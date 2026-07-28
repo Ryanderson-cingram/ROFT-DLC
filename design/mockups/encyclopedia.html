@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>玩家百科 · ROFT-DLC</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    padding: var(--sp-3);
+    border-bottom: var(--line);
+  }
+  .topbar a { text-decoration: none; font-size: 14px; }
+  .topbar b { font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.22em; color: var(--brass); }
+
+  .head { padding: var(--sp-4) 0 var(--sp-3); }
+  .head h1 { font-size: clamp(26px, 8vw, 36px); }
+  .head p { margin: var(--sp-2) 0 0; color: var(--text-secondary); }
+
+  .search {
+    width: 100%;
+    min-height: 48px;
+    padding: 0 var(--sp-3);
+    border: 1px solid #2c3833;
+    border-radius: var(--radius-pill);
+    background: var(--surface-sunken);
+    color: var(--text-primary);
+    font: inherit;
+  }
+  .search::placeholder { color: var(--text-secondary); }
+
+  /* 四句总则：置顶，编号是规则本身的顺序，不是装饰 */
+  .creed { border-color: var(--brass); }
+  .creed ol { margin: var(--sp-2) 0 0; padding-left: 1.5em; }
+  .creed li { margin-bottom: 6px; }
+
+  /* 花色锚点导航 */
+  .anchors {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+    padding: var(--sp-2) 0;
+    background: var(--bg-table);
+    border-bottom: var(--line);
+  }
+  .anchors a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 0 var(--sp-3);
+    border: 1px solid var(--brass-dim);
+    border-radius: var(--radius-pill);
+    color: var(--text-primary);
+    text-decoration: none;
+    font-size: 14px;
+  }
+  .anchors a:hover { border-color: var(--brass); }
+  .anchors .sigil { font-family: var(--font-mono); color: var(--brass); font-size: 16px; }
+
+  .suit { scroll-margin-top: 64px; }
+  .suit > h2 { display: flex; align-items: baseline; gap: var(--sp-2); }
+  .suit > h2 .sigil { font-family: var(--font-mono); color: var(--brass); }
+  .suit > h2 .count { margin-left: auto; font-size: 13px; color: var(--text-secondary); }
+
+  .skills { display: grid; gap: var(--sp-2); }
+  @media (min-width: 720px) { .skills { grid-template-columns: 1fr 1fr; } }
+
+  .skill {
+    padding: var(--sp-3);
+    border: 1px solid #2c3833;
+    border-radius: var(--radius-panel);
+    background: var(--surface-2);
+  }
+  .skill .name { display: flex; align-items: baseline; gap: var(--sp-2); }
+  .skill .sigil { font-family: var(--font-mono); color: var(--brass); }
+  .skill h3 { font-family: var(--font-display); font-size: 18px; }
+  .skill .kind { margin-left: auto; font-size: 12px; color: var(--text-secondary); }
+  .skill .l0 { margin: 6px 0 0; font-size: 15px; }
+
+  .skill details { margin-top: var(--sp-2); border-top: 1px dashed var(--brass-dim); }
+  .skill summary {
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    font-size: 14px;
+    color: var(--text-secondary);
+  }
+  .skill summary::after { content: "▾"; font-size: 11px; }
+  .skill details[open] summary::after { content: "▴"; }
+  .skill details p { margin: 0 0 var(--sp-2); font-size: 14px; line-height: 1.7; color: var(--text-secondary); }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <a href="lobby.html">← 大厅</a>
+  <b>玩家百科</b>
+  <span class="hint">v4.1</span>
+</header>
+
+<main class="wrap stack">
+
+  <div class="head">
+    <p class="eyebrow">由规则知识库生成</p>
+    <h1>怎么玩，技能怎么算</h1>
+    <p>这里的每一条都跟桌上生效的规则同源。规则改了，这页也会跟着改。</p>
+  </div>
+
+  <input class="search" type="search" placeholder="搜技能名或关键词，例如「叠牌」" aria-label="搜索技能">
+
+  <section class="panel creed">
+    <p class="eyebrow">四句总则</p>
+    <ol>
+      <li>回合开始用技能，然后出牌。</li>
+      <li>被 +2/+4 时先叠或不叠；叠的时候只算你自己那张的加成。</li>
+      <li>一人一个技能；亮出来才会生效。</li>
+      <li>神化 = 多几轮出牌；并列 = 一轮里多张。</li>
+    </ol>
+  </section>
+
+  <nav class="anchors" aria-label="按花色跳转">
+    <a href="#spade"><span class="sigil">♠</span>黑桃</a>
+    <a href="#heart"><span class="sigil">♥</span>红桃</a>
+    <a href="#diamond"><span class="sigil">♦</span>方块</a>
+    <a href="#club"><span class="sigil">♣</span>梅花</a>
+  </nav>
+
+  <section class="suit" id="spade">
+    <h2><span class="sigil">♠</span>黑桃<span class="count">1 个</span></h2>
+    <hr class="rail">
+    <div class="skills">
+
+      <article class="skill">
+        <div class="name"><span class="sigil">♠1</span><h3>恒心</h3><span class="kind">主动</span></div>
+        <p class="l0">弃一张牌，摸一张牌</p>
+        <details>
+          <summary>细则</summary>
+          <p>回合开始阶段用一次：从手牌里丢一张进弃牌堆，再从牌堆摸一张。手牌数不变，专治「一手牌全打不出去」。</p>
+        </details>
+      </article>
+
+    </div>
+  </section>
+
+  <section class="suit" id="heart">
+    <h2><span class="sigil">♥</span>红桃<span class="count">3 个</span></h2>
+    <hr class="rail">
+    <div class="skills">
+
+      <article class="skill">
+        <div class="name"><span class="sigil">♥1</span><h3>恩惠</h3><span class="kind">被动</span></div>
+        <p class="l0">被惩罚/被技能摸牌时少摸 2 张（至少 1）</p>
+        <details>
+          <summary>细则</summary>
+          <p>不用挑时机，自动生效：因为惩罚或别人的技能要摸牌时，少摸 2 张，但最少还是要摸 1 张。碰上叠链，是按整条链的总张数减 2，不是每一段各减。</p>
+        </details>
+      </article>
+
+      <article class="skill">
+        <div class="name"><span class="sigil">♥3</span><h3>精英</h3><span class="kind">被动</span></div>
+        <p class="l0">数字牌可当作大 1 点打出（只剩 1 张手牌时失效）</p>
+        <details>
+          <summary>细则</summary>
+          <p>手里的数字牌可以当成大 1 点的那个数打出去，最大只能当到 9。只剩 1 张手牌时这条失效，不能靠它收尾。</p>
+        </details>
+      </article>
+
+      <article class="skill">
+        <div class="name"><span class="sigil">♥4</span><h3>并列</h3><span class="kind">主动</span></div>
+        <p class="l0">两张同色同数 / 四张同数 / 六张同色可一起打出</p>
+        <details>
+          <summary>细则</summary>
+          <p>满足其一就能一次打出多张：两张同色同数、四张同数、六张同色。和神化一起时按「轮」算 —— 神化给你多几轮，并列让你一轮里出多张。</p>
+        </details>
+      </article>
+
+    </div>
+  </section>
+
+  <section class="suit" id="diamond">
+    <h2><span class="sigil">♦</span>方块<span class="count">5 个</span></h2>
+    <hr class="rail">
+    <div class="skills">
+
+      <article class="skill">
+        <div class="name"><span class="sigil">♦1</span><h3>强袭</h3><span class="kind">主动</span></div>
+        <p class="l0">打出 +2/+4 后掷骰改倍率；可替任何人重掷骰子</p>
+        <details>
+          <summary>细则</summary>
+          <p>你打出 +2 或 +4 之后，可以掷一次三面骰（0/1/2）改这一张的倍率。另外，任何人掷完骰子，你都可以用同样数量的骰子重掷一次，最后采用你的结果。</p>
+        </details>
+      </article>
+
+      <article class="skill">
+        <div class="name"><span class="sigil">♦2</span><h3>血棘</h3><span class="kind">被动</span></div>
+        <p class="l0">你发起的惩罚会封印对方技能</p>
+        <details>
+          <summary>细则</summary>
+          <p>由你发起的惩罚会封住对方的技能，直到解封条件达成。被封的人就算还没亮技能，这段时间也不能亮。回合开始你还可以掷骰，让被你封住的人摸等量的牌。</p>
+        </details>
+      </article>
+
+      <article class="skill">
+        <div class="name"><span class="sigil">♦3</span><h3>影歌</h3><span class="kind">主动</span></div>
+        <p class="l0">一次性攒「魂」（最多 6）；花 2 魂跳过回合</p>
+        <details>
+          <summary>细则</summary>
+          <p>回合开始阶段可以攒魂，最多攒到 6 个。花 2 魂跳过一个回合，惩罚回合也能跳。攒魂和跳过都占用你这回合的主动位，一回合只能做一件。</p>
+        </details>
+      </article>
+
+      <article class="skill">
+        <div class="name"><span class="sigil">♦10</span><h3>劫营</h3><span class="kind">响应</span></div>
+        <p class="l0">他人打出你也有的同色同数牌时，可同时打出打断</p>
+        <details>
+          <summary>细则</summary>
+          <p>别人打出一张牌，你手里正好有同色同数的那张，就能在响应窗口里同时打出去打断他。对方摸 1 张，接着从你的下家继续。并列和神化都能被打断，被打断的人剩下的神化轮作废。</p>
+        </details>
+      </article>
+
+      <article class="skill">
+        <div class="name"><span class="sigil">♦J</span><h3>远星</h3><span class="kind">响应</span></div>
+        <p class="l0">上家 +2/+4 时弃代价牌并摸 2，视为跟着叠牌</p>
+        <details>
+          <summary>细则</summary>
+          <p>上家出 +2，你弃一张同色的停或转；上家出 +4，你弃一张 +2。然后摸 2 张，就算你也跟着叠了一层。注意：视为的那张 +4 用你弃掉的 +2 的颜色，不能另选颜色。</p>
+        </details>
+      </article>
+
+    </div>
+  </section>
+
+  <section class="suit" id="club">
+    <h2><span class="sigil">♣</span>梅花<span class="count">1 个</span></h2>
+    <hr class="rail">
+    <div class="skills">
+
+      <article class="skill">
+        <div class="name"><span class="sigil">♣3</span><h3>司夜</h3><span class="kind">主动</span></div>
+        <p class="l0">打出变色牌后掷骰获「盗」；花盗换手牌</p>
+        <details>
+          <summary>细则</summary>
+          <p>你每打出一张变色牌，就掷一次骰，得到 0、1 或 2 个「盗」。回合开始阶段可以花盗换手牌。攒到 3 盗或 5 盗时，最后一张牌可以是功能牌或变色牌，但那张仍然必须能合法打出。</p>
+        </details>
+      </article>
+
+    </div>
+  </section>
+
+</main>
+
+</body>
+</html>
