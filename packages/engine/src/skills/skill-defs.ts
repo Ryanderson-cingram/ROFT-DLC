@@ -1,0 +1,518 @@
+// 由 scripts/gen-skill-defs.ts 生成，勿手改；改规则先改 docs/knowledge-base/04-skills-catalog.md，再跑 pnpm --filter @roft/engine gen:skills
+// ponytail: 与同目录 skill-defs.json 同源同内容的 TS 镜像。直接 import JSON 需要
+// resolveJsonModule，而那在共享 tsconfig 里（别人的地盘）；等它打开就把这里换成一行 import。
+import type { SkillDefsDoc } from './types.ts';
+
+export const skillDefs: SkillDefsDoc = {
+  "rulesetVersion": "4.1",
+  "source": "docs/knowledge-base/04-skills-catalog.md",
+  "generator": "scripts/gen-skill-defs.ts",
+  "skills": [
+    {
+      "id": "star-grandeur",
+      "name": "宏伟",
+      "suit_rank": "★",
+      "status": "✅/❓",
+      "summary": "摸 1，扣置 1。他人打出相同（色+牌面）时：其摸 1，你亮出弃置扣置。之后**每个**你的回合开始掷 1 骰，直到为 2：翻开判定并替换为宝藏★。",
+      "caveats": "惩罚回合开始是否仍掷（无主动技能但仍有回合开始？）；与「挑战/技能二选一」是否并行。",
+      "structured": false,
+      "notes": "类型：一次性 + 持续监控 + 升级检定"
+    },
+    {
+      "id": "star-treasure",
+      "name": "宝藏",
+      "suit_rank": "★",
+      "status": "✅",
+      "summary": "翻开判定锁定一支——变色/功能/数字均为**常驻**；毒→替换为古神。变色：跳过并视为 +4 进叠链（你定色）。功能：可反复弃不同色功能→摸等量并指定一人摸等量。数字：可持续双出同色同数，0 当任意数字。",
+      "caveats": null,
+      "structured": false
+    },
+    {
+      "id": "star-disaster",
+      "name": "灾难",
+      "suit_rank": "★",
+      "status": "✅",
+      "summary": "摸 1，扣置 1。他人打出相同牌时亮出弃置扣置；其回合结束：该玩家掷 2、你掷 4；双方获狂欢 buff；对方技能不变；**你的灾难技能移除**（若你骰和≥5 则获得时神技能）。",
+      "caveats": null,
+      "structured": false
+    },
+    {
+      "id": "star-carnival",
+      "name": "狂欢",
+      "suit_rank": "★",
+      "status": "✅",
+      "summary": "按自己的骰和：0 五彩 / 1 恋战 / 2 所有摸牌+1 / 3 惩罚摸牌+1 / 4 被惩罚不摸+单体不能以你为目标 / ≥5 时神（**仅掷4骰方可**）。",
+      "caveats": null,
+      "notes": "buff（非技能牌）；注：不占技能栏（时神除外，时神是技能替换）。",
+      "structured": false
+    },
+    {
+      "id": "heart-1",
+      "name": "恩惠",
+      "suit_rank": "♥1",
+      "status": "✅",
+      "summary": "被动：因惩罚或他人技能的摸牌数 -2（至少 1）；叠链时作用在贡献总和上",
+      "caveats": null,
+      "structured": false
+    },
+    {
+      "id": "heart-2",
+      "name": "迫近",
+      "suit_rank": "♥2",
+      "status": "❓",
+      "summary": "可明置同色递增 0→9；每明置 9 可接管他人各一次",
+      "caveats": "接管是否占被接管者回合；与明示洗牌",
+      "structured": false
+    },
+    {
+      "id": "heart-3",
+      "name": "精英",
+      "suit_rank": "♥3",
+      "status": "✅",
+      "summary": "被动：数字可当 +1 打出（仅 1 张手牌时失效）；最大 9",
+      "caveats": "Q&A 已补",
+      "structured": false
+    },
+    {
+      "id": "heart-4",
+      "name": "并列",
+      "suit_rank": "♥4",
+      "status": "✅",
+      "summary": "主动规则：2 同色同数 / 4 同数 / 6 同色；与神化按「轮」互动已定",
+      "caveats": "与劫营响应「任意一张」的牌顶",
+      "structured": false
+    },
+    {
+      "id": "heart-5",
+      "name": "神授",
+      "suit_rank": "♥5",
+      "status": "✅",
+      "summary": "仅列情形必摸；否则无牌可出可不摸结束；优先于恋战；>10可主动亮出",
+      "caveats": null,
+      "structured": false
+    },
+    {
+      "id": "heart-6",
+      "name": "近卫",
+      "suit_rank": "♥6",
+      "status": "✅",
+      "summary": "受 ≥4 惩罚时，每张 +2/+4 可交 1 张手牌给**链首**",
+      "caveats": null,
+      "structured": false
+    },
+    {
+      "id": "heart-7",
+      "name": "极运",
+      "suit_rank": "♥7",
+      "status": "⚠️",
+      "summary": "拼点默认 +4；亮出牌可口述；掷骰可口述；他人≤3 摸N弃N 你可同时；**可任意时刻亮出**",
+      "caveats": "口述掷骰与强袭重掷互动",
+      "structured": false
+    },
+    {
+      "id": "heart-8",
+      "name": "异议",
+      "suit_rank": "♥8",
+      "status": "✅/❓",
+      "summary": "① 上家 +2/+4 时反转并跳过（一次性）；② 打出转获异，受罚弃异少摸；不可强制使用",
+      "caveats": "① 是否算响应窗口非阶段1",
+      "structured": false
+    },
+    {
+      "id": "heart-9",
+      "name": "专精",
+      "suit_rank": "♥9",
+      "status": "✅/❓",
+      "summary": "亮出时底牌定色；该色 +2 无效；当前色为你的色可打任意数字；变色只能选你的色；免疫五彩",
+      "caveats": "与古神「变色皆毒」",
+      "structured": false
+    },
+    {
+      "id": "heart-10",
+      "name": "伤逝",
+      "suit_rank": "♥10",
+      "status": "✅",
+      "summary": "受罚时只按链上 +2/+4 张数掷骰摸牌；忽略贡献总和与吟游等改摸数",
+      "caveats": null,
+      "structured": false
+    },
+    {
+      "id": "heart-j",
+      "name": "回溯",
+      "suit_rank": "♥J",
+      "status": "❓",
+      "summary": "他人变色牌结算完掷 2 骰：0 回收 / 2 你获得 / 4 交任意人 / 1或3 无事",
+      "caveats": "Q&A 已有限制；与毒/洗牌",
+      "structured": false
+    },
+    {
+      "id": "heart-q",
+      "name": "偏折",
+      "suit_rank": "♥Q",
+      "status": "⚠️",
+      "summary": "即使未亮出也不用喊 UNO（质疑时可亮出）；亮出后不能被问手牌数等",
+      "caveats": "与 V1 例外；「抽取你手牌」类技能列表",
+      "structured": false
+    },
+    {
+      "id": "heart-k",
+      "name": "阳谋",
+      "suit_rank": "♥K",
+      "status": "❓",
+      "summary": "在任意玩家前横向扣置 +2/停/转，你摸 1；其回合开始翻开，可弃相同牌面否则结算",
+      "caveats": "「任意玩家」是否非己方回合放置=响应",
+      "structured": false
+    },
+    {
+      "id": "diamond-1",
+      "name": "强袭",
+      "suit_rank": "♦1",
+      "status": "✅/❓",
+      "summary": "打出 +2/+4 后可掷骰改该张倍率；任意玩家掷骰后可重掷同数量一次并采用你的结果",
+      "caveats": "重掷是否每骰事件一次；与邪神联动",
+      "structured": false
+    },
+    {
+      "id": "diamond-2",
+      "name": "血棘",
+      "suit_rank": "♦2",
+      "status": "✅",
+      "summary": "你**发起**的惩罚使目标封印技能直至条件；回合开始可掷骰令被血棘者摸等量；优先；未亮出也被封则不能亮出；合纵连横双封",
+      "caveats": "链首已定",
+      "structured": false
+    },
+    {
+      "id": "diamond-3",
+      "name": "影歌",
+      "suit_rank": "♦3",
+      "status": "✅",
+      "summary": "① 一次性阶段1攒魂（**上限 6**）；② 花2魂跳过（可惩罚回合），占主动条",
+      "caveats": null,
+      "structured": false
+    },
+    {
+      "id": "diamond-4",
+      "name": "攻心",
+      "suit_rank": "♦4",
+      "status": "❓",
+      "summary": "每名玩家限一次展示比牌摸 1/2/3；累计摸满人数获神化",
+      "caveats": "「首次累计」计数跨谁",
+      "structured": false
+    },
+    {
+      "id": "diamond-5",
+      "name": "毒池",
+      "suit_rank": "♦5",
+      "status": "❓",
+      "summary": "他人打毒额外摸你已明置毒数；你打毒不摸且他人各摸 3；实体毒明置",
+      "caveats": "与古神、同命序",
+      "structured": false
+    },
+    {
+      "id": "diamond-6",
+      "name": "夜魇",
+      "suit_rank": "♦6",
+      "status": "❓",
+      "summary": "① 一次性明置数字（非最后一张）；② 每回合开始翻牌与明置判定；不可强制使用",
+      "caveats": "判定 ⑶ 摸牌上下限",
+      "structured": false
+    },
+    {
+      "id": "diamond-7",
+      "name": "天堂",
+      "suit_rank": "♦7",
+      "status": "❓",
+      "summary": "无恋战时与人拼点：胜则对方摸牌+1并恋战直到打出 +4；负则你恋战直到打出 +2/+4",
+      "caveats": "状态互斥时拼点结果",
+      "structured": false
+    },
+    {
+      "id": "diamond-8",
+      "name": "日月",
+      "suit_rank": "♦8",
+      "status": "❓",
+      "summary": "限制人数次：交手牌给他人，其分成两叠你取一叠",
+      "caveats": "空手/1 张边界",
+      "structured": false
+    },
+    {
+      "id": "diamond-9",
+      "name": "寄生",
+      "suit_rank": "♦9",
+      "status": "⚠️",
+      "summary": "人数次：他人喊 UNO 时令其五彩或心盲+摸牌+1；你回合开始掷 2 骰和 0/1 则清除；**可任意时刻亮出**",
+      "caveats": "与状态互斥",
+      "structured": false
+    },
+    {
+      "id": "diamond-10",
+      "name": "劫营",
+      "suit_rank": "♦10",
+      "status": "✅",
+      "summary": "同色同数同时打出；对方摸 1；你下家继续；可打断并列/神化；剩余神化轮作废",
+      "caveats": "已定",
+      "structured": false
+    },
+    {
+      "id": "diamond-j",
+      "name": "远星",
+      "suit_rank": "♦J",
+      "status": "✅",
+      "summary": "上家 +2 时弃同色停/转、上家 +4 时弃 +2，各摸 2 视为叠链 +2/+4；**视为的 +4 用所弃 +2 的颜色**（非任选定色）",
+      "caveats": "已定",
+      "structured": false
+    },
+    {
+      "id": "diamond-q",
+      "name": "不意",
+      "suit_rank": "♦Q",
+      "status": "❓",
+      "summary": "一次性与所有人拼点，弃置所有手牌再重发；负方掷骰摸牌；额外摸≥人数则你再获一次使用",
+      "caveats": "「再获一次」存哪里",
+      "structured": false
+    },
+    {
+      "id": "diamond-k",
+      "name": "觐见",
+      "suit_rank": "♦K",
+      "status": "❓",
+      "summary": "明示一张不合法牌，选无明示者令其明示一半（下取整最多 4）",
+      "caveats": "与偏折「不能明示」冲突时",
+      "structured": false
+    },
+    {
+      "id": "spade-1",
+      "name": "恒心",
+      "suit_rank": "♠1",
+      "status": "✅",
+      "summary": "主动：弃 1 摸 1",
+      "caveats": null,
+      "structured": false
+    },
+    {
+      "id": "spade-2",
+      "name": "先哲",
+      "suit_rank": "♠2",
+      "status": "✅/❓",
+      "summary": "① 摸 2 弃 2 并强制他人亮出+可用则强制发动；② 洗牌时指定一人不参与",
+      "caveats": "强制规则已定；① 是否 on_reveal",
+      "structured": false
+    },
+    {
+      "id": "spade-3",
+      "name": "福赐",
+      "suit_rank": "♠3",
+      "status": "❓",
+      "summary": "每名玩家限一次：摸 3 交 2，其定色数；一次性：对所有人都发动过且手牌>人数则每人交 1 但本回合不能出牌",
+      "caveats": "「不能出牌」与阶段",
+      "structured": false
+    },
+    {
+      "id": "spade-4",
+      "name": "契约",
+      "suit_rank": "♠4",
+      "status": "⚠️",
+      "summary": "被停时可摸 3 弃 3；可在被跳过时亮出",
+      "caveats": "例外亮出已收白名单",
+      "structured": false
+    },
+    {
+      "id": "spade-5",
+      "name": "合纵",
+      "suit_rank": "♠5",
+      "status": "✅",
+      "summary": "亮出时连横须立刻响应；相应则换牌+之后回合开始可换；无响应则**每张**功能牌后摸2弃2",
+      "caveats": null,
+      "structured": false
+    },
+    {
+      "id": "spade-6",
+      "name": "连横",
+      "suit_rank": "♠6",
+      "status": "✅",
+      "summary": "对称；无响应则每张功能后摸1弃1，若上回合也打出功能则该次摸3弃3",
+      "caveats": null,
+      "structured": false
+    },
+    {
+      "id": "spade-7",
+      "name": "窃贼",
+      "suit_rank": "♠7",
+      "status": "❓",
+      "summary": "拼点：胜则取对方半数手牌（上取整最多 5）再还同数；负摸 1",
+      "caveats": null,
+      "structured": false
+    },
+    {
+      "id": "spade-8",
+      "name": "八门",
+      "suit_rank": "♠8",
+      "status": "✅/❓",
+      "summary": "一次性摸 8 弃 8（不受其他技能）；回合结束获五彩且所有摸牌+1",
+      "caveats": "「不受其他」范围",
+      "structured": false
+    },
+    {
+      "id": "spade-9",
+      "name": "黑白",
+      "suit_rank": "♠9",
+      "status": "❓",
+      "summary": "① 摸 3 扣 3；② 用扣置换判定/拼点；③ 与所有人拼点，负方亮手牌并掷骰解除",
+      "caveats": null,
+      "structured": false
+    },
+    {
+      "id": "spade-10",
+      "name": "毒师",
+      "suit_rank": "♠10",
+      "status": "❓",
+      "summary": "打毒选两人同命；打毒不摸；可摸 2 弃当前色功能视为毒；最多两名同命",
+      "caveats": "与毒池/古神",
+      "structured": false
+    },
+    {
+      "id": "spade-j",
+      "name": "忍戒",
+      "suit_rank": "♠J",
+      "status": "✅",
+      "summary": "受罚时多摸一倍再弃多摸数（最多多摸 6）；结算层级属 L6 后置程序（02 §7）",
+      "caveats": "✅ 与伤逝无冲突：S2 一人一技能，二者不可能同在一名受罚者身上",
+      "structured": false
+    },
+    {
+      "id": "spade-q",
+      "name": "心火",
+      "suit_rank": "♠Q",
+      "status": "❓",
+      "summary": "回合开始三选一：明示全部 / 弃明示最多人数张并摸等量 / 强制亮出并强制使用某人技能后移除心火",
+      "caveats": "强制规则已定",
+      "structured": false
+    },
+    {
+      "id": "spade-k",
+      "name": "染手",
+      "suit_rank": "♠K",
+      "status": "❓",
+      "summary": "无牌摸时多摸 2 弃 2；受罚可从弃牌堆选但惩罚+1；一次性打乱弃牌堆正面放旁边优先抽",
+      "caveats": "Q&A 牌河洗牌",
+      "structured": false
+    },
+    {
+      "id": "club-1",
+      "name": "统御",
+      "suit_rank": "♣1",
+      "status": "❓",
+      "summary": "打出变色牌扣置；可弃一张扣置视为当前色转或停",
+      "caveats": "窗口=阶段1还是 after_play",
+      "structured": false
+    },
+    {
+      "id": "club-2",
+      "name": "明暗",
+      "suit_rank": "♣2",
+      "status": "❓",
+      "summary": "① 摸手牌倍数量并扣置人数张（至少留 1）；② 回合开始可用扣置换手牌（仅 1 张手牌不能）",
+      "caveats": null,
+      "structured": false
+    },
+    {
+      "id": "club-3",
+      "name": "司夜",
+      "suit_rank": "♣3",
+      "status": "✅",
+      "summary": "打出变色后**掷骰一次获点数个盗（0/1/2）**；阶段1花盗换牌；3/5盗放宽末牌为功能/变色，仍须合法打出",
+      "caveats": null,
+      "structured": false
+    },
+    {
+      "id": "club-4",
+      "name": "辉耀",
+      "suit_rank": "♣4",
+      "status": "❓",
+      "summary": "限制人数次：亮出人数张顶牌，他人按序各取 1；已亮出则洗牌时你可不参与",
+      "caveats": null,
+      "structured": false
+    },
+    {
+      "id": "club-5",
+      "name": "吟游",
+      "suit_rank": "♣5",
+      "status": "✅",
+      "summary": "上家非+2/+4时可选歌声；选/切换占主动条；亮出时无歌声",
+      "caveats": null,
+      "structured": false
+    },
+    {
+      "id": "club-6",
+      "name": "伪神",
+      "suit_rank": "♣6",
+      "status": "✅",
+      "summary": "摸 1 明置；重复色弃置按张数奖励；算神（黄昏/互挑）；陨满不算神但效果保留",
+      "caveats": null,
+      "structured": false
+    },
+    {
+      "id": "club-7",
+      "name": "通牌",
+      "suit_rank": "♣7",
+      "status": "❓",
+      "summary": "所有人扣置 1，你选择交给各自上家或下家",
+      "caveats": null,
+      "structured": false
+    },
+    {
+      "id": "club-8",
+      "name": "万变",
+      "suit_rank": "♣8",
+      "status": "✅",
+      "summary": "掷2骰获形=占主动；达10强制换技能并归零；排除宏伟/灾难/宝藏/狂欢/预兆/飞升及四神；♣8",
+      "caveats": null,
+      "structured": false
+    },
+    {
+      "id": "club-9",
+      "name": "预兆",
+      "suit_rank": "♣9",
+      "status": "❓",
+      "summary": "开局亮出掷 2 定预兆；之后匹配两次：开预兆 / 化身邪神",
+      "caveats": "与开局发技能顺序",
+      "structured": false
+    },
+    {
+      "id": "club-10",
+      "name": "终结",
+      "suit_rank": "♣10",
+      "status": "❓",
+      "summary": "获领域；仅 1 张手牌时失去领域，下次摸牌获扣置牌+明示+神化；无明示手牌则失去该神化",
+      "caveats": "领域与摸牌定义",
+      "structured": false
+    },
+    {
+      "id": "club-j",
+      "name": "无念",
+      "suit_rank": "♣J",
+      "status": "❓",
+      "summary": "回合开始掷 2 记总和（0 清空）；一次性摸总和，每 5 张一神化",
+      "caveats": null,
+      "structured": false
+    },
+    {
+      "id": "club-q",
+      "name": "降临",
+      "suit_rank": "♣Q",
+      "status": "❓",
+      "summary": "摸 2 展示，同色则视为洗牌且人人神化；每次成功后需额外多摸 1",
+      "caveats": "与真洗牌牌、神化上限",
+      "structured": false
+    },
+    {
+      "id": "club-k",
+      "name": "飞升",
+      "suit_rank": "♣K",
+      "status": "✅",
+      "summary": "每回合开始获神化；出完续玩→主神；神官优先级+下家方向最近；神官胜主神同胜",
+      "caveats": null,
+      "structured": false
+    }
+  ]
+};

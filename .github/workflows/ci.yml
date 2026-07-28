@@ -17,6 +17,13 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+
+      # 技能定义单一生成源：重跑生成脚本，产物（引擎 JSON/TS + 迁移 seed）必须与
+      # 仓库里已提交的逐字节一致。手改产物或改了知识库没重跑 = 双源漂移 = CI 红。
+      - run: pnpm --filter @roft/engine gen:skills
+      - name: skill defs 无漂移（含迁移 seed 同源）
+        run: git diff --exit-code -- packages/engine/src/skills supabase/migrations/0004_skill_defs_seed.sql
+
       - run: pnpm test
       - run: pnpm --filter web build
 
