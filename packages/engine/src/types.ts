@@ -18,14 +18,43 @@ export interface PendingWindow {
   defaultChoice: string;
   resume: Phase;
 }
+/** 一局开跑后的牌桌。`lobby` 阶段没有牌桌，故 `GameState.board` 可选。 */
+export interface Board {
+  rulePack: RulePack;
+  drawPile: Card[];
+  /** `[0]` 是弃牌堆顶。 */
+  discardPile: Card[];
+  /** 按座位下标。 */
+  hands: Card[][];
+  /** 跟色比的是这个，不是牌堆顶那张牌的原色（打过变色牌后两者不同）。 */
+  activeColor: Color | null;
+  currentSeat: number;
+  direction: 1 | -1;
+  saidUno: boolean[];
+  /** 本轮技能未实现（S1/S2 的持有槽位，只存不用）。 */
+  skills: (string | null)[];
+  /** U1：刚摸到且可打的那张牌；非 null 时本回合只能打它或结束回合。 */
+  drawnPlayable?: Card | null;
+  punish?: PunishChain;
+  winner?: number;
+}
+/** P6：每段贡献在打出进链时结算，只作用于自己那一张，所以逐段存。 */
+export interface PunishSegment { seat: number; face: "+2" | "+4"; draw: number }
+export interface PunishChain { initiator: number; segments: PunishSegment[]; total: number }
 export interface GameState {
   version: number;
   phase: Phase;
   seats: { userId: string }[];
   pendingWindow?: PendingWindow;
+  board?: Board;
 }
 export type Action =
   | { type: "ping"; seat: number }
+  | { type: "startGame"; seat: number }
+  | { type: "playCards"; seat: number; cardIds: string[]; chosenColor?: Color }
+  | { type: "drawCard"; seat: number }
+  | { type: "endTurn"; seat: number }
+  | { type: "claimTimeout"; seat: number; windowId: string }
   | { type: "respond"; seat: number; windowId: string; choice: string };
 export interface EngineEvent { type: string; public: Record<string, unknown>; private?: { seat: number; payload: Record<string, unknown> } }
 export interface Ctx { rng: () => number; now: string }
