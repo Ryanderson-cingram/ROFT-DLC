@@ -4,6 +4,8 @@
 
 字段含义见 [02-methodology.md](./02-methodology.md)。原文以 Excel 为准；此处为结构化摘要。
 
+**散文给人读，围栏块给机器读。** 每个花色表格后的「结构化标注」小节里，` ```yaml ` 围栏块按 `id` 与条目配对，携带 `effects[]` / `layer` / `reveal_window` 等机读字段；格式与「省略 vs 显式留空」的区别见 [02 §6](./02-methodology.md#6-结构化标注围栏块04-的机读格式-)。**围栏块不得改变散文的裁定**，冲突时以散文与 [01](./01-decided-rules.md) 为准。
+
 ---
 
 ## ★ 升级链（开局可抽：宏伟、灾难）
@@ -47,6 +49,25 @@
 | Q | 偏折 | ⚠️ | 即使未亮出也不用喊 UNO（质疑时可亮出）；亮出后不能被问手牌数等 | 与 V1 例外；「抽取你手牌」类技能列表 |
 | K | 阳谋 | ❓ | 在任意玩家前横向扣置 +2/停/转，你摸 1；其回合开始翻开，可弃相同牌面否则结算 | 「任意玩家」是否非己方回合放置=响应 |
 
+### 结构化标注（♥）
+
+恩惠：`−2` 落 L2、自带的「至少 1」落 L5，两层都由 [02 §7](./02-methodology.md#7-摸牌数结算层级决策层级-) 点名；「叠链时作用在贡献总和上」是 01-P11，不是额外一层。
+
+```yaml
+id: heart-1
+structured: true
+effects:
+  - key: passive
+    kind: passive
+    window: any
+    targeting: self
+    once: unlimited
+    stacks_with_turn_limit: false
+    modifies: [draw_count]
+    duration: while_revealed
+    layer: [L2, L5]
+```
+
 ---
 
 ## ♦ 方片
@@ -86,6 +107,24 @@
 | J | 忍戒 | ✅ | 受罚时多摸一倍再弃多摸数（最多多摸 6）；结算层级属 L6 后置程序（02 §7） | ✅ 与伤逝无冲突：S2 一人一技能，二者不可能同在一名受罚者身上 |
 | Q | 心火 | ❓ | 回合开始三选一：明示全部 / 弃明示最多人数张并摸等量 / 强制亮出并强制使用某人技能后移除心火 | 强制规则已定 |
 | K | 染手 | ❓ | 无牌摸时多摸 2 弃 2；受罚可从弃牌堆选但惩罚+1；一次性打乱弃牌堆正面放旁边优先抽 | Q&A 牌河洗牌 |
+
+### 结构化标注（♠）
+
+恒心自己摸的那 1 张是效果本身、不是「改摸牌数」，所以不带 `layer`（02 §6）。
+
+```yaml
+id: spade-1
+structured: true
+effects:
+  - key: 1
+    kind: active
+    window: turn_start
+    cost: 弃 1 张手牌
+    targeting: self
+    once: unlimited
+    stacks_with_turn_limit: true
+    duration: instant
+```
 
 ---
 

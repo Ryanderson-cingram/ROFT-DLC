@@ -23,7 +23,13 @@ describe('skill defs 生成源', () => {
     expect(new Set(skillDefs.skills.map((s) => s.id)).size).toBe(56);
   });
 
-  it('尚未结构化——effects[] 等字段一律不猜', () => {
-    expect(skillDefs.skills.every((s) => s.structured === false)).toBe(true);
+  it('structured 只在完整标注时为 true，且必带 effects', () => {
+    for (const s of skillDefs.skills) {
+      if (s.structured) expect(s.effects?.length).toBeGreaterThan(0);
+    }
+    // 没标注的条目一律不猜：既没 effects 也不自称 structured
+    for (const s of skillDefs.skills) {
+      if (!s.effects) expect(s.structured).toBe(false);
+    }
   });
 });

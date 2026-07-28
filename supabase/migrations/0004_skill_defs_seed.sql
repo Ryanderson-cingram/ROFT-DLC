@@ -12,8 +12,8 @@ with doc as (select $skill_defs${
       "status": "✅/❓",
       "summary": "摸 1，扣置 1。他人打出相同（色+牌面）时：其摸 1，你亮出弃置扣置。之后**每个**你的回合开始掷 1 骰，直到为 2：翻开判定并替换为宝藏★。",
       "caveats": "惩罚回合开始是否仍掷（无主动技能但仍有回合开始？）；与「挑战/技能二选一」是否并行。",
-      "structured": false,
-      "notes": "类型：一次性 + 持续监控 + 升级检定"
+      "notes": "类型：一次性 + 持续监控 + 升级检定",
+      "structured": false
     },
     {
       "id": "star-treasure",
@@ -50,7 +50,25 @@ with doc as (select $skill_defs${
       "status": "✅",
       "summary": "被动：因惩罚或他人技能的摸牌数 -2（至少 1）；叠链时作用在贡献总和上",
       "caveats": null,
-      "structured": false
+      "effects": [
+        {
+          "key": "passive",
+          "kind": "passive",
+          "window": "any",
+          "targeting": "self",
+          "once": "unlimited",
+          "stacks_with_turn_limit": false,
+          "modifies": [
+            "draw_count"
+          ],
+          "duration": "while_revealed",
+          "layer": [
+            "L2",
+            "L5"
+          ]
+        }
+      ],
+      "structured": true
     },
     {
       "id": "heart-2",
@@ -284,7 +302,19 @@ with doc as (select $skill_defs${
       "status": "✅",
       "summary": "主动：弃 1 摸 1",
       "caveats": null,
-      "structured": false
+      "effects": [
+        {
+          "key": "1",
+          "kind": "active",
+          "window": "turn_start",
+          "cost": "弃 1 张手牌",
+          "targeting": "self",
+          "once": "unlimited",
+          "stacks_with_turn_limit": true,
+          "duration": "instant"
+        }
+      ],
+      "structured": true
     },
     {
       "id": "spade-2",
