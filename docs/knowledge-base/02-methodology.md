@@ -17,6 +17,7 @@
 | `force_activate_ok` | 可否被强制发动 | 默认 true；异议/夜魇等 false |
 | `sealable` | 可否被血棘封印 | 默认 true |
 | `upgrade_to` | 升级目标 | 宏伟→宝藏→古神 |
+| `category` | 条目分类（非普通技能时才写） | `buff`（狂欢★：非技能牌） |
 | `notes` | 裁定备注 | 指向 01 / Q&A |
 
 ### 子效果 `effects[]`
@@ -102,9 +103,43 @@ Q&A：只能指定一名玩家的技能为**单体技能**。
 
 ---
 
+## 6. 结构化标注围栏块（04 的机读格式）✅
+
+04 的技能条目是给人读的散文；机器读的是**紧跟条目后的 ` ```yaml ` 围栏块**。散文不因标注而改动；两者若冲突，以散文与 [01 的已定条款](./01-decided-rules.md) 为准，围栏块改到对齐为止。
+
+**位置**：★ / 神条目放在该条目要点之后；花色技能放在该花色表格后的「结构化标注」小节。围栏块靠块内的 `id` 与条目配对，位置只影响可读性。
+
+**字段**：只用 §1 的字段名，逐字沿用。技能级 `id`（必填）/ `category` / `reveal_window` / `force_reveal_ok` / `force_activate_ok` / `sealable` / `upgrade_to` / `notes` / `effects[]`；子效果级 `key` / `kind` / `window` / `cost` / `targeting` / `once` / `stacks_with_turn_limit` / `priority` / `modifies` / `duration` / `layer`。**一个技能的每条子效果都要有自己的 `key`**（`1` / `2` / `3` / `passive` / `on_reveal`，与 04 散文里的 ①②③ 对应）。
+
+**完整度**：只有当条目的**全部**子效果都标注完时才写 `structured: true`。
+
+- `structured: true` 的块里，**省略** = 取 §1 / §2 的文档默认值（`reveal_window` 省略 = 01-V1 的 `own_turn`；`force_reveal_ok` / `force_activate_ok` / `sealable` 省略 = true；`cost` / `priority` / `layer` 省略 = 无）
+- 没写 `structured` 的块是**部分标注**（例如只把 §7 的 `layer` 搬下来），其中的省略只表示「尚未标注」，不表示默认值
+- **显式留空**（`字段:` 后不写值）= **文档没有裁定**，等裁定；与「省略」严格区分。不要为了填满字段而猜
+
+**取值**：`kind` 见 §2、`window` 见 §3、`duration` 见 §1、`layer` 见 §7。其余枚举：
+
+| 字段 | 取值 | §1 里的说法 |
+|---|---|---|
+| `once` | `once` / `once_per_player` / `per_player_count` / `unlimited` | 一次性 / 每名玩家限一次 / 玩家人数次 / 无限 |
+| `targeting` | `self` / `single` / `all_others` / `global` | 见 §4 |
+| `modifies` | `draw_count` / `draw_procedure` / `punish_amount` / `card_value` / `color_rule` / `play_legality` / `turn_flow` / `dice` | 「改摸数、改惩罚、改颜色规则等标签」 |
+
+约定（只是标注约定，不新增裁定）：
+
+- `layer` 可写多层，如恩惠 `[L2, L5]`——L2 做 −2、L5 兜自带的「至少 1」（§7 两层都点名了恩惠）
+- **摸牌类效果必须带 `layer`**：`modifies` 含 `draw_count`（L0–L5 改数字）或 `draw_procedure`（L6 只改执行方式）时 `layer` 必填；反过来 `layer` 不得出现在其他效果上。技能**自己造成**的摸牌（恒心摸 1、远星的代价摸 2、劫营让对方摸 1）不是「改摸牌数」，不带 `layer`
+- `targeting` 只描述**受影响玩家的范围**：`single` = 恰好一名其他玩家，无论由玩家指定还是由结算落点决定。§4 的「单体技能」另外要求「**可指定**」，非指定类（如血棘随惩罚落点）算不算单体尚未裁定
+- `once` 只写**本技能自带的**次数上限。01-S18c「一次性 / 限次技能被重新获得时次数重置」是全局规则，不逐条重复
+- 01-V7「同一技能多条主动每回合只能选发动一条」由标注体现为：同一技能下 `kind: active` 且 `stacks_with_turn_limit: true` 的效果出现多条（如影歌 ①②）
+
+---
+
 ## 7. 摸牌数结算层级（决策层级）✅
 
 同一次摸牌可被多个来源修改（恩惠 −2、狂欢 +1、吟游歌声、忍戒、伤逝…）。**任何摸牌事件按以下固定层级结算一次**，不做技能间 ad-hoc 排序；引擎实现为按层排序的 reducer，每个修正效果声明自己的 `layer`。
+
+本节按技能名列举的层级**已逐条搬进 04 对应条目的围栏块**（见 §6）；本节保留作总览，两处冲突时以本节为准。
 
 ```text
 L0 定型   事件类型（惩罚 / 技能 / 规则摸牌）+ 基础值
