@@ -1,0 +1,242 @@
+/* 源：design/mockups/game.html 的 <style>。已去掉设计稿的 body[data-state] 差异段——
+   真实产品里状态由快照决定，可打/压暗一律走 tokens.css 的 .card--legal / .card--dim。*/
+.table { max-width: 1040px; margin: 0 auto; padding: var(--sp-3); display: grid; gap: var(--sp-3); }
+/* 网格子项默认 min-width:auto，会被长内容撑破 375px —— 一律归零 */
+.table > *, .mine > *, .opp, .hand-wrap { min-width: 0; }
+
+/* ---- 顶部横幅：倒计时（惩罚/反应窗口共用） ---- */
+.alertbar {
+  position: sticky;
+  top: 48px;
+  z-index: 80;
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--brass-dim);
+  background: rgba(31, 44, 38, 0.96);
+}
+.alertbar p { margin: 0 0 6px; font-size: 14px; }
+.alertbar .secs { font-family: var(--font-mono); color: var(--brass); }
+.timer { height: 4px; border-radius: 2px; background: var(--surface-sunken); overflow: hidden; }
+.timer i { display: block; height: 100%; background: var(--brass); animation: drain 12s linear infinite; }
+.alertbar--react { background: rgba(43, 26, 77, 0.96); border-color: var(--card-wild-a); }
+.alertbar--react .timer i { background: var(--card-wild-a); animation-duration: 8s; }
+@keyframes drain { from { width: 100%; } to { width: 0; } }
+
+/* ---- 对手 ---- */
+.opponents { display: grid; gap: var(--sp-2); grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.opp {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--sp-2);
+  border: 1px solid #2c3833;
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+  font-size: 13px;
+}
+.opp--acting { border-color: var(--brass); box-shadow: 0 0 0 1px var(--brass-glow); }
+.opp .who { display: flex; align-items: center; gap: 6px; font-family: var(--font-display); font-size: 15px; }
+.opp .hand-count { font-family: var(--font-mono); color: var(--text-secondary); }
+.opp .hand-count b { color: var(--text-primary); font-size: 15px; }
+.opp .tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.skillchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border: 1px solid var(--brass-dim);
+  border-radius: var(--radius-pill);
+  background: rgba(211, 172, 90, 0.08);
+  font-size: 12px;
+}
+.skillchip .sigil { font-family: var(--font-mono); color: var(--brass); }
+.skillchip--hidden { border-style: dashed; color: var(--text-secondary); }
+
+/* ---- 牌桌中央 ---- */
+.center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-4);
+  padding: var(--sp-4) 0;
+}
+.center .slot { text-align: center; }
+.center .slot span { display: block; margin-top: 6px; font-size: 12px; color: var(--text-secondary); }
+.center .card { --card-w: 68px; --card-h: 102px; }
+.dirs { font-family: var(--font-mono); font-size: 22px; color: var(--brass); }
+
+/* ---- 惩罚叠链横幅 ---- */
+.chain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-panel);
+  background: rgba(201, 58, 43, 0.14);
+}
+.chain .seg { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+.chain .seg b { font-family: var(--font-mono); font-size: 16px; }
+.chain .arrow { color: var(--text-secondary); font-family: var(--font-mono); }
+.chain .total {
+  margin-left: auto;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--danger);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+.swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+}
+
+/* ---- 阶段条：黄铜刻度轨 ---- */
+.turnline { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
+.turnline .owner { font-family: var(--font-display); font-size: 16px; }
+.phase { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; margin: var(--sp-2) 0; padding: 0; list-style: none; }
+.phase li {
+  padding: 6px 4px 0;
+  border-top: 2px solid #2c3833;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-secondary);
+}
+.hudsay {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-left: 3px solid var(--brass);
+  background: rgba(211, 172, 90, 0.08);
+  font-size: 15px;
+}
+
+/* ---- 四句总则 ---- */
+.rules summary,
+.l1 summary {
+  cursor: pointer;
+  list-style: none;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+.rules summary::after,
+.l1 summary::after { content: "▾"; font-size: 11px; }
+.rules[open] summary::after,
+.l1[open] summary::after { content: "▴"; }
+.rules ol { margin: 0; padding-left: 1.4em; font-size: 14px; }
+.rules li { margin-bottom: 4px; }
+
+/* ---- 自己：技能卡 + 手牌 + 行动 ---- */
+.mine { display: grid; gap: var(--sp-3); }
+.skillcard {
+  position: relative;
+  padding: var(--sp-3);
+  border: 1px solid var(--brass);
+  border-radius: var(--radius-panel);
+  background: linear-gradient(180deg, rgba(211, 172, 90, 0.12), transparent 70%), var(--surface-2);
+}
+.skillcard .sc-head { display: flex; align-items: center; gap: var(--sp-2); }
+.skillcard .sigil { font-family: var(--font-mono); color: var(--brass); }
+.skillcard h3 { font-family: var(--font-display); font-size: 18px; }
+.skillcard .l0 { margin: 6px 0 0; font-size: 14px; }
+.l1 { margin-top: var(--sp-2); border-top: 1px dashed var(--brass-dim); }
+.l1 p { margin: 0 0 var(--sp-2); font-size: 14px; color: var(--text-secondary); }
+.l2 {
+  display: flex;
+  gap: 6px;
+  margin: var(--sp-2) 0 0;
+  font-size: 13px;
+  color: var(--danger-text);
+}
+.l2::before { content: "✕"; }
+
+.hand-wrap { position: relative; }
+.hand {
+  display: flex;
+  gap: var(--sp-2);
+  padding: 10px var(--sp-1) var(--sp-2);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.hand .card { cursor: pointer; }
+.hand-meta { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-secondary); }
+
+.actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; }
+.actions .btn { flex: 1 1 140px; }
+.uno-note { flex: 1 1 100%; margin: 0; }
+
+/* ---- D/E 覆盖层 ---- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: var(--sp-3);
+  background: rgba(6, 10, 8, 0.88);
+  backdrop-filter: blur(4px);
+}
+.sheet {
+  width: 100%;
+  max-width: 520px;
+  padding: var(--sp-4) var(--sp-3);
+  border: 1px solid var(--brass-dim);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+  box-shadow: var(--shadow-lift);
+}
+.sheet h2 { font-size: 20px; }
+.sheet-top { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); }
+.sheet-top .eyebrow { margin: 0; }
+.sheet .lead { margin: var(--sp-2) 0 var(--sp-4); color: var(--text-secondary); font-size: 14px; }
+
+.colors { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+.colors button {
+  min-height: 88px;
+  border: 0;
+  border-radius: var(--radius-card);
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+}
+.colors button:nth-child(1) { background: var(--card-red); }
+.colors button:nth-child(2) { background: var(--card-blue); }
+.colors button:nth-child(3) { background: var(--card-yellow); color: var(--card-yellow-ink); }
+.colors button:nth-child(4) { background: var(--card-green); }
+
+/* E：抽 3 选 1 */
+.draft { display: grid; gap: var(--sp-2); }
+@media (min-width: 620px) { .draft { grid-template-columns: repeat(3, 1fr); } }
+.draft-opt {
+  display: block;
+  padding: var(--sp-3);
+  border: 1px solid #2c3833;
+  border-radius: var(--radius-panel);
+  background: var(--surface-2);
+  cursor: pointer;
+}
+.draft-opt:has(input:checked) { border-color: var(--brass); background: rgba(211, 172, 90, 0.12); }
+.draft-opt input { position: absolute; opacity: 0; }
+.draft-opt .sigil { font-family: var(--font-mono); color: var(--brass); }
+.draft-opt h3 { font-family: var(--font-display); font-size: 18px; margin: 4px 0 6px; }
+.draft-opt p { margin: 0; font-size: 14px; color: var(--text-secondary); }
+.draft-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); margin-top: var(--sp-4); }
+.draft-foot .btn { flex: 1; }
+/* 手牌里的牌是按钮（键盘可达）；把浏览器默认样式抹掉，其余交给 .card。 */
+button.card { padding: 0; border: 0; font: inherit; }
+
+/* 阶段条当前步：设计稿用 body[data-state] 挑，这里由 phase 决定。 */
+.phase li.phase--now { border-top-color: var(--brass); color: var(--text-primary); }
+
+.btn--block { width: 100%; margin-top: var(--sp-3); }
+
+/* 设计稿的 alertbar 贴在状态切换器下面（top:48px）；真实页面没有那条，贴顶。 */
+.alertbar { top: 0; }
