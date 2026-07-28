@@ -1,0 +1,23 @@
+.login { max-width: 480px; padding-top: var(--sp-5); text-align: center; }
+.login .fan { display: flex; justify-content: center; height: 96px; margin-bottom: var(--sp-4); }
+.login .fan .card { margin: 0 -14px; transform-origin: 50% 120%; }
+.login .fan .card:nth-child(1) { transform: rotate(-10deg) translateY(4px); }
+.login .fan .card:nth-child(3) { transform: rotate(10deg) translateY(4px); }
+.login h1 { font-size: clamp(26px, 8vw, 34px); margin-top: var(--sp-2); }
+.login .panel { margin-top: var(--sp-4); text-align: left; }
+
+.name-input {
+  width: 100%;
+  min-height: 56px;
+  margin: var(--sp-2) 0;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--brass-dim);
+  border-radius: var(--radius-card);
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 20px;
+}
+.name-input::placeholder { color: #5c6862; }
+
+.btn--block { width: 100%; margin-top: var(--sp-3); }

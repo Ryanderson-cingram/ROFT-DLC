@@ -1,8 +1,24 @@
-import { projectView, type GameState } from "@roft/engine";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 
-const demo: GameState = { version: 1, phase: "lobby", seats: [{ userId: "demo" }] };
+export default async function Home() {
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getClaims();
+  if (!data?.claims) redirect("/login");
 
-export default function Home() {
-  const view = projectView(demo, 0);
-  return <main><h1>ROFT-DLC</h1><p>engine ok · phase: {view.phase} · v{view.version}</p></main>;
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("username")
+    .eq("id", data.claims.sub)
+    .maybeSingle();
+  if (!profile) redirect("/login");
+
+  return (
+    <main className="wrap">
+      <h1>大厅</h1>
+      <p className="hint">
+        已登录：<span className="dot" /> {profile.username}
+      </p>
+    </main>
+  );
 }
