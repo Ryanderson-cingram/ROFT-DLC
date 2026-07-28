@@ -345,7 +345,7 @@ a { color: var(--brass); }
 .state-picker {
   position: sticky;
   top: 0;
-  z-index: 90;
+  z-index: 200; /* 永远压在模态之上，否则设计稿切不出去 */
   display: flex;
   flex-wrap: wrap;
   gap: var(--sp-1);

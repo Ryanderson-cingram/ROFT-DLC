@@ -191,6 +191,77 @@
     box-shadow: inset 0 0 0 2px #f6f1e6, 0 0 0 2px var(--brass), 0 0 16px var(--brass-glow);
   }
   body[data-state="b"] .skillcard { border-color: #3a4640; background: var(--surface); opacity: 0.75; }
+
+  /* C：他人回合的反应窗口 —— 只有能打断的那张亮，其余压暗；技能卡换成劫营 */
+  body[data-state="c"] .skillcard--mine,
+  body[data-state="c"] .owner--self { display: none; }
+  body[data-state="c"] .opp--manman { border-color: var(--brass); box-shadow: 0 0 0 1px var(--brass-glow); }
+  body[data-state="c"] .hand .card { filter: saturate(0.3) brightness(0.55); transform: none; box-shadow: inset 0 0 0 2px #f6f1e6; }
+  body[data-state="c"] .hand .card[data-color="blue"][data-face="7"] {
+    filter: none;
+    transform: translateY(-6px);
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+
+  /* ---- D/E 覆盖层 ---- */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: grid;
+    place-items: center;
+    padding: var(--sp-3);
+    background: rgba(6, 10, 8, 0.88);
+    backdrop-filter: blur(4px);
+  }
+  .sheet {
+    width: 100%;
+    max-width: 520px;
+    padding: var(--sp-4) var(--sp-3);
+    border: 1px solid var(--brass-dim);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+    box-shadow: var(--shadow-lift);
+  }
+  .sheet h2 { font-size: 20px; }
+  .sheet-top { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); }
+  .sheet-top .eyebrow { margin: 0; }
+  .sheet .lead { margin: var(--sp-2) 0 var(--sp-4); color: var(--text-secondary); font-size: 14px; }
+
+  .colors { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+  .colors button {
+    min-height: 88px;
+    border: 0;
+    border-radius: var(--radius-card);
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+    cursor: pointer;
+  }
+  .colors button:nth-child(1) { background: var(--card-red); }
+  .colors button:nth-child(2) { background: var(--card-blue); }
+  .colors button:nth-child(3) { background: var(--card-yellow); color: var(--card-yellow-ink); }
+  .colors button:nth-child(4) { background: var(--card-green); }
+
+  /* E：抽 3 选 1 */
+  .draft { display: grid; gap: var(--sp-2); }
+  @media (min-width: 620px) { .draft { grid-template-columns: repeat(3, 1fr); } }
+  .draft-opt {
+    display: block;
+    padding: var(--sp-3);
+    border: 1px solid #2c3833;
+    border-radius: var(--radius-panel);
+    background: var(--surface-2);
+    cursor: pointer;
+  }
+  .draft-opt:has(input:checked) { border-color: var(--brass); background: rgba(211, 172, 90, 0.12); }
+  .draft-opt input { position: absolute; opacity: 0; }
+  .draft-opt .sigil { font-family: var(--font-mono); color: var(--brass); }
+  .draft-opt h3 { font-family: var(--font-display); font-size: 18px; margin: 4px 0 6px; }
+  .draft-opt p { margin: 0; font-size: 14px; color: var(--text-secondary); }
+  .draft-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); margin-top: var(--sp-4); }
+  .draft-foot .btn { flex: 1; }
 </style>
 </head>
 <body data-state="a">
@@ -208,6 +279,11 @@
   <div class="timer"><i></i></div>
 </div>
 
+<div class="alertbar alertbar--react only-c">
+  <p>等待你响应：小满打出了 蓝7，你可以劫营 · <span class="secs">8s</span></p>
+  <div class="timer"><i></i></div>
+</div>
+
 <main class="table">
 
   <section class="opponents">
@@ -217,11 +293,14 @@
       <span class="skillchip"><span class="sigil">♦10</span>劫营</span>
       <span class="tags"><span class="badge" data-tone="ok">已喊 UNO</span></span>
     </div>
-    <div class="opp">
+    <div class="opp opp--manman">
       <span class="who"><span class="dot"></span>小满</span>
       <span class="hand-count">手牌 <b>4</b></span>
       <span class="skillchip skillchip--hidden"><span class="sigil">?</span>未亮出</span>
-      <span class="tags"><span class="badge" data-tone="warn">恋战</span></span>
+      <span class="tags">
+        <span class="badge" data-tone="warn">恋战</span>
+        <span class="badge only-c" data-tone="magic">出牌中</span>
+      </span>
     </div>
     <div class="opp">
       <span class="who"><span class="dot"></span>老白</span>
@@ -254,7 +333,8 @@
 
   <section>
     <div class="turnline">
-      <span class="owner">你的回合</span>
+      <span class="owner owner--self">你的回合</span>
+      <span class="owner only-c">小满的回合</span>
       <span class="hint">第 3 轮</span>
     </div>
     <ol class="phase">
@@ -265,6 +345,7 @@
     </ol>
     <p class="hudsay only-a">你的回合：可以先用技能，或直接出牌</p>
     <p class="hudsay only-b">被 +2/+4 了：只能出 +4 接着叠，或者吃下 6 张</p>
+    <p class="hudsay only-c">别人的回合：这一轮只等你要不要打断，其他操作先停下</p>
   </section>
 
   <details class="rules panel">
@@ -279,7 +360,7 @@
 
   <section class="mine">
 
-    <div class="skillcard">
+    <div class="skillcard skillcard--mine">
       <div class="sc-head">
         <span class="sigil">♠1</span>
         <h3>恒心</h3>
@@ -293,8 +374,25 @@
       <p class="l2 only-b">惩罚回合不能用主动技能</p>
     </div>
 
+    <div class="skillcard only-c">
+      <div class="sc-head">
+        <span class="sigil">♦10</span>
+        <h3>劫营</h3>
+        <span class="badge" data-tone="ok">已亮出</span>
+      </div>
+      <p class="l0">他人打出你也有的同色同数牌时，可同时打出打断</p>
+      <details class="l1">
+        <summary>细则</summary>
+        <p>小满打出的是蓝7，你手里也有蓝7。在这 8 秒里按「劫营打断」，你的蓝7 跟着落桌，回合顺序从你这里继续。</p>
+      </details>
+    </div>
+
     <div class="hand-wrap">
-      <div class="hand-meta"><span>你的手牌 <b class="count">7</b></span><span class="only-a">高亮 = 现在能打</span></div>
+      <div class="hand-meta">
+        <span>你的手牌 <b class="count">7</b></span>
+        <span class="only-a">高亮 = 现在能打</span>
+        <span class="only-c">跳动的这张能打断</span>
+      </div>
       <div class="hand">
         <span class="card card--legal" data-color="red" data-face="3"></span>
         <span class="card card--legal" data-color="red" data-face="7"></span>
@@ -317,9 +415,63 @@
       <button class="btn btn--danger">吃下 6 张</button>
     </div>
 
+    <div class="actions only-c">
+      <button class="btn btn--primary">劫营打断</button>
+      <button class="btn btn--ghost">放弃</button>
+    </div>
+
   </section>
 
 </main>
+
+<div class="overlay only-d" role="dialog" aria-modal="true" aria-labelledby="d-title">
+  <div class="sheet">
+    <p class="eyebrow">选颜色</p>
+    <h2 id="d-title">你打出了 +4，选择颜色</h2>
+    <p class="lead">选完之后，下家要按这个颜色接牌。</p>
+    <div class="colors">
+      <button>红</button>
+      <button>蓝</button>
+      <button>黄</button>
+      <button>绿</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay only-e" role="dialog" aria-modal="true" aria-labelledby="e-title">
+  <div class="sheet">
+    <div class="sheet-top">
+      <p class="eyebrow">开局 · 抽 3 选 1</p>
+      <span class="hint">其他玩家选择中 2/4</span>
+    </div>
+    <h2 id="e-title">挑一个技能带上桌</h2>
+    <p class="lead">整局只有这一个技能，亮出来才生效。</p>
+    <div class="draft">
+      <label class="draft-opt">
+        <input type="radio" name="draft" checked>
+        <span class="sigil">♥3</span>
+        <h3>精英</h3>
+        <p>数字牌可当作大 1 点打出（只剩 1 张手牌时失效）</p>
+      </label>
+      <label class="draft-opt">
+        <input type="radio" name="draft">
+        <span class="sigil">♦J</span>
+        <h3>远星</h3>
+        <p>上家 +2/+4 时弃代价牌并摸 2，视为跟着叠牌</p>
+      </label>
+      <label class="draft-opt">
+        <input type="radio" name="draft">
+        <span class="sigil">♣3</span>
+        <h3>司夜</h3>
+        <p>打出变色牌后掷骰获「盗」；花盗换手牌</p>
+      </label>
+    </div>
+    <div class="draft-foot">
+      <span class="hint">已选：精英</span>
+      <button class="btn btn--primary">确认</button>
+    </div>
+  </div>
+</div>
 
 <script>
   document.querySelector('.state-picker').addEventListener('click', e => {
