@@ -22,7 +22,19 @@ export interface SkillData {
   params: ParamSource;
 }
 
-export const SKILL_DATA: SkillData = { byId: skills.byId, params: SKILL_PARAMS };
+/**
+ * `byId` 用 getter 惰性取，不在模块顶层读。
+ * registry → handlers → actions/draw → draw-passives → registry 是一个环：顶层直接读
+ * `skills.byId` 时，registry 可能还在初始化中，拿到的是 undefined。谁先被 import 决定
+ * 会不会炸——本地全量跑侥幸没事，CI 单独跑 registry.test.ts 就炸了。
+ * 惰性化之后模块初始化不再依赖环内顺序，环存在也无害。
+ */
+export const SKILL_DATA: SkillData = {
+  get byId() {
+    return skills.byId;
+  },
+  params: SKILL_PARAMS,
+};
 
 /** 一层修正的形状。L2/L5 之外的层要 scope / procedure，参数表还没有承载它们的槽位。 */
 function toModifier(layer: DrawLayer, source: string, n: number | undefined): DrawModifier {
