@@ -11,15 +11,21 @@ export type EdgeResult<T> =
 export async function callEdge<T>(name: string, body: object): Promise<EdgeResult<T>> {
   const supabase = createClient();
   const { data: { session } } = await supabase.auth.getSession();
-  const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/${name}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-      Authorization: `Bearer ${session?.access_token ?? ""}`,
-    },
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/${name}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+        Authorization: `Bearer ${session?.access_token ?? ""}`,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    // status 0 = 根本没到服务端。调用方可以带同一个 idempotencyKey 安全重试。
+    return { ok: false, status: 0, reason: "network" };
+  }
   const payload = await res.json().catch(() => ({}));
   if (res.ok) return { ok: true, data: payload as T };
   return { ok: false, status: res.status, reason: payload.reason ?? payload.error ?? "unknown" };
@@ -46,6 +52,7 @@ const SAYINGS: Record<string, string> = {
   stale_window: "这个窗口已经结算过了。",
   not_yet_expired: "还没到时间。",
   version_conflict: "桌面刚变过，重新看一眼再操作。",
+  network: "网络没通，检查一下再试。",
   unauthenticated: "登录过期了，重新进一次。",
 };
 

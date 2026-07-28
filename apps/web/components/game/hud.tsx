@@ -50,6 +50,8 @@ export function Hud({ snapshot, names, onPlay, onAction, onExpire }: Props) {
     if (window) return `等${window.actors.map(nameOf).join("、")}响应，其他操作先停下`;
     if (!yourTurn) return `${nameOf(s.currentSeat ?? 0)}的回合，等一等`;
     if (s.drawnPlayable) return "刚摸到的这张能打：打它，或者结束回合";
+    // 选了叠就得真叠出来：链没结算前摸牌不合法（P3），别再提示「或者摸牌」。
+    if (s.punish) return `接着叠：打一张能接的惩罚牌（累计 ${s.punish.total} 张）`;
     return "你的回合：挑一张能打的牌，或者摸牌";
   })();
 

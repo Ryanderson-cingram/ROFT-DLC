@@ -23,7 +23,15 @@ export function serveAuthed(
     if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
     const { data: { user } } = await userClient(req).auth.getUser();
     if (!user) return json({ error: "unauthenticated" }, 401);
-    const body = req.headers.get("content-type")?.includes("json") ? await req.json() : {};
+    let body: Record<string, unknown> = {};
+    if (req.headers.get("content-type")?.includes("json")) {
+      // 坏 body 是 400，不是 500——不然日志里全是无从下手的堆栈。
+      try {
+        body = await req.json();
+      } catch {
+        return json({ error: "bad_json" }, 400);
+      }
+    }
     return await fn({ body, user, svc: serviceClient() });
   });
 }

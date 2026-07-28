@@ -7,7 +7,10 @@ import { skillById } from "@/lib/skills";
  * 开局抽 3 选 1。契约里还没有 draft 的表达（没有对应 Action，快照也不带候选），
  * 所以本轮它只是静态 UI：选了不发请求。技能获取流程是下一个计划的事。
  */
-export function DraftSheet({ options }: { options: string[] }) {
+// 候选先写死；技能获取流程（S1 抽 3 选 1）落地后由服务端给。
+const DEFAULT_OPTIONS = ["精英", "远星", "司夜"];
+
+export function DraftSheet({ options = DEFAULT_OPTIONS }: { options?: string[] }) {
   const skills = options.map(skillById).filter((s) => s !== undefined);
   const [picked, setPicked] = useState(skills[0]?.id ?? "");
 

@@ -1,8 +1,10 @@
 import type { Card, ClientSnapshot } from "@roft/engine";
-import type { Skill } from "@/lib/skills";
 
 /**
  * 设计稿 game.html 的五个状态，改写成受 `ClientSnapshot` 驱动的数据。
+ * 页面已经接上真快照（Task 5），这份 fixture 留着当**契约的编译期验证**：
+ * `pnpm --filter web typecheck` 过了，就说明契约装得下 HUD 要画的全部东西。
+
  * 类型标注是重点：它是引擎契约的编译期验证，fixture 编译不过就说明契约有洞。
  * 人物与张数照搬设计稿（凛 7 张、阿柴 2 张已喊 UNO、小满 4 张、老白 11 张神化 2）。
  *
@@ -144,9 +146,6 @@ export const fixtureE: ClientSnapshot = {
   legalActions: [],
   disabledReasons: {},
 };
-
-/** 抽 3 选 1 的候选（静态）。技能获取流程是下一个计划的事。 */
-export const fixtureDraft: Skill["id"][] = ["精英", "远星", "司夜"];
 
 export const FIXTURES = { a: fixtureA, b: fixtureB, c: fixtureC, d: fixtureD, e: fixtureE };
 export type FixtureKey = keyof typeof FIXTURES;
