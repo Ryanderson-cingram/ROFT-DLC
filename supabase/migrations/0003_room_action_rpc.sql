@@ -30,7 +30,13 @@ begin
     raise exception 'apply_room_action: refusing to apply an action with no events';
   end if;
 
-  -- CAS 必须是第一条语句：它顺带锁住 rooms 行，把同房间的并发写串行化，
+  -- 幂等重放必须在 CAS 之前：重放带的通常是**旧的** expectedVersion（第一次其实成功了，
+  -- 客户端只是没收到响应），先做 CAS 的话它会直接冲突失败，幂等键就形同虚设。
+  select room_version into v_version
+    from room_events where room_id = p_room and idempotency_key = p_idempotency_key;
+  if found then return jsonb_build_object('version', v_version, 'idempotent', true); end if;
+
+  -- CAS 必须是第一条写语句：它顺带锁住 rooms 行，把同房间的并发写串行化，
   -- 下面 max(seq)+1 才不需要额外的序列或锁。
   update rooms
      set version = p_expected_version + 1,
@@ -58,6 +64,16 @@ begin
     from jsonb_array_elements(p_events) with ordinality as e(ev, i);
 
   return jsonb_build_object('version', v_version, 'seq', v_seq + jsonb_array_length(p_events));
+
+-- 上面的预检查挡不住真正的并发：两个同 key 的请求可能双双查不到、双双往下走。
+-- 最后由唯一约束裁决，输的那个走这里——异常处理块自带隐式 savepoint，
+-- 抛出时上面的 CAS 与 state 写入一并回滚，所以它同样是零副作用。
+exception when unique_violation then
+  select room_version into v_version
+    from room_events where room_id = p_room and idempotency_key = p_idempotency_key;
+  -- 查不到说明撞的是别的唯一约束（如 room_id+seq），那是真 bug，不能吞掉
+  if v_version is null then raise; end if;
+  return jsonb_build_object('version', v_version, 'idempotent', true);
 end $$;
 
 -- 授权照 0001 的显式模式：只有 service_role 能调（Edge 用 service key）。

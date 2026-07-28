@@ -9,10 +9,8 @@ serveAuthed(async ({ body, user, svc }) => {
   };
   const action = body.action as Action;
 
-  const { data: dup } = await svc.from("room_events").select("room_version")
-    .eq("room_id", roomId).eq("idempotency_key", idempotencyKey).maybeSingle();
-  if (dup) return json({ version: dup.room_version, idempotent: true });
-
+  // 幂等不在这里预检查——事务外的预检查挡不住两个同 key 的并发请求。
+  // 由 RPC 里的唯一约束裁决，重放走 apply_room_action 的 unique_violation 分支。
   const { data: room } = await svc.from("rooms").select("created_by, status").eq("id", roomId).single();
   if (!room) return json({ error: "room_not_found" }, 404);
 
@@ -47,5 +45,5 @@ serveAuthed(async ({ body, user, svc }) => {
     return json({ error: "apply_failed" }, 500);
   }
   if (!applied) return json({ error: "version_conflict" }, 409);
-  return json({ version: applied.version });
+  return json(applied.idempotent ? { version: applied.version, idempotent: true } : { version: applied.version });
 });
