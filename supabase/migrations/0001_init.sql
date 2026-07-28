@@ -74,6 +74,17 @@ create policy "events member read" on public.room_events for select to authentic
   using (public.is_room_member(room_id));
 create policy "skill defs readable" on public.skill_defs for select to authenticated using (true);
 
+-- Data API 暴露：新表默认不再自动授权任何角色（config.toml auto_expose_new_tables 未开），
+-- RLS 只管「哪些行」，能不能碰到表仍要显式 grant。room_state_private 只给 service_role。
+grant select on table
+  public.profiles, public.rooms, public.room_seats, public.room_events, public.skill_defs
+  to authenticated;
+grant insert, update on table public.profiles to authenticated;
+grant select, insert, update, delete on table
+  public.profiles, public.rooms, public.room_seats,
+  public.room_state_private, public.room_events, public.skill_defs
+  to service_role;
+
 -- 列级隐私：private_payload 不给 authenticated（RLS 管行、grant 管列）
 revoke select on table public.room_events from authenticated;
 grant select (id, room_id, seq, actor, type, public_payload, created_at)
