@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tokens 预览（临时）</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  .grid { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+  .swatch { padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-card); font-family: var(--font-mono); font-size: 12px; }
+</style>
+</head>
+<body>
+<main class="wrap stack">
+  <header>
+    <p class="eyebrow">tokens preview</p>
+    <h1>牌面 · 徽章 · 神化点</h1>
+    <p class="hint">临时目检页，Task 6 完成后删除。</p>
+  </header>
+
+  <section class="panel">
+    <h2>四色牌</h2>
+    <hr class="rail">
+    <div class="grid"><span class="card" data-color="red" data-face="3"></span><span class="card" data-color="red" data-face="+2"></span><span class="card" data-color="red" data-face="停"></span><span class="card" data-color="red" data-face="转"></span></div>
+    <div class="grid"><span class="card" data-color="blue" data-face="7"></span><span class="card" data-color="blue" data-face="+2"></span><span class="card" data-color="blue" data-face="停"></span><span class="card" data-color="blue" data-face="转"></span></div>
+    <div class="grid"><span class="card" data-color="yellow" data-face="0"></span><span class="card" data-color="yellow" data-face="+2"></span><span class="card" data-color="yellow" data-face="停"></span><span class="card" data-color="yellow" data-face="转"></span></div>
+    <div class="grid"><span class="card" data-color="green" data-face="9"></span><span class="card" data-color="green" data-face="+2"></span><span class="card" data-color="green" data-face="停"></span><span class="card" data-color="green" data-face="转"></span></div>
+    <h2>彩色牌与牌背</h2>
+    <hr class="rail">
+    <div class="grid">
+      <span class="card" data-color="wild" data-face="变色"></span>
+      <span class="card" data-color="wild" data-face="+4"></span>
+      <span class="card" data-color="wild" data-face="洗牌"></span>
+      <span class="card" data-color="wild" data-face="毒"></span>
+      <span class="card" data-color="back"></span>
+    </div>
+    <h2>状态</h2>
+    <hr class="rail">
+    <div class="grid" style="padding-top:8px">
+      <span class="card card--legal" data-color="red" data-face="7"></span>
+      <span class="card card--pulse" data-color="blue" data-face="7"></span>
+      <span class="card card--dim" data-color="green" data-face="4"></span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>徽章 / 神化 / 在线</h2>
+    <hr class="rail">
+    <div class="grid">
+      <span class="badge" data-tone="magic">五彩</span>
+      <span class="badge" data-tone="warn">恋战</span>
+      <span class="badge" data-tone="bad">心盲</span>
+      <span class="badge" data-tone="magic">领域</span>
+      <span class="badge" data-tone="bad">同命</span>
+      <span class="badge" data-tone="ok">UNO</span>
+      <span class="badge">魂 <b class="count">3</b></span>
+      <span class="badge">盗 <b class="count">1</b></span>
+    </div>
+    <div class="row">
+      <span>神化</span>
+      <span class="pips"><i class="pip"></i><i class="pip"></i><i class="pip pip--empty"></i></span>
+      <span class="dot"></span><span class="hint">在线</span>
+      <span class="dot dot--off"></span><span class="hint">离线</span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>正文对比度</h2>
+    <hr class="rail">
+    <p>主文字 --text-primary 于面板底色，用于所有正文与按钮文案。</p>
+    <p class="muted">次文字 --text-secondary，用于说明行与已读信息。</p>
+    <p class="hint">辅助文字 13px --text-secondary，用于卡片脚注。</p>
+    <div class="grid" style="margin-top:16px">
+      <button class="btn btn--primary">主按钮</button>
+      <button class="btn">次按钮</button>
+      <button class="btn btn--danger">危险</button>
+      <button class="btn" disabled>置灰</button>
+    </div>
+  </section>
+</main>
+</body>
+</html>
