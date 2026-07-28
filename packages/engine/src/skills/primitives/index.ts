@@ -9,8 +9,13 @@
  */
 export const primitives: ReadonlySet<string> = new Set<string>([
   "drawModifier", // 02 §7 摸牌数结算层级
-  "marks", // 03 §5 计数标记的获得/上限/花费
-  "statuses", // 03 §4 状态的赋予/互斥/移除
+  "draw_count", //   同上，`modifies` 那一侧的名字
+  "marks", //        03 §5 计数标记的获得/上限/花费
+  "statuses", //     03 §4 状态的赋予/互斥/移除
+  // 下面两个是 02 §2 的 `kind` 值，不是机制。放进来只是因为 kind 与原语名共用一个
+  // 命名空间；「这个技能真的能执行吗」由 loadSkills 另外查 HANDLERS，见 registry.ts。
+  "active", //       阶段 1 声明发动，占 V7 的额度
+  "passive", //      条件满足即触发，不占次数（V8）
 ]);
 
 export { resolveDrawCount } from "./draw-modifier.ts";

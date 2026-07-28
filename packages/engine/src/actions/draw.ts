@@ -1,5 +1,6 @@
 import { shuffle } from "../deck.ts";
 import { commit, isPlayable, passTurn, reject } from "../legal.ts";
+import { drawModifiersFor } from "../skills/draw-passives.ts";
 import { resolveDrawCount } from "../skills/primitives/draw-modifier.ts";
 import type { DrawModifier, DrawRequest, DrawResolution } from "../skills/primitives/draw-modifier.ts";
 import type { ApplyResult, Board, Card, Ctx, EngineEvent, GameState } from "../types.ts";
@@ -7,6 +8,10 @@ import type { ApplyResult, Board, Card, Ctx, EngineEvent, GameState } from "../t
 /**
  * 唯一的摸牌出口：先把请求过一遍 02 §7 的层级 reducer 得出张数，再真的从牌堆取。
  * 层级在这里而不是在各调用点，是为了没有哪条摸牌路径能绕开它（spec §8 禁止 ad-hoc 排序）。
+ *
+ * 已亮出技能声明的修正也在这里采集，同样是为了绕不开：调用方只描述「谁因为什么摸几张」，
+ * 场上有谁在改这个数不是它该知道的事。`mods` 参数留给调用方**当场算出来**的修正
+ * （掷骰之类），它与采集到的合并后一起进 reducer。
  *
  * 摸空时把弃牌堆（除牌顶）洗回摸牌堆；洗回后仍不够就摸到几张算几张
  * ——所以 `drawn.length` 可能小于 `resolution.count`。随机源只来自注入的 `rng`。
@@ -17,7 +22,7 @@ export function drawCards(
   rng: () => number,
   mods: readonly DrawModifier[] = [],
 ): { board: Board; drawn: Card[]; reshuffledOrder: string[] | null; resolution: DrawResolution } {
-  const resolution = resolveDrawCount(req, mods);
+  const resolution = resolveDrawCount(req, [...drawModifiersFor(b, req), ...mods]);
   let drawPile = b.drawPile.slice();
   let discardPile = b.discardPile;
   const drawn: Card[] = [];
@@ -61,7 +66,7 @@ export function drawCard(state: GameState, seat: number, ctx: Ctx): ApplyResult 
   if (b.drawnPlayable) return reject(state, "already_drawn");
 
   // U1 是规则摸牌，不是惩罚（01-P1）
-  const { board, drawn, reshuffledOrder } = drawCards(b, { kind: "rule", base: 1 }, ctx.rng);
+  const { board, drawn, reshuffledOrder } = drawCards(b, { kind: "rule", base: 1, seat }, ctx.rng);
   const withCard: Board = { ...board, hands: giveTo(board, seat, drawn) };
   const events = drawEvents(seat, drawn, reshuffledOrder);
 

@@ -91,7 +91,7 @@ function settle(state: GameState, seat: number, choice: string, ctx: Ctx): Apply
   // P10：吃下累计 → 摸完即回合结束，不能再出牌。
   // P11：`chain.total` 就是「先加总各段贡献」的结果，直接作为 L0 基础值；
   // P6 的「只作用于自己那张」在进链时已入各段贡献，02 §7 L0 不得重复计算。
-  const { board, drawn, reshuffledOrder } = drawCards(b, { kind: "punish", base: chain.total }, ctx.rng);
+  const { board, drawn, reshuffledOrder } = drawCards(b, { kind: "punish", base: chain.total, seat }, ctx.rng);
   const eaten: Board = {
     ...board,
     hands: giveTo(board, seat, drawn),

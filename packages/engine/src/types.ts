@@ -78,8 +78,12 @@ export type Action =
   | { type: "respond"; seat: number; windowId: string; choice: string }
   /** V1：默认只能在己方回合亮出；V2 的白名单例外由技能定义的 reveal_window 放行。 */
   | { type: "revealSkill"; seat: number }
-  /** V7：发动一条主动。`effectKey` 对应 04 标注里的 ①②③，同回合只能选一条。 */
-  | { type: "activateSkill"; seat: number; effectKey: string };
+  /**
+   * V7：发动一条主动。`effectKey` 对应 04 标注里的 ①②③，同回合只能选一条。
+   * `cardIds` 是为付代价挑的手牌（恒心弃 1）——跟无色牌的 `chosenColor` 一样，
+   * 是提交前的客户端选择，不是服务端窗口；不需要代价的效果不带它。
+   */
+  | { type: "activateSkill"; seat: number; effectKey: string; cardIds?: string[] };
 export interface EngineEvent {
   type: string;
   public: Record<string, unknown>;

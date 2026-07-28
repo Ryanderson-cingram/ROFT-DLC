@@ -80,16 +80,34 @@ describe("skill registry", () => {
     ]);
   });
 
-  // 真实定义的当下状态：10 个 MVP 技能已标注完整，但原语一个都还没建，所以池是空的、
-  // 它们全在 unsupported 里。primitives 计划每完成一波，就有技能从 unsupported 挪进 pool；
+  // 真实定义的当下状态：10 个 MVP 技能已标注完整，原语建到哪一波，池里就有几个。
+  // 计划 Task 3 建完 active/passive/draw_count，恒心与恩惠据此从 unsupported 挪进 pool；
   // Task 8 的 CI 断言会在全部建完时要求 MVP 10 必须在 pool 里。
-  it("标注已完成但原语未建：MVP 技能落在 unsupported 而不是池里", () => {
+  it("原语建到哪一波，池里就有几个技能", () => {
     const r = loadSkills(skillDefs, primitives);
     expect(r.byId.size).toBe(60);
-    expect(r.pool).toEqual([]);
-    expect(r.unsupported.map((u) => u.id)).toContain("heart-1"); // 恩惠
+    expect(r.pool.map((s) => s.id).sort()).toEqual(["heart-1", "spade-1"]); // 恩惠、恒心
+    expect(r.unsupported.map((u) => u.id)).toContain("heart-3"); // 精英要 card_value，还没建
     // 报出来的是具体缺哪个机制，不是一句「不支持」
-    expect(r.unsupported.find((u) => u.id === "heart-1")!.missing.length).toBeGreaterThan(0);
+    expect(r.unsupported.find((u) => u.id === "heart-3")!.missing).toEqual(['effects[0].modifies: "card_value"']);
+  });
+
+  // 注册表里有 "active" 只说明「阶段 1 发动」这个 kind 引擎认识，不代表某个技能真有行为。
+  // 真正能不能执行看 HANDLERS 有没有它——否则玩家抽到它、亮出、发动，拿到 not_implemented。
+  it("有 active 效果却没有 handler 的技能不进池", () => {
+    const d = doc(def({
+      id: "no-such-skill",
+      structured: true,
+      effects: [{ key: "1", kind: "active" }],
+    }));
+    const r = loadSkills(d, new Set(["active"]));
+    expect(r.pool).toEqual([]);
+    expect(r.unsupported[0].missing).toEqual(['effects[0]: 没有 handler']);
+  });
+
+  it("纯被动技能不需要 handler（被动由采集器按定义生效）", () => {
+    const d = doc(def({ id: "heart-1", structured: true, effects: [{ key: "passive", kind: "passive" }] }));
+    expect(loadSkills(d, new Set(["passive"])).pool.map((s) => s.id)).toEqual(["heart-1"]);
   });
 
   it("默认参数就是生产用的那两个源，加载不抛", () => {

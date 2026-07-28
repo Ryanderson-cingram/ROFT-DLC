@@ -7,6 +7,7 @@
 // （断言首批 10 个 MVP 技能必须在池里，见 primitives 计划 Task 8）。
 //
 // 规则来源：docs/knowledge-base/02-methodology.md §1/§2；计划 §1「硬约束」。
+import { HANDLERS } from "./handlers.ts";
 import { primitives } from "./primitives/index.ts";
 import { skillDefs } from "./skill-defs.ts";
 import type { SkillDef } from "./types.ts";
@@ -47,6 +48,7 @@ const isAnnotated = (d: LoadableSkillDef) => d.structured === true && d.unimplem
 export function loadSkills(
   doc: { skills: readonly LoadableSkillDef[] } = skillDefs,
   registered: ReadonlySet<string> = primitives,
+  handlers: Readonly<Record<string, unknown>> = HANDLERS,
 ): LoadedSkills {
   const pool: LoadableSkillDef[] = [];
   const unsupported: { id: string; missing: string[] }[] = [];
@@ -55,8 +57,20 @@ export function loadSkills(
     const missing = mechanismRefs(d)
       .filter((r) => !registered.has(r.name))
       .map((r) => `${r.path}: "${r.name}"`);
+
+    // 注册表里有 "active" 只说明引擎认识这个 kind，不代表这个技能真有行为。
+    // 主动效果得有 handler 才算能执行，否则玩家抽到它、亮出、发动，只会拿到 not_implemented。
+    // 被动不需要：它们由摸牌采集器一类的机制按定义生效，没有 per-skill 代码。
+    if (!handlers[d.id])
+      d.effects?.forEach((e, i) => {
+        if (e.kind === "active") missing.push(`effects[${i}]: 没有 handler`);
+      });
+
     if (missing.length > 0) unsupported.push({ id: d.id, missing });
     else pool.push(d);
   }
   return { byId: new Map(doc.skills.map((d) => [d.id, d])), pool, unsupported };
 }
+
+/** 生产用的那一份，进程内加载一次。要注入别的定义源就直接调 `loadSkills()`。 */
+export const skills = loadSkills();
