@@ -1,7 +1,7 @@
 import { isPlayable, isWild, nextSeat } from "../legal.ts";
 import type { ApplyResult, Board, Card, Color, Ctx, GameState } from "../types.ts";
 
-const reject = (state: GameState, reason: string): ApplyResult => ({ state, events: [], rejected: { reason } });
+export const reject = (state: GameState, reason: string): ApplyResult => ({ state, events: [], rejected: { reason } });
 
 /** 把牌桌换成新的，version + 1；输入 state 永不修改。 */
 export const commit = (state: GameState, board: Board, phase: GameState["phase"] = state.phase): GameState => ({

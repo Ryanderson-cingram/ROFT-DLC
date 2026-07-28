@@ -1,3 +1,4 @@
+import { drawCard, endTurn } from "./actions/draw.ts";
 import { playCards } from "./actions/play-cards.ts";
 import { startGame } from "./actions/start-game.ts";
 import type { Action, ApplyResult, Ctx, GameState } from "./types.ts";
@@ -13,6 +14,10 @@ export function applyAction(state: GameState, action: Action, ctx: Ctx): ApplyRe
       return startGame(state, ctx);
     case "playCards":
       return playCards(state, action, ctx);
+    case "drawCard":
+      return drawCard(state, action.seat, ctx);
+    case "endTurn":
+      return endTurn(state, action.seat);
     case "ping":
       return { state: { ...state, version: state.version + 1 }, events: [{ type: "pinged", public: { seat: action.seat } }] };
     default:
