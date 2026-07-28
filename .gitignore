@@ -1,2 +1,6 @@
 .DS_Store
 .venv/
+node_modules/
+.next/
+supabase/.temp/
+.env*
