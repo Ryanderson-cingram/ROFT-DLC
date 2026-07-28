@@ -91,6 +91,51 @@ describe("playCards", () => {
     expect(r.state.board!.winner).toBe(0);
   });
 
+  // U5：功能牌不能作为最后一张牌结束游戏，打出后须再摸 1 张
+  for (const [color, face] of [["R", "+2"], ["R", "skip"], ["R", "rev"], [null, "wild"], [null, "+4"]] as const) {
+    it(`U5: a final ${face} does not win -- you draw 1 and play continues`, () => {
+      const last = card(color, face);
+      const s = table([[last], [card("Y", "1")], [card("Y", "2")]], { discardPile: [R7] });
+      const r = applyAction(
+        s,
+        { type: "playCards", seat: 0, cardIds: [last.id], chosenColor: color ? undefined : "B" },
+        ctx(),
+      );
+      expect(r.rejected).toBeUndefined();
+      expect(r.state.phase).not.toBe("finished");
+      expect(r.state.board!.winner).toBeUndefined();
+      expect(r.state.board!.hands[0]).toHaveLength(1); // 摸了代价牌
+    });
+  }
+
+  it("U5: the final card still resolves -- a last +2 still opens the punish chain", () => {
+    const last = card("R", "+2");
+    const s = table([[last], [card("Y", "1")], [card("Y", "2")]], { discardPile: [R7] });
+    const r = applyAction(s, { type: "playCards", seat: 0, cardIds: [last.id] }, ctx());
+    expect(r.state.board!.punish?.total).toBe(2);
+    expect(r.state.pendingWindow?.actors).toEqual([1]);
+  });
+
+  it("U5: the cost card is not a punishment, so it is drawn even mid-chain", () => {
+    // 座位 0 用最后一张 +4 接上家的 +2：既叠链，又因 U5 摸 1 张
+    const last = card(null, "+4");
+    const s = table([[last], [card("Y", "1")], [card("Y", "2")]], {
+      discardPile: [card("B", "+2")],
+      punish: { initiator: 1, segments: [{ seat: 1, face: "+2", draw: 2 }], total: 2 },
+    });
+    const r = applyAction(s, { type: "playCards", seat: 0, cardIds: [last.id], chosenColor: "B" }, ctx());
+    expect(r.rejected).toBeUndefined();
+    expect(r.state.board!.hands[0]).toHaveLength(1);
+    expect(r.state.board!.punish?.total).toBe(6);
+  });
+
+  it("U5: a number card still wins even when the draw pile is empty", () => {
+    const last = card("R", "3");
+    const s = table([[last], [card("Y", "1")], [card("Y", "2")]], { discardPile: [R7], drawPile: [] });
+    const r = applyAction(s, { type: "playCards", seat: 0, cardIds: [last.id] }, ctx());
+    expect(r.state.board!.winner).toBe(0);
+  });
+
   it("rejects multi-card plays (并列/神化 are out of scope this round)", () => {
     const a = card("R", "3");
     const b = card("R", "4");

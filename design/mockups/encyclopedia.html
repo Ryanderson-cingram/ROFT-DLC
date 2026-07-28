@@ -37,6 +37,15 @@
   .creed { border-color: var(--brass); }
   .creed ol { margin: var(--sp-2) 0 0; padding-left: 1.5em; }
   .creed li { margin-bottom: 6px; }
+  /* U5 不属于「四句」，所以压成脚注而不是第五条 */
+  .creed .footnote {
+    margin: var(--sp-3) 0 0;
+    padding-top: var(--sp-2);
+    border-top: var(--line);
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+  }
+  .creed .footnote .dim { color: var(--text-tertiary, var(--text-secondary)); }
 
   /* 花色锚点导航 */
   .anchors {
@@ -127,6 +136,10 @@
       <li>一人一个技能；亮出来才会生效。</li>
       <li>神化 = 多几轮出牌；并列 = 一轮里多张。</li>
     </ol>
+    <p class="footnote">
+      最后一张牌必须是数字牌才算赢。功能牌（+2 / 停 / 转 / 变色 / +4 / 毒 / 洗牌）打完手牌时要再摸 1 张，
+      牌照常生效，但你没赢。<span class="dim">（司夜的「盗」可以放宽这条）</span>
+    </p>
   </section>
 
   <nav class="anchors" aria-label="按花色跳转">

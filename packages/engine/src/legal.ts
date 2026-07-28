@@ -1,4 +1,4 @@
-import type { ApplyResult, Board, Card, Color, GameState } from "./types.ts";
+import type { ApplyResult, Board, Card, Color, Face, GameState } from "./types.ts";
 
 export const reject = (state: GameState, reason: string): ApplyResult => ({ state, events: [], rejected: { reason } });
 
@@ -16,6 +16,10 @@ export const commit = (state: GameState, board: Board, phase: GameState["phase"]
 
 /** 无色牌：变色 / +4（诸神包的毒、洗牌同样无色）。 */
 export const isWild = (c: Card) => c.color === null;
+
+/** U5：功能牌不能作为最后一张牌结束游戏，只有数字牌能打完获胜。 */
+const FUNCTION_FACES = new Set<Face>(["+2", "skip", "rev", "wild", "+4", "poison", "shuffle"]);
+export const isNumberCard = (c: Card) => !FUNCTION_FACES.has(c.face);
 
 /**
  * U1/U3 单张出牌合法性：同色 / 同牌面 / 无色牌任意时候可打。
