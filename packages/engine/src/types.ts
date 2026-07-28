@@ -1,4 +1,16 @@
 export type Phase = "lobby" | "dealing" | "turnStart" | "play" | "afterPlay";
+
+export type RulePack = "base" | "gods";
+export type Color = "R" | "G" | "B" | "Y";
+/** 牌面。数字牌 0–9；功能牌 +2/停/转；无色牌 变色/+4；诸神包 毒/洗牌。 */
+export type Face =
+  | "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
+  | "+2" | "skip" | "rev"
+  | "wild" | "+4"
+  | "poison" | "shuffle";
+/** `color === null` = 无色牌（变色 / +4 / 毒 / 洗牌）。`id` 在一副牌内唯一。 */
+export interface Card { id: string; color: Color | null; face: Face }
+
 export interface PendingWindow {
   type: string;
   actors: number[];          // seat 下标
