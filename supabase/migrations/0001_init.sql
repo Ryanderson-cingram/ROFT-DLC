@@ -74,10 +74,12 @@ create policy "events member read" on public.room_events for select to authentic
   using (public.is_room_member(room_id));
 create policy "skill defs readable" on public.skill_defs for select to authenticated using (true);
 
--- Data API 暴露：新表默认不再自动授权任何角色（config.toml auto_expose_new_tables 未开），
--- RLS 只管「哪些行」，能不能碰到表仍要显式 grant。room_state_private 只给 service_role。
+-- Data API 暴露：显式授权模式（config.toml 的 auto_expose_new_tables 保持未设置＝新云端默认；
+-- 该字段已废弃，2026-10-30 移除，别为了「显式」去打开它——打开就是退回旧模式）。
+-- 新表默认不授权任何角色，RLS 只管「哪些行」，能不能碰到表仍要这里显式 grant。
+-- room_events 不在整表 grant 里——它按列授权，见下。room_state_private 只给 service_role。
 grant select on table
-  public.profiles, public.rooms, public.room_seats, public.room_events, public.skill_defs
+  public.profiles, public.rooms, public.room_seats, public.skill_defs
   to authenticated;
 grant insert, update on table public.profiles to authenticated;
 grant select, insert, update, delete on table
@@ -86,16 +88,16 @@ grant select, insert, update, delete on table
   to service_role;
 
 -- 列级隐私：private_payload 不给 authenticated（RLS 管行、grant 管列）
-revoke select on table public.room_events from authenticated;
 grant select (id, room_id, seq, actor, type, public_payload, created_at)
   on table public.room_events to authenticated;
 
--- 铃铛：Broadcast from DB，payload 只有 id（spec §3.2）
+-- 铃铛：Broadcast from DB，payload 只有 id（spec §3.2 = {roomId, version, seq}）
+-- seq 编码为 version*100 + 批内序号，所以 version = seq / 100（bigint 整除）。
 create function public.notify_room_event() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
   perform realtime.send(
-    jsonb_build_object('roomId', new.room_id, 'version', new.seq, 'seq', new.seq),
+    jsonb_build_object('roomId', new.room_id, 'version', new.seq / 100, 'seq', new.seq),
     'bell', 'room:' || new.room_id::text, false);
   return new;
 end $$;
