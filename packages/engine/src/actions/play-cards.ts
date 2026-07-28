@@ -1,6 +1,7 @@
-import { commit, isPlayable, isWild, nextSeat, reject } from "../legal.ts";
+import { commit, isNumberCard, isPlayable, isWild, nextSeat, reject } from "../legal.ts";
+import { drawCards, drawEvents, giveTo } from "./draw.ts";
 import { canStack, extendChain, openPunishWindow, punishFace } from "./punish.ts";
-import type { ApplyResult, Board, Card, Color, Ctx, GameState } from "../types.ts";
+import type { ApplyResult, Board, Card, Color, Ctx, EngineEvent, GameState } from "../types.ts";
 
 export function playCards(
   state: GameState,
@@ -37,7 +38,7 @@ function resolvePlay(
 ): ApplyResult {
   const hands = b.hands.map((h, i) => (i === seat ? h.filter((c) => c.id !== card.id) : h));
   const face = punishFace(card);
-  const played: Board = {
+  let played: Board = {
     ...b,
     hands,
     discardPile: [card, ...b.discardPile],
@@ -46,11 +47,18 @@ function resolvePlay(
     drawnPlayable: null,
     punish: face ? extendChain(b.punish, seat, face) : b.punish,
   };
-  const events = [{ type: "cardPlayed", public: { seat, card, chosenColor: chosenColor ?? null } }];
+  const events: EngineEvent[] = [{ type: "cardPlayed", public: { seat, card, chosenColor: chosenColor ?? null } }];
 
-  // 出完手牌即胜；未结算的惩罚链随之作废（裁定，见最终报告）
-  if (hands[seat].length === 0)
-    return { state: commit(state, { ...played, punish: undefined, winner: seat }, "finished"), events };
+  if (played.hands[seat].length === 0) {
+    // U5：只有数字牌能打完获胜；功能牌打空手牌 → 摸 1 张代价牌，游戏继续。
+    // 该牌照常结算（下面的惩罚链/停/转都还要走），摸的这张不是惩罚（P1）。
+    if (isNumberCard(card))
+      return { state: commit(state, { ...played, punish: undefined, winner: seat }, "finished"), events };
+
+    const { board, drawn, reshuffled } = drawCards(played, 1, ctx.rng);
+    played = { ...board, hands: giveTo(board, seat, drawn) };
+    events.push(...drawEvents(seat, drawn, reshuffled));
+  }
 
   if (face) {
     const opened = openPunishWindow(state, played, seat, ctx);
