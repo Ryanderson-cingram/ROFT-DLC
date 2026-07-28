@@ -1,4 +1,18 @@
-import type { Board, Card, Color } from "./types.ts";
+import type { ApplyResult, Board, Card, Color, GameState } from "./types.ts";
+
+export const reject = (state: GameState, reason: string): ApplyResult => ({ state, events: [], rejected: { reason } });
+
+/**
+ * 把牌桌换成新的，version + 1；输入 state 永不修改。
+ * 任何状态转换默认关闭反应窗口——要开窗口的转换自己再挂上去。
+ */
+export const commit = (state: GameState, board: Board, phase: GameState["phase"] = state.phase): GameState => ({
+  ...state,
+  version: state.version + 1,
+  phase,
+  board,
+  pendingWindow: undefined,
+});
 
 /** 无色牌：变色 / +4（诸神包的毒、洗牌同样无色）。 */
 export const isWild = (c: Card) => c.color === null;

@@ -1,6 +1,5 @@
 import { shuffle } from "../deck.ts";
-import { isPlayable, nextSeat } from "../legal.ts";
-import { commit, reject } from "./play-cards.ts";
+import { commit, isPlayable, nextSeat, reject } from "../legal.ts";
 import type { ApplyResult, Board, Card, Ctx, EngineEvent, GameState } from "../types.ts";
 
 /**
@@ -42,6 +41,8 @@ export function drawCard(state: GameState, seat: number, ctx: Ctx): ApplyResult 
   if (state.pendingWindow) return reject(state, "pending_window");
   if (state.phase !== "turnStart" && state.phase !== "play") return reject(state, "wrong_phase");
   if (seat !== b.currentSeat) return reject(state, "not_your_turn");
+  // P3：选了叠就得叠，不能改成摸牌
+  if (b.punish) return reject(state, "must_stack");
   if (b.drawnPlayable) return reject(state, "already_drawn");
 
   const { board, drawn, reshuffled } = drawCards(b, 1, ctx.rng);

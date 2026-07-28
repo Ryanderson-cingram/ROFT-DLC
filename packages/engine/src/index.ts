@@ -1,5 +1,6 @@
 import { drawCard, endTurn } from "./actions/draw.ts";
 import { playCards } from "./actions/play-cards.ts";
+import { claimTimeout, respond } from "./actions/punish.ts";
 import { startGame } from "./actions/start-game.ts";
 import type { Action, ApplyResult, Ctx, GameState } from "./types.ts";
 export * from "./types.ts";
@@ -18,6 +19,10 @@ export function applyAction(state: GameState, action: Action, ctx: Ctx): ApplyRe
       return drawCard(state, action.seat, ctx);
     case "endTurn":
       return endTurn(state, action.seat);
+    case "respond":
+      return respond(state, action, ctx);
+    case "claimTimeout":
+      return claimTimeout(state, action, ctx);
     case "ping":
       return { state: { ...state, version: state.version + 1 }, events: [{ type: "pinged", public: { seat: action.seat } }] };
     default:
