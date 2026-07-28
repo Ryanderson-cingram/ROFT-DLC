@@ -4,3 +4,7 @@ node_modules/
 .next/
 supabase/.temp/
 .env*
+
+# Claude Code local state
+.claude/worktrees/
+.claude/settings.local.json
