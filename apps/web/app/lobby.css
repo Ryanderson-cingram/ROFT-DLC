@@ -48,6 +48,9 @@
 .opt-title { font-family: var(--font-display); font-size: 16px; }
 .opt-note { display: block; margin-left: 24px; font-size: 13px; color: var(--text-secondary); }
 .opt:has(input:checked) { border-color: var(--brass); background: rgba(211, 172, 90, 0.09); }
+/* 禁用的规则包：看得见但点不动，好过悄悄消失——玩家知道它存在，只是还没做完 */
+.opt--disabled { cursor: not-allowed; opacity: 0.55; }
+.opt--disabled input { cursor: not-allowed; }
 
 fieldset { margin: 0 0 var(--sp-3); padding: 0; border: 0; }
 legend { padding: 0 0 var(--sp-2); font-size: 13px; color: var(--text-secondary); }

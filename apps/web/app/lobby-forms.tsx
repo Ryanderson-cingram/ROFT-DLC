@@ -56,16 +56,14 @@ export default function LobbyForms() {
               <span className="opt-title">基础包</span>
               <small className="opt-note">UNO 牌 + 首批 10 个技能。</small>
             </label>
-            <label className="opt">
-              <input
-                type="radio"
-                name="pack"
-                value="gods"
-                checked={rulePack === "gods"}
-                onChange={() => setRulePack("gods")}
-              />
+            {/*
+              诸神包禁用中：牌堆里的毒与洗牌引擎还没有任何行为，选了会当普通变色牌打出去，
+              规则静默跑错——比报错更糟，牌桌上没人会发现。等这两张牌与四神实现后再开。
+            */}
+            <label className="opt opt--disabled">
+              <input type="radio" name="pack" value="gods" disabled />
               <span className="opt-title">诸神包</span>
-              <small className="opt-note">进阶内容，建议先玩过基础包。</small>
+              <small className="opt-note">开发中：毒 / 洗牌与四神尚未实现，暂不可选。</small>
             </label>
           </fieldset>
 
