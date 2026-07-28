@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { applyAction, projectView, type GameState } from "../src/index.ts";
+import { applyAction, projectView, type GameState, type Seat } from "../src/index.ts";
 
-const base: GameState = { version: 3, phase: "play", seats: [{ userId: "u1" }, { userId: "u2" }, { userId: "u3" }] };
+const seat = (userId: string): Seat => ({
+  userId, name: userId, hand: [], saidUno: false, apotheosis: 0, skillId: null,
+});
+
+const base: GameState = {
+  version: 3, phase: "play", config: { rulePack: "base", skillDraft: "draft3" },
+  seats: [seat("u1"), seat("u2"), seat("u3")],
+  currentSeat: 0, direction: 1, drawPile: [], discardPile: [], activeColor: null,
+  roundsLeft: 1, drawnPlayable: null, punish: null, pendingWindow: null, winner: null,
+};
 const ctx = { rng: () => 0.5, now: "2026-07-28T00:00:00Z" };
 
 describe("applyAction", () => {
