@@ -6,27 +6,35 @@ import type { ApplyResult, Board, Card, Ctx, EngineEvent, GameState } from "../t
  * 从摸牌堆取 n 张。摸空时把弃牌堆（除牌顶）洗回摸牌堆；洗回后仍不够就摸到几张算几张。
  * 随机源只来自注入的 `rng`。
  */
-export function drawCards(b: Board, n: number, rng: () => number): { board: Board; drawn: Card[]; reshuffled: boolean } {
+export function drawCards(
+  b: Board,
+  n: number,
+  rng: () => number,
+): { board: Board; drawn: Card[]; reshuffledOrder: string[] | null } {
   let drawPile = b.drawPile.slice();
   let discardPile = b.discardPile;
   const drawn: Card[] = [];
-  let reshuffled = false;
+  let reshuffledOrder: string[] | null = null;
   for (let i = 0; i < n; i++) {
     if (drawPile.length === 0) {
       if (discardPile.length <= 1) break;
       drawPile = shuffle(discardPile.slice(1), rng);
       discardPile = [discardPile[0]];
-      reshuffled = true;
+      // 洗出来的牌序要留档（调研 §4）：重放读事件，不重新洗
+      reshuffledOrder = drawPile.map((c) => c.id);
     }
     drawn.push(drawPile.shift()!);
   }
-  return { board: { ...b, drawPile, discardPile }, drawn, reshuffled };
+  return { board: { ...b, drawPile, discardPile }, drawn, reshuffledOrder };
 }
 
 /** 摸牌事件：公开只说谁摸了几张，具体牌面走 private 投影（spec §4）。 */
-export function drawEvents(seat: number, drawn: Card[], reshuffled: boolean): EngineEvent[] {
+export function drawEvents(seat: number, drawn: Card[], reshuffledOrder: string[] | null): EngineEvent[] {
   return [
-    ...(reshuffled ? [{ type: "deckReshuffled", public: {} }] : []),
+    // public 只说「洗过了」与洗回多少张；牌序进 audit，谁都不发
+    ...(reshuffledOrder
+      ? [{ type: "deckReshuffled", public: { count: reshuffledOrder.length }, audit: { order: reshuffledOrder } }]
+      : []),
     { type: "cardsDrawn", public: { seat, count: drawn.length }, private: { seat, payload: { cards: drawn } } },
   ];
 }
@@ -45,9 +53,9 @@ export function drawCard(state: GameState, seat: number, ctx: Ctx): ApplyResult 
   if (b.punish) return reject(state, "must_stack");
   if (b.drawnPlayable) return reject(state, "already_drawn");
 
-  const { board, drawn, reshuffled } = drawCards(b, 1, ctx.rng);
+  const { board, drawn, reshuffledOrder } = drawCards(b, 1, ctx.rng);
   const withCard: Board = { ...board, hands: giveTo(board, seat, drawn) };
-  const events = drawEvents(seat, drawn, reshuffled);
+  const events = drawEvents(seat, drawn, reshuffledOrder);
 
   const playable = drawn[0] && isPlayable(drawn[0], withCard.discardPile[0], withCard.activeColor);
   if (playable) return { state: commit(state, { ...withCard, drawnPlayable: drawn[0] }, "play"), events };

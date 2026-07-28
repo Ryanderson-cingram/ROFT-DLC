@@ -59,7 +59,14 @@ begin
   select p_room, v_seq + e.i, v_version, p_actor,
          e.ev ->> 'type',
          coalesce(e.ev -> 'public', '{}'::jsonb),
-         e.ev -> 'private',
+         -- private（只给某座位）与 audit（谁都不给，只为重放）都进这一列：
+         -- private_payload 的列级 grant 已把 authenticated 排除在外，客户端永远看不到。
+         case
+           when e.ev ? 'private' and e.ev ? 'audit'
+             then jsonb_build_object('private', e.ev -> 'private', 'audit', e.ev -> 'audit')
+           when e.ev ? 'audit' then jsonb_build_object('audit', e.ev -> 'audit')
+           else e.ev -> 'private'
+         end,
          case when e.i = 1 then p_idempotency_key end
     from jsonb_array_elements(p_events) with ordinality as e(ev, i);
 

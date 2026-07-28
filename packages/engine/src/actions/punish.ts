@@ -89,7 +89,7 @@ function settle(state: GameState, seat: number, choice: string, ctx: Ctx): Apply
     };
   }
   // P10：吃下累计 → 摸完即回合结束，不能再出牌
-  const { board, drawn, reshuffled } = drawCards(b, chain.total, ctx.rng);
+  const { board, drawn, reshuffledOrder } = drawCards(b, chain.total, ctx.rng);
   const eaten: Board = {
     ...board,
     hands: giveTo(board, seat, drawn),
@@ -101,7 +101,7 @@ function settle(state: GameState, seat: number, choice: string, ctx: Ctx): Apply
     state: commit(state, eaten, "turnStart"),
     events: [
       { type: "punishAccepted", public: { seat, total: chain.total, segments: chain.segments } },
-      ...drawEvents(seat, drawn, reshuffled),
+      ...drawEvents(seat, drawn, reshuffledOrder),
     ],
   };
 }

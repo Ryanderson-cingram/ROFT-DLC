@@ -15,13 +15,19 @@ export function startGame(state: GameState, ctx: Ctx): ApplyResult {
 
   const rulePack = state.config?.rulePack ?? "base";
   const pile = shuffle(buildDeck(rulePack), ctx.rng);
+  // 洗牌结果留档，重放读它而不是重新洗（调研 §4）。绝不能进 public。
+  const shuffledOrder = pile.map((c) => c.id);
   const hands: Card[][] = [];
   for (let seat = 0; seat < n; seat++) hands.push(pile.splice(0, HAND_SIZE));
   while (pile[0].color === null) pile.push(pile.shift()!);
   const starter = pile.shift()!;
 
   const events: EngineEvent[] = [
-    { type: "gameStarted", public: { seats: n, handSize: HAND_SIZE, starter, drawPile: pile.length } },
+    {
+      type: "gameStarted",
+      public: { seats: n, handSize: HAND_SIZE, starter, drawPile: pile.length },
+      audit: { rulePack, shuffledOrder },
+    },
     ...hands.map((cards, seat): EngineEvent => ({
       type: "handDealt",
       public: { seat, count: cards.length },

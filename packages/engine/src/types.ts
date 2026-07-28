@@ -59,7 +59,19 @@ export type Action =
   | { type: "endTurn"; seat: number }
   | { type: "claimTimeout"; seat: number; windowId: string }
   | { type: "respond"; seat: number; windowId: string; choice: string };
-export interface EngineEvent { type: string; public: Record<string, unknown>; private?: { seat: number; payload: Record<string, unknown> } }
+export interface EngineEvent {
+  type: string;
+  public: Record<string, unknown>;
+  /** 只给这个座位看的信息（如他摸到的牌）。落 room_events.private_payload，列级 grant 已排除 authenticated。 */
+  private?: { seat: number; payload: Record<string, unknown> };
+  /**
+   * 谁都不发，只为审计与重放留档——典型是洗牌后的牌序。
+   * 调研 §4（Fowler: "the response to every external query needs to be remembered"）：
+   * 随机的**结果**必须入事件流，否则重放要重新掷骰，历史对不上。
+   * 绝不能放进 `public`：那等于把整个牌堆的顺序告诉所有人。
+   */
+  audit?: Record<string, unknown>;
+}
 /** 他人只剩公开计数——手牌牌面不进这个结构。 */
 export interface SnapshotPlayer {
   seat: number;

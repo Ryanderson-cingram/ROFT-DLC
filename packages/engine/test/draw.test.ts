@@ -88,6 +88,22 @@ describe("drawCard", () => {
     expect(recovered).toEqual(buried.map((c) => c.id).sort());
   });
 
+  // 调研 §4：随机的结果必须入事件流，否则重放要重新掷骰，历史对不上。
+  it("records the reshuffled pile order for replay, without leaking it", () => {
+    const buried = [card("G", "1"), card("G", "2"), card("G", "3")];
+    const s = table([[card("B", "5")], [card("Y", "1")], [card("Y", "2")]], {
+      drawPile: [], discardPile: [R7, ...buried],
+    });
+    const r = applyAction(s, { type: "drawCard", seat: 0 }, ctx());
+    const ev = r.events.find((e) => e.type === "deckReshuffled")!;
+
+    // 审计里是洗完当下的完整牌序（顶在前），重放据此还原：这一张随即被摸走，其余留在堆里
+    expect(ev.audit?.order).toEqual([r.state.board!.hands[0][1], ...r.state.board!.drawPile].map((c) => c.id));
+    // 公开 payload 里一张牌都不能有——否则等于把牌堆顺序告诉所有人
+    expect(JSON.stringify(ev.public)).not.toContain("G1");
+    for (const c of buried) expect(JSON.stringify(ev.public)).not.toContain(c.id);
+  });
+
   it("survives an exhausted deck: draws what is left instead of crashing", () => {
     const s = table(hands(), { discardPile: [R7], drawPile: [] });
     const r = applyAction(s, { type: "drawCard", seat: 0 }, ctx());
