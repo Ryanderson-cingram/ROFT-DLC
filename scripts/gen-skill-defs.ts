@@ -23,6 +23,9 @@ const EXPECTED_COUNT = 60;
 
 const SUITS: Record<string, string> = { '♥': 'heart', '♦': 'diamond', '♠': 'spade', '♣': 'club' };
 
+/** 04 文件头的状态图例（含复合值）。状态栏里塞别的东西（分类、备注）在这里红。 */
+const STATUSES = new Set(['✅', '❓', '⚠️', '✅/❓']);
+
 // ── 围栏块的字段与取值白名单（02-methodology §1/§2/§3/§6/§7）。
 // 白名单之外一律抛错：拼错字段名静默变成「没标注」是最难查的漂移。
 const SKILL_KEYS = new Set([
@@ -263,7 +266,10 @@ export function parseCatalog(md: string): SkillDef[] {
     if (suit === '★' || suit === '神') {
       const entry = /^### +(.+?) +— +(.+)$/.exec(line);
       if (entry) {
-        const [status, ...rest] = entry[2].split(' ');
+        const status = entry[2].trim();
+        if (!STATUSES.has(status)) {
+          throw new Error(`条目「${entry[1]}」的状态「${status}」不在 04 文件头的图例里`);
+        }
         skills.push({
           id: '', // 由紧随其后的 `- **id**：` 要点填上；缺了在下面抛
           name: suit === '★' ? entry[1].replace(/★$/, '') : entry[1],
@@ -271,7 +277,6 @@ export function parseCatalog(md: string): SkillDef[] {
           status,
           summary: '',
           caveats: null,
-          ...(rest.length ? { notes: rest.join(' ') } : {}),
           structured: false,
         });
         continue;
