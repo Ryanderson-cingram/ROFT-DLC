@@ -1,6 +1,8 @@
 export type Phase = "lobby" | "dealing" | "turnStart" | "play" | "afterPlay" | "finished";
 
 export type RulePack = "base" | "gods";
+/** 房间配置。由 Edge 在建房时写进 `GameState`，引擎不查库（S1：技能获取 MVP 只有抽 3 选 1）。 */
+export interface RoomConfig { rulePack: RulePack; skillDraft: "draft3" }
 export type Color = "R" | "G" | "B" | "Y";
 /** 牌面。数字牌 0–9；功能牌 +2/停/转；无色牌 变色/+4；诸神包 毒/洗牌。 */
 export type Face =
@@ -45,6 +47,8 @@ export interface GameState {
   version: number;
   phase: Phase;
   seats: { userId: string }[];
+  /** 建房时写入。缺省（老房间）按基础包处理。 */
+  config?: RoomConfig;
   pendingWindow?: PendingWindow;
   board?: Board;
 }

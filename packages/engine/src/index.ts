@@ -94,8 +94,10 @@ export function projectView(state: GameState, seat: number): ClientSnapshot {
   };
 }
 
-function disabledReasons(state: GameState, seat: number): Record<string, string> {
-  const hand = state.board?.hands[seat];
-  // ponytail: 只放 UI 现在真的会显示的那条；其余等 UI 提出需求再加
-  return hand && hand.length > 2 ? { callUno: "剩 2 张牌时才需要喊" } : {};
+function disabledReasons(_state: GameState, _seat: number): Record<string, string> {
+  // 暂时恒为空。这里曾经放过 callUno 的置灰文案，但引擎里根本没有 callUno 动作，
+  // 等于逼 UI 渲染一个永远点不亮的按钮。喊话时机与漏喊罚则规则库都没定
+  // （见 06-open-questions.md），定了再实现——不要为了让按钮亮起来发明规则。
+  // 字段留着：技能的 L2「为何不可用」文案就靠它。
+  return {};
 }

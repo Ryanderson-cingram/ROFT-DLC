@@ -13,8 +13,8 @@ export function startGame(state: GameState, ctx: Ctx): ApplyResult {
   const n = state.seats.length;
   if (n < 3 || n > 4) return { state, events: [], rejected: { reason: "bad_seat_count" } };
 
-  // ponytail: 规则包暂时恒为 base，房间配置进引擎是下一个计划的事
-  const pile = shuffle(buildDeck("base"), ctx.rng);
+  const rulePack = state.config?.rulePack ?? "base";
+  const pile = shuffle(buildDeck(rulePack), ctx.rng);
   const hands: Card[][] = [];
   for (let seat = 0; seat < n; seat++) hands.push(pile.splice(0, HAND_SIZE));
   while (pile[0].color === null) pile.push(pile.shift()!);
@@ -34,7 +34,7 @@ export function startGame(state: GameState, ctx: Ctx): ApplyResult {
       version: state.version + 1,
       phase: "turnStart",
       board: {
-        rulePack: "base",
+        rulePack,
         drawPile: pile,
         discardPile: [starter],
         hands,

@@ -9,7 +9,10 @@ import "./room.css";
 
 const SEATS = [0, 1, 2, 3];
 
-type Room = { id: string; code: string; status: string; created_by: string; config: { rulePack: string } };
+type Room = {
+  id: string; code: string; status: string; created_by: string;
+  version: number; config: { rulePack: string };
+};
 type SeatRow = { seat: number; user_id: string; ready: boolean };
 
 export default function RoomPage() {
@@ -55,7 +58,7 @@ export default function RoomPage() {
 
       const { data: found } = await supabase
         .from("rooms")
-        .select("id, code, status, created_by, config")
+        .select("id, code, status, created_by, version, config")
         .eq("code", code)
         .maybeSingle();
       setLoaded(true);
@@ -114,7 +117,8 @@ export default function RoomPage() {
     setError(null);
     const res = await callEdge("room-action", {
       roomId: room!.id,
-      expectedVersion: 0,
+      // 读实际 version，别假设 0——大厅里没人动它只是今天的事实，不是约定
+      expectedVersion: room!.version,
       idempotencyKey: crypto.randomUUID(),
       action: { type: "startGame", seat: mySeat?.seat ?? 0 },
     });

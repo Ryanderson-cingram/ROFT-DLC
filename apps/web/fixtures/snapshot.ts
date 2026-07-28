@@ -51,7 +51,9 @@ const BASE = {
   activeColor: "R",
   discardTop: TOP,
   drawPileCount: 38,
-  disabledReasons: { callUno: "剩 2 张牌时才需要喊" },
+  // Q26 未裁定前引擎不发 callUno 提示，fixture 也不装作有——
+  // 否则设计稿一直摆着一个真实产品里不存在的按钮。
+  disabledReasons: {},
 } satisfies Partial<ClientSnapshot>;
 
 /** A · 我的回合：可打的牌来自 legalActions，无色牌任何时候都能打。 */

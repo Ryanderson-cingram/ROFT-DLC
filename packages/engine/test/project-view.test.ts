@@ -121,10 +121,12 @@ describe("legalActions", () => {
 });
 
 describe("disabledReasons", () => {
-  it("explains that UNO is only called at two cards", () => {
+  // Q26：喊话时机与漏喊罚则未裁定，引擎就不该假装有 callUno——
+  // 提示存在会逼 UI 渲染一个永远点不亮的按钮。
+  it("never advertises an action the engine does not implement", () => {
     const s = table([[card("R", "3"), card("R", "4"), card("R", "5")], [card("Y", "1")], [card("Y", "2")]]);
-    expect(projectView(s, 0).disabledReasons.callUno).toBe("剩 2 张牌时才需要喊");
-    const two = table([[card("R", "3"), card("R", "4")], [card("Y", "1")], [card("Y", "2")]]);
-    expect(projectView(two, 0).disabledReasons.callUno).toBeUndefined();
+    const reasons = projectView(s, 0).disabledReasons;
+    expect(reasons.callUno).toBeUndefined();
+    expect(Object.keys(reasons)).toEqual([]);
   });
 });

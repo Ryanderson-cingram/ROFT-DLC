@@ -24,6 +24,18 @@ describe("startGame", () => {
     }
   });
 
+  it("the room's rule pack reaches the deck: 诸神包 deals from all 172", () => {
+    const s = { ...lobby(3), config: { rulePack: "gods", skillDraft: "draft3" } as const };
+    const b = applyAction(s, { type: "startGame", seat: 0 }, ctx()).state.board!;
+    expect(b.rulePack).toBe("gods");
+    expect([...b.drawPile, ...b.discardPile, ...b.hands.flat()]).toHaveLength(172);
+  });
+
+  it("a room with no config falls back to the base pack", () => {
+    const b = start(3).state.board!;
+    expect(b.rulePack).toBe("base");
+  });
+
   it("S1b: no card is lost or duplicated by dealing", () => {
     const b = start(4).state.board!;
     const all = [...b.drawPile, ...b.discardPile, ...b.hands.flat()];

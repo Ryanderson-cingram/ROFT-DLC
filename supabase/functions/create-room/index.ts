@@ -21,7 +21,13 @@ serveAuthed(async ({ body, user, svc }) => {
   if (!room) return json({ error: "code_exhausted" }, 503);
 
   await svc.from("room_seats").insert({ room_id: room.id, seat: 0, user_id: user.id });
-  const state: GameState = { version: 0, phase: "lobby", seats: [{ userId: user.id }] };
+  // config 同时落在 rooms.config（给大厅/UI 读）与 GameState（引擎唯一能看到的来源）
+  const state: GameState = {
+    version: 0,
+    phase: "lobby",
+    seats: [{ userId: user.id }],
+    config: { rulePack, skillDraft: "draft3" },
+  };
   await svc.from("room_state_private").insert({ room_id: room.id, state });
 
   return json({ roomId: room.id, code: room.code, seat: 0 });
