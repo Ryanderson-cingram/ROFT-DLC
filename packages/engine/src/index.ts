@@ -1,7 +1,9 @@
+import { playCards } from "./actions/play-cards.ts";
 import { startGame } from "./actions/start-game.ts";
 import type { Action, ApplyResult, Ctx, GameState } from "./types.ts";
 export * from "./types.ts";
 export { buildDeck, shuffle } from "./deck.ts";
+export { isPlayable } from "./legal.ts";
 
 export function applyAction(state: GameState, action: Action, ctx: Ctx): ApplyResult {
   if (action.seat < 0 || action.seat >= state.seats.length)
@@ -9,6 +11,8 @@ export function applyAction(state: GameState, action: Action, ctx: Ctx): ApplyRe
   switch (action.type) {
     case "startGame":
       return startGame(state, ctx);
+    case "playCards":
+      return playCards(state, action, ctx);
     case "ping":
       return { state: { ...state, version: state.version + 1 }, events: [{ type: "pinged", public: { seat: action.seat } }] };
     default:

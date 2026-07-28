@@ -1,23 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { applyAction } from "../src/index.ts";
 import { buildDeck, shuffle } from "../src/deck.ts";
-import type { Ctx, GameState } from "../src/types.ts";
+import type { Ctx } from "../src/types.ts";
+import { ctx, lcg, lobby } from "./helpers.ts";
 
-/** 确定性伪随机源，只用于测试——引擎自身永远不产生随机数（spec §5.1）。 */
-export const lcg = (seed: number) => () => {
-  seed = (seed * 1103515245 + 12345) % 2147483648;
-  return seed / 2147483648;
-};
-
-export const lobby = (n: number): GameState => ({
-  version: 0,
-  phase: "lobby",
-  seats: Array.from({ length: n }, (_, i) => ({ userId: `u${i}` })),
-});
-
-export const ctx = (rng = lcg(1), now = "2026-07-28T12:00:00.000Z"): Ctx => ({ rng, now });
-
-export const start = (n = 3, c: Ctx = ctx()) =>
+const start = (n = 3, c: Ctx = ctx()) =>
   applyAction(lobby(n), { type: "startGame", seat: 0 }, c);
 
 describe("startGame", () => {

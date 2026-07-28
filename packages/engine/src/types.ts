@@ -1,4 +1,4 @@
-export type Phase = "lobby" | "dealing" | "turnStart" | "play" | "afterPlay";
+export type Phase = "lobby" | "dealing" | "turnStart" | "play" | "afterPlay" | "finished";
 
 export type RulePack = "base" | "gods";
 export type Color = "R" | "G" | "B" | "Y";
