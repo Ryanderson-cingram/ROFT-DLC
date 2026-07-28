@@ -68,6 +68,38 @@ effects:
     layer: [L2, L5]
 ```
 
+精英改的是**牌面点数**（03 Q&A：最大为 9，下家按牌面数字继续），不是摸牌数，因此没有 `layer`。
+
+```yaml
+id: heart-3
+structured: true
+effects:
+  - key: passive
+    kind: passive
+    window: play_phase
+    targeting: self
+    once: unlimited
+    stacks_with_turn_limit: false
+    modifies: [card_value]
+    duration: while_revealed
+```
+
+并列改的是「一次合法打出几张」（01-G2），发生在阶段 2；摘要写的是「主动规则」，**是否占用 01-V7 的每回合一条主动没有裁定过**，`stacks_with_turn_limit` 故意留空等裁定。
+
+```yaml
+id: heart-4
+structured: true
+effects:
+  - key: 1
+    kind: meta_rule
+    window: play_phase
+    targeting: self
+    once: unlimited
+    stacks_with_turn_limit:
+    modifies: [play_legality]
+    duration: while_revealed
+```
+
 ---
 
 ## ♦ 方片
@@ -87,6 +119,112 @@ effects:
 | J | 远星 | ✅ | 上家 +2 时弃同色停/转、上家 +4 时弃 +2，各摸 2 视为叠链 +2/+4；**视为的 +4 用所弃 +2 的颜色**（非任选定色） | 已定 |
 | Q | 不意 | ❓ | 一次性与所有人拼点，弃置所有手牌再重发；负方掷骰摸牌；额外摸≥人数则你再获一次使用 | 「再获一次」存哪里 |
 | K | 觐见 | ❓ | 明示一张不合法牌，选无明示者令其明示一半（下取整最多 4） | 与偏折「不能明示」冲突时 |
+
+### 结构化标注（♦）
+
+强袭①改的是自己那张惩罚牌的倍率，按 01-P6 在**进链时**结算，02 §7 明确这类修正已计入 L0 贡献、不再走层级，故无 `layer`。②「重掷一次」的计次范围正是本条疑点（每骰事件一次？每回合一次？），`once` 留空；02 §3 也没有掷骰窗口，暂记 `any`。
+
+```yaml
+id: diamond-1
+structured: true
+effects:
+  - key: 1
+    kind: on_play
+    window: on_stack_contribute
+    targeting: self
+    once: unlimited
+    stacks_with_turn_limit: false
+    modifies: [punish_amount, dice]
+    duration: instant
+  - key: 2
+    kind: response
+    window: any
+    targeting: global
+    once:
+    stacks_with_turn_limit:
+    modifies: [dice]
+    duration: instant
+```
+
+血棘：封印按 01-P8 只在有血棘者是**链首发起**的 +2/+4 时成立，落点是被惩罚者，故 `targeting: single`（不是玩家指定，§4 的「单体」判定另说，见 02 §6）。摘要写「直至条件」但没写是什么条件，`duration` 留空等裁定。「优先」（02 §1 `priority`）挂在封印上。
+
+```yaml
+id: diamond-2
+structured: true
+effects:
+  - key: passive
+    kind: status_grant
+    window: on_punish_resolve
+    targeting: single
+    once: unlimited
+    stacks_with_turn_limit: false
+    priority: true
+    duration:
+  - key: 1
+    kind: active
+    window: turn_start
+    targeting: all_others
+    once: unlimited
+    stacks_with_turn_limit: true
+    duration: instant
+```
+
+影歌照 01-S15：①一次性攒魂（上限 6）、②花 2 魂跳过且**占主动条**。两条都是阶段 1 主动 → 01-V7 每回合只能选发动一条。②「可在惩罚回合发动」是 02 §2 压制的例外，字段模型里没有承载它的栏位，只在散文里。
+
+```yaml
+id: diamond-3
+structured: true
+effects:
+  - key: 1
+    kind: active
+    window: turn_start
+    targeting: self
+    once: once
+    stacks_with_turn_limit: true
+    duration: instant
+  - key: 2
+    kind: active
+    window: turn_start
+    cost: 2 魂
+    targeting: self
+    once: unlimited
+    stacks_with_turn_limit: true
+    modifies: [turn_flow]
+    duration: instant
+```
+
+劫营按 01-G5 打断当前轮、作废剩余神化轮。「对方摸 1」是本效果**造成**的摸牌，不是改摸牌数，无 `layer`。02 §2 说 `response` 的次数「按技能」，而 04/01 都没写劫营响应算不算占主动条，`stacks_with_turn_limit` 留空。
+
+```yaml
+id: diamond-10
+structured: true
+effects:
+  - key: 1
+    kind: response
+    window: interrupt
+    targeting: single
+    once: unlimited
+    stacks_with_turn_limit:
+    modifies: [turn_flow]
+    duration: instant
+```
+
+远星按 01-P7 是**合法叠链接法**，摸的 2 张是代价、不计惩罚，所以既不是改摸牌数也无 `layer`；「视为的 +4 用所弃 +2 的颜色」是改颜色规则。`stacks_with_turn_limit` 同劫营留空。
+
+```yaml
+id: diamond-j
+structured: true
+effects:
+  - key: 1
+    kind: response
+    window: interrupt
+    cost: 弃 1 张 + 摸 2
+    targeting: self
+    once: unlimited
+    stacks_with_turn_limit:
+    modifies: [play_legality, color_rule]
+    duration: instant
+```
 
 ---
 
@@ -145,6 +283,41 @@ effects:
 | J | 无念 | ❓ | 回合开始掷 2 记总和（0 清空）；一次性摸总和，每 5 张一神化 | — |
 | Q | 降临 | ❓ | 摸 2 展示，同色则视为洗牌且人人神化；每次成功后需额外多摸 1 | 与真洗牌牌、神化上限 |
 | K | 飞升 | ✅ | 每回合开始获神化；出完续玩→主神；神官优先级+下家方向最近；神官胜主神同胜 | — |
+
+### 结构化标注（♣）
+
+司夜三条：①获盗按 01-T2 在**阶段 3**；②花盗换牌要等到下次**阶段 1**（同 T2），占主动条；③3/5 盗放宽末牌是 01-U5 的例外（01-S16），发生在出牌时。02 §2 没给 `meta_rule` 的占位默认，③ 的 `stacks_with_turn_limit` 留空。
+
+```yaml
+id: club-3
+structured: true
+effects:
+  - key: 1
+    kind: on_play
+    window: after_play
+    targeting: self
+    once: unlimited
+    stacks_with_turn_limit: false
+    modifies: [dice]
+    duration: instant
+  - key: 2
+    kind: active
+    window: turn_start
+    cost: 盗
+    targeting: self
+    once: unlimited
+    stacks_with_turn_limit: true
+    duration: instant
+  - key: 3
+    kind: meta_rule
+    window: play_phase
+    cost: 3 或 5 盗
+    targeting: self
+    once: unlimited
+    stacks_with_turn_limit:
+    modifies: [play_legality]
+    duration: instant
+```
 
 ---
 

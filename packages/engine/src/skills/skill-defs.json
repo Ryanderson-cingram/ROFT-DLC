@@ -84,7 +84,21 @@
       "status": "✅",
       "summary": "被动：数字可当 +1 打出（仅 1 张手牌时失效）；最大 9",
       "caveats": "Q&A 已补",
-      "structured": false
+      "effects": [
+        {
+          "key": "passive",
+          "kind": "passive",
+          "window": "play_phase",
+          "targeting": "self",
+          "once": "unlimited",
+          "stacks_with_turn_limit": false,
+          "modifies": [
+            "card_value"
+          ],
+          "duration": "while_revealed"
+        }
+      ],
+      "structured": true
     },
     {
       "id": "heart-4",
@@ -93,7 +107,21 @@
       "status": "✅",
       "summary": "主动规则：2 同色同数 / 4 同数 / 6 同色；与神化按「轮」互动已定",
       "caveats": "与劫营响应「任意一张」的牌顶",
-      "structured": false
+      "effects": [
+        {
+          "key": "1",
+          "kind": "meta_rule",
+          "window": "play_phase",
+          "targeting": "self",
+          "once": "unlimited",
+          "stacks_with_turn_limit": null,
+          "modifies": [
+            "play_legality"
+          ],
+          "duration": "while_revealed"
+        }
+      ],
+      "structured": true
     },
     {
       "id": "heart-5",
@@ -183,7 +211,34 @@
       "status": "✅/❓",
       "summary": "打出 +2/+4 后可掷骰改该张倍率；任意玩家掷骰后可重掷同数量一次并采用你的结果",
       "caveats": "重掷是否每骰事件一次；与邪神联动",
-      "structured": false
+      "effects": [
+        {
+          "key": "1",
+          "kind": "on_play",
+          "window": "on_stack_contribute",
+          "targeting": "self",
+          "once": "unlimited",
+          "stacks_with_turn_limit": false,
+          "modifies": [
+            "punish_amount",
+            "dice"
+          ],
+          "duration": "instant"
+        },
+        {
+          "key": "2",
+          "kind": "response",
+          "window": "any",
+          "targeting": "global",
+          "once": null,
+          "stacks_with_turn_limit": null,
+          "modifies": [
+            "dice"
+          ],
+          "duration": "instant"
+        }
+      ],
+      "structured": true
     },
     {
       "id": "diamond-2",
@@ -192,7 +247,28 @@
       "status": "✅",
       "summary": "你**发起**的惩罚使目标封印技能直至条件；回合开始可掷骰令被血棘者摸等量；优先；未亮出也被封则不能亮出；合纵连横双封",
       "caveats": "链首已定",
-      "structured": false
+      "effects": [
+        {
+          "key": "passive",
+          "kind": "status_grant",
+          "window": "on_punish_resolve",
+          "targeting": "single",
+          "once": "unlimited",
+          "stacks_with_turn_limit": false,
+          "priority": true,
+          "duration": null
+        },
+        {
+          "key": "1",
+          "kind": "active",
+          "window": "turn_start",
+          "targeting": "all_others",
+          "once": "unlimited",
+          "stacks_with_turn_limit": true,
+          "duration": "instant"
+        }
+      ],
+      "structured": true
     },
     {
       "id": "diamond-3",
@@ -201,7 +277,31 @@
       "status": "✅",
       "summary": "① 一次性阶段1攒魂（**上限 6**）；② 花2魂跳过（可惩罚回合），占主动条",
       "caveats": null,
-      "structured": false
+      "effects": [
+        {
+          "key": "1",
+          "kind": "active",
+          "window": "turn_start",
+          "targeting": "self",
+          "once": "once",
+          "stacks_with_turn_limit": true,
+          "duration": "instant"
+        },
+        {
+          "key": "2",
+          "kind": "active",
+          "window": "turn_start",
+          "cost": "2 魂",
+          "targeting": "self",
+          "once": "unlimited",
+          "stacks_with_turn_limit": true,
+          "modifies": [
+            "turn_flow"
+          ],
+          "duration": "instant"
+        }
+      ],
+      "structured": true
     },
     {
       "id": "diamond-4",
@@ -264,7 +364,21 @@
       "status": "✅",
       "summary": "同色同数同时打出；对方摸 1；你下家继续；可打断并列/神化；剩余神化轮作废",
       "caveats": "已定",
-      "structured": false
+      "effects": [
+        {
+          "key": "1",
+          "kind": "response",
+          "window": "interrupt",
+          "targeting": "single",
+          "once": "unlimited",
+          "stacks_with_turn_limit": null,
+          "modifies": [
+            "turn_flow"
+          ],
+          "duration": "instant"
+        }
+      ],
+      "structured": true
     },
     {
       "id": "diamond-j",
@@ -273,7 +387,23 @@
       "status": "✅",
       "summary": "上家 +2 时弃同色停/转、上家 +4 时弃 +2，各摸 2 视为叠链 +2/+4；**视为的 +4 用所弃 +2 的颜色**（非任选定色）",
       "caveats": "已定",
-      "structured": false
+      "effects": [
+        {
+          "key": "1",
+          "kind": "response",
+          "window": "interrupt",
+          "cost": "弃 1 张 + 摸 2",
+          "targeting": "self",
+          "once": "unlimited",
+          "stacks_with_turn_limit": null,
+          "modifies": [
+            "play_legality",
+            "color_rule"
+          ],
+          "duration": "instant"
+        }
+      ],
+      "structured": true
     },
     {
       "id": "diamond-q",
@@ -447,7 +577,44 @@
       "status": "✅",
       "summary": "打出变色后**掷骰一次获点数个盗（0/1/2）**；阶段1花盗换牌；3/5盗放宽末牌为功能/变色，仍须合法打出",
       "caveats": null,
-      "structured": false
+      "effects": [
+        {
+          "key": "1",
+          "kind": "on_play",
+          "window": "after_play",
+          "targeting": "self",
+          "once": "unlimited",
+          "stacks_with_turn_limit": false,
+          "modifies": [
+            "dice"
+          ],
+          "duration": "instant"
+        },
+        {
+          "key": "2",
+          "kind": "active",
+          "window": "turn_start",
+          "cost": "盗",
+          "targeting": "self",
+          "once": "unlimited",
+          "stacks_with_turn_limit": true,
+          "duration": "instant"
+        },
+        {
+          "key": "3",
+          "kind": "meta_rule",
+          "window": "play_phase",
+          "cost": "3 或 5 盗",
+          "targeting": "self",
+          "once": "unlimited",
+          "stacks_with_turn_limit": null,
+          "modifies": [
+            "play_legality"
+          ],
+          "duration": "instant"
+        }
+      ],
+      "structured": true
     },
     {
       "id": "club-4",
