@@ -44,9 +44,16 @@ describe("activateSkill", () => {
   const revealed = (over: Parameters<typeof table>[1] = {}) =>
     withSkill("spade-1", { revealed: [true, false, false], ...over });
 
+  // 恒心的代价是「弃 1 张手牌」，所以发动时要带上弃哪张——付得起代价才轮到 V1–V8 之外的事。
+  const cost = (s: Parameters<typeof applyAction>[0]) => [s.board!.hands[0][0].id];
+
   it("V4：亮出的当回合就能发动，不必等下回合", () => {
     const afterReveal = applyAction(withSkill("spade-1"), { type: "revealSkill", seat: 0 }, ctx()).state;
-    const r = applyAction(afterReveal, { type: "activateSkill", seat: 0, effectKey: "1" }, ctx());
+    const r = applyAction(
+      afterReveal,
+      { type: "activateSkill", seat: 0, effectKey: "1", cardIds: cost(afterReveal) },
+      ctx(),
+    );
     expect(r.rejected).toBeUndefined();
   });
 
@@ -56,7 +63,8 @@ describe("activateSkill", () => {
   });
 
   it("V7：发动占 1 次，同回合不能再发动第二条", () => {
-    const first = applyAction(revealed(), { type: "activateSkill", seat: 0, effectKey: "1" }, ctx());
+    const s = revealed();
+    const first = applyAction(s, { type: "activateSkill", seat: 0, effectKey: "1", cardIds: cost(s) }, ctx());
     expect(first.state.board!.activatedThisTurn[0]).toBe(true);
     expect(applyAction(first.state, { type: "activateSkill", seat: 0, effectKey: "2" }, ctx())
       .rejected?.reason).toBe("already_activated");
@@ -75,7 +83,9 @@ describe("activateSkill", () => {
   });
 
   it("回合切换后额度重置", () => {
-    const used = applyAction(revealed(), { type: "activateSkill", seat: 0, effectKey: "1" }, ctx()).state;
+    const s = revealed();
+    const used = applyAction(s, { type: "activateSkill", seat: 0, effectKey: "1", cardIds: cost(s) }, ctx()).state;
+    expect(used.board!.activatedThisTurn[0]).toBe(true);
     // 座位 0 打出一张牌结束自己的回合
     const played = applyAction(used, { type: "playCards", seat: 0, cardIds: [used.board!.hands[0][0].id] }, ctx());
     expect(played.state.board!.activatedThisTurn[0]).toBe(false);

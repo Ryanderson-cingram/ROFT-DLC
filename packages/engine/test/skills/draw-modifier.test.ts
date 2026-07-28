@@ -8,7 +8,7 @@ import { applyAction } from "../../src/index.ts";
 import { card, ctx, table } from "../helpers.ts";
 
 const n = (req: { kind?: "punish" | "skill" | "rule"; base: number }, mods: DrawModifier[] = []) =>
-  resolveDrawCount({ kind: req.kind ?? "rule", base: req.base }, mods).count;
+  resolveDrawCount({ kind: req.kind ?? "rule", base: req.base, seat: 0 }, mods).count;
 
 /** 洗回来也不够摸的牌桌：drawPile 只有 2 张，弃牌堆只有牌顶（不可洗回）。 */
 const pile = (count: number) => Array.from({ length: count }, (_, i) => card("G", "1"));
@@ -44,9 +44,9 @@ describe("02 §7 摸牌数结算层级", () => {
     });
 
     it("replacedBy 记下是谁替换的", () => {
-      const r = resolveDrawCount({ kind: "punish", base: 10 }, [{ layer: "L1", source: "伤逝", value: 3 }]);
+      const r = resolveDrawCount({ kind: "punish", base: 10, seat: 0 }, [{ layer: "L1", source: "伤逝", value: 3 }]);
       expect(r.replacedBy).toBe("伤逝");
-      expect(resolveDrawCount({ kind: "rule", base: 1 }, []).replacedBy).toBeUndefined();
+      expect(resolveDrawCount({ kind: "rule", base: 1, seat: 0 }, []).replacedBy).toBeUndefined();
     });
   });
 
@@ -147,11 +147,11 @@ describe("02 §7 摸牌数结算层级", () => {
     });
 
     it("L6 原样交给调用方去执行", () => {
-      const r = resolveDrawCount({ kind: "punish", base: 6 }, [
+      const r = resolveDrawCount({ kind: "punish", base: 6, seat: 0 }, [
         { layer: "L6", source: "忍戒", procedure: "drawThenDiscard" },
       ]);
       expect(r.procedures.map((p) => p.procedure)).toEqual(["drawThenDiscard"]);
-      expect(resolveDrawCount({ kind: "rule", base: 1 }, []).procedures).toEqual([]);
+      expect(resolveDrawCount({ kind: "rule", base: 1, seat: 0 }, []).procedures).toEqual([]);
     });
   });
 });
@@ -159,7 +159,7 @@ describe("02 §7 摸牌数结算层级", () => {
 describe("接线：每一次摸牌都过层级", () => {
   it("drawCards 摸的是 reducer 算出来的数，不是请求里的基础值", () => {
     const b = table([[], [], []], { drawPile: pile(20) }).board!;
-    const { drawn, resolution } = drawCards(b, { kind: "punish", base: 6 }, ctx().rng, [
+    const { drawn, resolution } = drawCards(b, { kind: "punish", base: 6, seat: 0 }, ctx().rng, [
       { layer: "L2", source: "恩惠", delta: -2 },
     ]);
     expect(resolution.count).toBe(4);
@@ -169,14 +169,14 @@ describe("接线：每一次摸牌都过层级", () => {
   it("摸牌堆不够就摸到几张算几张（结算出的数与实际摸到的数可以不等）", () => {
     // drawPile 2 张，弃牌堆只有牌顶所以洗不回来
     const b = table([[], [], []], { drawPile: pile(2) }).board!;
-    const { drawn, resolution } = drawCards(b, { kind: "punish", base: 6 }, ctx().rng);
+    const { drawn, resolution } = drawCards(b, { kind: "punish", base: 6, seat: 0 }, ctx().rng);
     expect(resolution.count).toBe(6);
     expect(drawn).toHaveLength(2);
   });
 
   it("结算为 0 张时一张都不摸", () => {
     const b = table([[], [], []], { drawPile: pile(20) }).board!;
-    const { drawn, board } = drawCards(b, { kind: "punish", base: 6 }, ctx().rng, [
+    const { drawn, board } = drawCards(b, { kind: "punish", base: 6, seat: 0 }, ctx().rng, [
       { layer: "L4", source: "狂欢4", scope: "self", value: 0 },
     ]);
     expect(drawn).toEqual([]);

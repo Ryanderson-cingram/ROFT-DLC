@@ -60,3 +60,6 @@ export function loadSkills(
   }
   return { byId: new Map(doc.skills.map((d) => [d.id, d])), pool, unsupported };
 }
+
+/** 生产用的那一份，进程内加载一次。要注入别的定义源就直接调 `loadSkills()`。 */
+export const skills = loadSkills();

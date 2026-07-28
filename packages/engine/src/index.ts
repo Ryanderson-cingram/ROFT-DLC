@@ -29,7 +29,7 @@ export function applyAction(state: GameState, action: Action, ctx: Ctx): ApplyRe
     case "revealSkill":
       return revealSkill(state, action.seat);
     case "activateSkill":
-      return activateSkill(state, action.seat, action.effectKey);
+      return activateSkill(state, action, ctx);
     default:
       return { state, events: [], rejected: { reason: "unknown_action" } };
   }

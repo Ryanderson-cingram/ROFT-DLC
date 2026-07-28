@@ -55,7 +55,7 @@ function resolvePlay(
     if (isNumberCard(card))
       return { state: commit(state, { ...played, punish: undefined, winner: seat }, "finished"), events };
 
-    const { board, drawn, reshuffledOrder } = drawCards(played, { kind: "rule", base: 1 }, ctx.rng);
+    const { board, drawn, reshuffledOrder } = drawCards(played, { kind: "rule", base: 1, seat }, ctx.rng);
     played = { ...board, hands: giveTo(board, seat, drawn) };
     events.push(...drawEvents(seat, drawn, reshuffledOrder));
   }

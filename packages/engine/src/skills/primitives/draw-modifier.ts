@@ -32,6 +32,12 @@ export type DrawProcedure = Extract<DrawModifier, { layer: "L6" }>;
 export interface DrawRequest {
   kind: DrawEventKind;
   /**
+   * 谁在摸这张牌。修正的采集是**按摸牌者**做的（恩惠 `targeting: self` 只改自己那次摸牌，
+   * L4 的 `scope: "self"` 同理），所以摸牌者是这个事件的一部分，不是调用方的私事——
+   * 放在请求里，任何摸牌路径都绕不开它。
+   */
+  seat: number;
+  /**
    * L0 基础值。惩罚事件传的必须是**链上各段贡献的加总**（01-P11「先加总各段贡献再套用」），
    * 而各段「只作用于自己打出的那一张」的修正在**进链时**就已经计入该段贡献（01-P6）——
    * 所以这里绝不能再加一遍。`PunishChain.total` 正是那个加总。
