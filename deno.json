@@ -1,0 +1,5 @@
+{
+  "//": "Deno only type-checks the Edge Functions. Root config so `deno check` does not walk up into package.json/pnpm-workspace.yaml.",
+  "nodeModulesDir": "none",
+  "exclude": ["node_modules", "apps", "packages/*/node_modules", ".next"]
+}
