@@ -1,0 +1,93 @@
+/* 源：design/mockups/encyclopedia.html 的 <style>。已去掉 .search 一段——
+   本页零客户端 JS，无 JS 的搜索框只会是个骗人的输入框。*/
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border-bottom: var(--line);
+}
+.topbar a { text-decoration: none; font-size: 14px; }
+.topbar b { font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.22em; color: var(--brass); }
+
+.head { padding: var(--sp-4) 0 var(--sp-3); }
+.head h1 { font-size: clamp(26px, 8vw, 36px); }
+.head p { margin: var(--sp-2) 0 0; color: var(--text-secondary); }
+
+
+/* 四句总则：置顶，编号是规则本身的顺序，不是装饰 */
+.creed { border-color: var(--brass); }
+.creed ol { margin: var(--sp-2) 0 0; padding-left: 1.5em; }
+.creed li { margin-bottom: 6px; }
+/* U5 不属于「四句」，所以压成脚注而不是第五条 */
+.creed .footnote {
+  margin: var(--sp-3) 0 0;
+  padding-top: var(--sp-2);
+  border-top: var(--line);
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+.creed .footnote .dim { color: var(--text-tertiary, var(--text-secondary)); }
+
+/* 花色锚点导航 */
+.anchors {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  padding: var(--sp-2) 0;
+  background: var(--bg-table);
+  border-bottom: var(--line);
+}
+.anchors a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--brass-dim);
+  border-radius: var(--radius-pill);
+  color: var(--text-primary);
+  text-decoration: none;
+  font-size: 14px;
+}
+.anchors a:hover { border-color: var(--brass); }
+.anchors .sigil { font-family: var(--font-mono); color: var(--brass); font-size: 16px; }
+
+.suit { scroll-margin-top: 64px; }
+.suit > h2 { display: flex; align-items: baseline; gap: var(--sp-2); }
+.suit > h2 .sigil { font-family: var(--font-mono); color: var(--brass); }
+.suit > h2 .count { margin-left: auto; font-size: 13px; color: var(--text-secondary); }
+
+.skills { display: grid; gap: var(--sp-2); }
+@media (min-width: 720px) { .skills { grid-template-columns: 1fr 1fr; } }
+
+.skill {
+  padding: var(--sp-3);
+  border: 1px solid #2c3833;
+  border-radius: var(--radius-panel);
+  background: var(--surface-2);
+}
+.skill .name { display: flex; align-items: baseline; gap: var(--sp-2); }
+.skill .sigil { font-family: var(--font-mono); color: var(--brass); }
+.skill h3 { font-family: var(--font-display); font-size: 18px; }
+.skill .kind { margin-left: auto; font-size: 12px; color: var(--text-secondary); }
+.skill .l0 { margin: 6px 0 0; font-size: 15px; }
+
+.skill details { margin-top: var(--sp-2); border-top: 1px dashed var(--brass-dim); }
+.skill summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+.skill summary::after { content: "▾"; font-size: 11px; }
+.skill details[open] summary::after { content: "▴"; }
+.skill details p { margin: 0 0 var(--sp-2); font-size: 14px; line-height: 1.7; color: var(--text-secondary); }

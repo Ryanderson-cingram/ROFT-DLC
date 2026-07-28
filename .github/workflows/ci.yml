@@ -23,4 +23,4 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - run: deno check supabase/functions/room-action/index.ts supabase/functions/get-snapshot/index.ts
+      - run: deno check supabase/functions/*/index.ts

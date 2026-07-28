@@ -1,8 +1,59 @@
-import { projectView, type GameState } from "@roft/engine";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import LobbyForms from "./lobby-forms";
+import "./lobby.css";
 
-const demo: GameState = { version: 1, phase: "lobby", seats: [{ userId: "demo" }] };
+export default async function LobbyPage() {
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getClaims();
+  if (!data?.claims) redirect("/login");
 
-export default function Home() {
-  const view = projectView(demo, 0);
-  return <main><h1>ROFT-DLC</h1><p>engine ok · phase: {view.phase} · v{view.version}</p></main>;
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("username")
+    .eq("id", data.claims.sub)
+    .maybeSingle();
+  if (!profile) redirect("/login");
+
+  return (
+    <>
+      <header className="topbar">
+        <div className="brand">
+          <b>ROFT-DLC</b>
+          <span>诸神降临 4.1</span>
+        </div>
+        <div className="me">
+          <span className="dot" />
+          {profile.username}
+        </div>
+      </header>
+
+      <main className="wrap">
+        <section className="hero">
+          <div className="fan" aria-hidden="true">
+            <span className="card" data-color="green" data-face="7" />
+            <span className="card" data-color="yellow" data-face="+2" />
+            <span className="card" data-color="wild" data-face="+4" />
+            <span className="card" data-color="red" data-face="停" />
+            <span className="card" data-color="blue" data-face="3" />
+          </div>
+          <h1>今晚坐哪一桌？</h1>
+          <p>3–4 人，一人一个技能，亮出来才生效。</p>
+        </section>
+
+        <LobbyForms />
+
+        <Link className="more" href="/encyclopedia">
+          <span>
+            玩家百科
+            <small className="opt-note" style={{ margin: 0 }}>
+              四句总则、10 个技能的细则与例子。
+            </small>
+          </span>
+          <span className="arrow">→</span>
+        </Link>
+      </main>
+    </>
+  );
 }
