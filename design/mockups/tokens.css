@@ -1,0 +1,394 @@
+/* ============================================================
+   ROFT-DLC 设计令牌 · design direction
+   ------------------------------------------------------------
+   主题「夜牌桌 · 庙火」：一张深墨玉色毡桌，中央一圈灯池（径向渐变）
+   把注意力压在牌与手牌区；UI 底色全部去饱和，**只有牌面五色是画面里
+   唯一饱和的东西**——牌永远最跳。
+   结构色用黄铜（brass）：发丝分隔线、阶段刻度、技能卡压印边框，
+   对应「诸神/铭牌」的题材，而不是常见的亮绿/朱红单点缀。
+   字体三职：宋体系=神名与规则（庄重）、无衬线=界面口语文案、
+   等宽数字=一切机器量（房间码、张数、倒计时、牌面数字，压印感）。
+   签名元素：黄铜刻度轨（.rail / 阶段条）+ 灯池。
+   ============================================================ */
+
+:root {
+  /* 牌面五色：body = 牌身，ink = 牌身上深色字（对骨白 ≥ 7:1） */
+  --card-red: #d62f2f;
+  --card-red-ink: #8e1a1a;
+  --card-blue: #1e6fd9;
+  --card-blue-ink: #16407f;
+  --card-yellow: #efb01c;
+  --card-yellow-ink: #7a4e06;
+  --card-green: #2e9e4f;
+  --card-green-ink: #145a2c;
+  /* 万能牌拼色：a→b 两端，配合 conic 四色轮 */
+  --card-wild-a: #7b5cd6;
+  --card-wild-b: #2b1a4d;
+
+  /* 桌面与容器 */
+  --bg-table: #0d1411;        /* 毡面基色 */
+  --bg-lamp: #1b2a24;         /* 中央灯池 */
+  --surface: #16201c;         /* 面板 */
+  --surface-2: #1f2c26;       /* 面板内凸起（座位卡、技能卡） */
+  --surface-sunken: #0a100d;  /* 凹槽（牌堆、输入框） */
+
+  /* 黄铜：结构线与强调 */
+  --brass: #d3ac5a;
+  --brass-dim: #6f5a2c;
+  --brass-glow: rgba(211, 172, 90, 0.22);
+
+  /* 文字（对 --surface 均 ≥ 4.5:1） */
+  --text-primary: #f2ede1;    /* 骨白，对 #16201c ≈ 13.9:1 */
+  --text-secondary: #a8b3ac;  /* 对 #16201c ≈ 6.6:1 */
+  --text-muted: #7d8a83;      /* 仅用于 ≥16px 的辅助行，对 #16201c ≈ 4.6:1 */
+  --text-on-brass: #16140c;
+
+  /* 语义 */
+  --danger: #c93a2b;        /* 填充用：白字于其上 5.1:1 */
+  --danger-text: #f0897a;   /* 深色底上的危险文字 */
+  --ok: #4bbf7a;
+  --warn: #e8a33d;
+
+  /* 间距 / 圆角 / 层级 */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 16px;
+  --sp-4: 24px;
+  --sp-5: 32px;
+  --radius-card: 8px;
+  --radius-panel: 14px;
+  --radius-pill: 999px;
+
+  /* 字体三职 */
+  --font-display: "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", Georgia, serif;
+  --font-body: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Menlo", "Cascadia Mono", monospace;
+
+  /* 牌面尺寸（改这一处，所有牌等比缩放） */
+  --card-w: 54px;
+  --card-h: 81px;
+
+  --line: 1px solid rgba(211, 172, 90, 0.22);
+  --shadow-lift: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+
+/* ---------- 基础排版 ---------- */
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  background:
+    radial-gradient(ellipse 120% 70% at 50% 38%, var(--bg-lamp) 0%, transparent 62%),
+    var(--bg-table);
+  background-attachment: fixed;
+  -webkit-text-size-adjust: 100%;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin: 0;
+}
+
+/* 一切「机器量」用等宽 + 定宽数字 */
+.num, .code, .count {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+a { color: var(--brass); }
+
+:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: 2px;
+}
+
+/* ---------- 签名元素：黄铜刻度轨 ---------- */
+
+.rail {
+  height: 1px;
+  border: 0;
+  margin: var(--sp-3) 0;
+  background:
+    repeating-linear-gradient(90deg, var(--brass-dim) 0 6px, transparent 6px 14px);
+  opacity: 0.7;
+}
+
+/* ---------- 面板 ---------- */
+
+.panel {
+  background: var(--surface);
+  border: var(--line);
+  border-radius: var(--radius-panel);
+  padding: var(--sp-3);
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--brass);
+}
+
+/* ---------- 按钮（可点击目标 ≥ 44px） ---------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-height: 44px;
+  padding: 0 var(--sp-4);
+  border: 1px solid var(--brass-dim);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.btn:hover { border-color: var(--brass); }
+
+.btn--primary {
+  background: linear-gradient(180deg, var(--brass) 0%, #b8913f 100%);
+  border-color: var(--brass);
+  color: var(--text-on-brass);
+  font-weight: 600;
+}
+
+.btn--danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+  font-weight: 600;
+}
+
+.btn--ghost { background: transparent; }
+
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  background: var(--surface);
+  border-color: #303c36;
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+/* ---------- .card 牌面 ----------
+   用法：<span class="card" data-color="red" data-face="3"></span>
+   data-color: red|blue|yellow|green|wild|back
+   data-face : 0–9 / +2 / 停 / 转 / 变色 / +4 / 洗牌 / 毒
+   ::before = 左上角小字，::after = 中央大字（衬在骨白椭圆上）      */
+
+.card {
+  --c: var(--card-red);
+  --ci: var(--card-red-ink);
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: var(--card-w);
+  height: var(--card-h);
+  border-radius: var(--radius-card);
+  background:
+    radial-gradient(ellipse 40% 31% at 50% 52%, #f6f1e6 0 99%, transparent 100%),
+    var(--c);
+  box-shadow: inset 0 0 0 2px #f6f1e6, var(--shadow-lift);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  vertical-align: bottom;
+}
+
+/* 角标做成真实牌的「骨白索引块」：深色字压骨白，各色均 ≥ 6:1 */
+.card::before {
+  content: attr(data-face);
+  position: absolute;
+  top: 3px;
+  left: 4px;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: #f6f1e6;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--ci);
+}
+
+.card::after {
+  content: attr(data-face);
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: calc(var(--card-w) * 0.46);
+  font-weight: 700;
+  color: var(--ci);
+}
+
+/* 多字牌面（停/转/变色/洗牌/毒）缩字号 */
+.card[data-face="变色"]::after,
+.card[data-face="洗牌"]::after { font-size: calc(var(--card-w) * 0.26); }
+
+.card[data-color="blue"]   { --c: var(--card-blue);   --ci: var(--card-blue-ink); }
+.card[data-color="yellow"] { --c: var(--card-yellow); --ci: var(--card-yellow-ink); }
+.card[data-color="green"]  { --c: var(--card-green);  --ci: var(--card-green-ink); }
+
+.card[data-color="wild"] {
+  background:
+    radial-gradient(ellipse 40% 31% at 50% 52%, #f6f1e6 0 99%, transparent 100%),
+    conic-gradient(var(--card-red) 0 25%, var(--card-blue) 0 50%,
+                   var(--card-yellow) 0 75%, var(--card-green) 0);
+  --ci: #2b1a4d;
+}
+
+.card[data-color="back"] {
+  background:
+    repeating-linear-gradient(45deg, var(--card-wild-b) 0 6px, var(--card-wild-a) 6px 12px);
+}
+
+.card[data-color="back"]::before { content: none; }
+.card[data-color="back"]::after { content: "?"; color: #f6f1e6; }
+
+/* 可打出（legalActions）/ 选中 / 不可打 */
+.card--legal {
+  box-shadow: inset 0 0 0 2px #f6f1e6, 0 0 0 2px var(--brass), 0 0 16px var(--brass-glow);
+  transform: translateY(-6px);
+}
+
+.card--dim { filter: saturate(0.35) brightness(0.6); }
+
+.card--pulse { animation: pulse 1.4s ease-in-out infinite; }
+
+@keyframes pulse {
+  0%, 100% { box-shadow: inset 0 0 0 2px #f6f1e6, 0 0 0 2px var(--brass), 0 0 6px var(--brass-glow); }
+  50%      { box-shadow: inset 0 0 0 2px #f6f1e6, 0 0 0 3px var(--brass), 0 0 22px var(--brass); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+/* ---------- .badge 状态徽章 ----------
+   <span class="badge" data-tone="magic">五彩</span>
+   tone: neutral(默认) | magic 五彩/领域 | warn 恋战 | bad 心盲/同命 | ok UNO */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border: 1px solid var(--brass-dim);
+  border-radius: var(--radius-pill);
+  background: rgba(211, 172, 90, 0.08);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.badge::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--brass);
+}
+
+.badge[data-tone="magic"] { border-color: #6b4fa8; background: rgba(123, 92, 214, 0.14); }
+.badge[data-tone="magic"]::before { background: var(--card-wild-a); }
+.badge[data-tone="warn"] { border-color: #8a6220; background: rgba(232, 163, 61, 0.14); }
+.badge[data-tone="warn"]::before { background: var(--warn); }
+.badge[data-tone="bad"] { border-color: #8a3527; background: rgba(224, 83, 63, 0.14); }
+.badge[data-tone="bad"]::before { background: var(--danger); }
+.badge[data-tone="ok"] { border-color: #2c6f4a; background: rgba(75, 191, 122, 0.14); }
+.badge[data-tone="ok"]::before { background: var(--ok); }
+/* 计数徽章：魂×3、盗×1 —— 数字走等宽 */
+.badge .count { font-weight: 700; }
+
+/* ---------- .pip 神化点 ---------- */
+
+.pips { display: inline-flex; gap: 3px; vertical-align: middle; }
+
+.pip {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--brass);
+  box-shadow: 0 0 6px var(--brass-glow);
+}
+
+.pip--empty { background: transparent; border: 1px solid var(--brass-dim); }
+
+/* ---------- 在线点 ---------- */
+
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ok);
+}
+
+.dot--off { background: #5b665f; }
+
+/* ---------- 设计稿状态切换器（仅设计稿用，真实产品无此物） ----------
+   body[data-state="x"] 控制 .only-x 的显隐；不匹配时才隐藏，
+   匹配时元素保留自己声明的 display（无需 revert）。 */
+
+.state-picker {
+  position: sticky;
+  top: 0;
+  z-index: 200; /* 永远压在模态之上，否则设计稿切不出去 */
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  padding: var(--sp-2);
+  border-bottom: 1px dashed var(--brass-dim);
+  background: rgba(10, 16, 13, 0.92);
+  backdrop-filter: blur(6px);
+}
+
+.state-picker button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid #33403a;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.state-picker button[aria-pressed="true"] {
+  border-color: var(--brass);
+  background: rgba(211, 172, 90, 0.16);
+  color: var(--text-primary);
+}
+
+body:not([data-state="a"]) .only-a,
+body:not([data-state="b"]) .only-b,
+body:not([data-state="c"]) .only-c,
+body:not([data-state="d"]) .only-d,
+body:not([data-state="e"]) .only-e,
+body:not([data-state="host"]) .only-host,
+body:not([data-state="guest"]) .only-guest { display: none !important; }
+
+/* ---------- 通用小工具 ---------- */
+
+.muted { color: var(--text-secondary); }
+.hint { font-size: 13px; color: var(--text-secondary); }
+.row { display: flex; align-items: center; gap: var(--sp-2); }
+.stack { display: flex; flex-direction: column; gap: var(--sp-3); }
+.wrap { width: 100%; max-width: 960px; margin: 0 auto; padding: var(--sp-3); }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap;
+}
