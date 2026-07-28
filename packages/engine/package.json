@@ -7,6 +7,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "gen:skills": "node --experimental-strip-types ../../scripts/gen-skill-defs.ts",
     "test": "vitest run",
     "typecheck": "tsc -p ."
   },
