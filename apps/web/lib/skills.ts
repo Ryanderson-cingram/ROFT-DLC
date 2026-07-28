@@ -77,6 +77,15 @@ export const SKILLS: Skill[] = [
 
 export const skillById = (id: string | null) => SKILLS.find((s) => s.id === id);
 
+/**
+ * U5 脚注（百科页用）。它不是「第五句总则」——四句总则本身逐字不变。
+ * 逐字取自 design/mockups/encyclopedia.html。
+ */
+export const CREED_FOOTNOTE = {
+  text: "最后一张牌必须是数字牌才算赢。功能牌（+2 / 停 / 转 / 变色 / +4 / 毒 / 洗牌）打完手牌时要再摸 1 张，牌照常生效，但你没赢。",
+  aside: "（司夜的「盗」可以放宽这条）",
+};
+
 /** 四句总则（HUD 常驻折叠面板与百科页共用），逐字同源。 */
 export const CREED = [
   "回合开始用技能，然后出牌。",
