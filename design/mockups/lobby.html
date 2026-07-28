@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>大厅 · ROFT-DLC</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  /* ---- 大厅：单列牌桌，灯池落在开局卡上 ---- */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    padding: var(--sp-3);
+    border-bottom: var(--line);
+  }
+  .brand { display: flex; align-items: baseline; gap: var(--sp-2); }
+  .brand b {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    color: var(--brass);
+  }
+  .brand span { font-family: var(--font-display); font-size: 15px; color: var(--text-secondary); }
+  .me { display: flex; align-items: center; gap: var(--sp-2); font-size: 14px; }
+  /* 开场：扇形牌 + 一句话定位 */
+  .hero { padding: var(--sp-5) 0 var(--sp-4); text-align: center; }
+  .fan { display: flex; justify-content: center; margin-bottom: var(--sp-4); height: 96px; }
+  .fan .card { margin: 0 -14px; transform-origin: 50% 120%; }
+  .fan .card:nth-child(1) { transform: rotate(-14deg) translateY(6px); }
+  .fan .card:nth-child(2) { transform: rotate(-7deg) translateY(1px); }
+  .fan .card:nth-child(3) { transform: rotate(0deg) translateY(-3px); }
+  .fan .card:nth-child(4) { transform: rotate(7deg) translateY(1px); }
+  .fan .card:nth-child(5) { transform: rotate(14deg) translateY(6px); }
+  .hero h1 { font-size: clamp(28px, 9vw, 40px); line-height: 1.2; }
+  .hero p { margin: var(--sp-2) 0 0; color: var(--text-secondary); }
+
+  .cols { display: grid; gap: var(--sp-3); }
+  @media (min-width: 760px) { .cols { grid-template-columns: 1.4fr 1fr; align-items: start; } }
+
+  /* 规则包选项：整块可点，≥ 56px */
+  .opt {
+    display: block;
+    min-height: 56px;
+    padding: var(--sp-2) var(--sp-3);
+    border: 1px solid #2c3833;
+    border-radius: var(--radius-card);
+    background: var(--surface-2);
+    cursor: pointer;
+  }
+  .opt + .opt { margin-top: var(--sp-2); }
+  .opt input { accent-color: var(--brass); margin-right: var(--sp-2); }
+  .opt-title { font-family: var(--font-display); font-size: 16px; }
+  .opt-note { display: block; margin-left: 24px; font-size: 13px; color: var(--text-secondary); }
+  .opt:has(input:checked) { border-color: var(--brass); background: rgba(211, 172, 90, 0.09); }
+
+  fieldset { margin: 0 0 var(--sp-3); padding: 0; border: 0; }
+  legend { padding: 0 0 var(--sp-2); font-size: 13px; color: var(--text-secondary); }
+
+  .fixed-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 48px;
+    padding: 0 var(--sp-3);
+    border: 1px dashed #2c3833;
+    border-radius: var(--radius-card);
+    color: var(--text-secondary);
+  }
+  .fixed-row b { color: var(--text-primary); font-weight: 600; }
+
+  .code-input {
+    width: 100%;
+    min-height: 56px;
+    padding: 0 var(--sp-3);
+    border: 1px solid var(--brass-dim);
+    border-radius: var(--radius-card);
+    background: var(--surface-sunken);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 24px;
+    letter-spacing: 0.32em;
+    text-align: center;
+    text-transform: uppercase;
+  }
+  .code-input::placeholder { color: #5c6862; letter-spacing: 0.32em; }
+
+  .btn--block { width: 100%; margin-top: var(--sp-3); }
+
+  .more {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    min-height: 56px;
+    margin-top: var(--sp-4);
+    padding: var(--sp-2) var(--sp-3);
+    border: var(--line);
+    border-radius: var(--radius-panel);
+    color: var(--text-primary);
+    text-decoration: none;
+  }
+  .more:hover { border-color: var(--brass); }
+  .more .arrow { color: var(--brass); font-family: var(--font-mono); }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand"><b>ROFT-DLC</b><span>诸神降临 4.1</span></div>
+  <div class="me"><span class="dot"></span>凛</div>
+</header>
+
+<main class="wrap">
+
+  <section class="hero">
+    <div class="fan" aria-hidden="true">
+      <span class="card" data-color="green" data-face="7"></span>
+      <span class="card" data-color="yellow" data-face="+2"></span>
+      <span class="card" data-color="wild" data-face="+4"></span>
+      <span class="card" data-color="red" data-face="停"></span>
+      <span class="card" data-color="blue" data-face="3"></span>
+    </div>
+    <h1>今晚坐哪一桌？</h1>
+    <p>3–4 人，一人一个技能，亮出来才生效。</p>
+  </section>
+
+  <div class="cols">
+
+    <section class="panel">
+      <p class="eyebrow">开一桌</p>
+      <h2>创建房间</h2>
+      <hr class="rail">
+
+      <fieldset>
+        <legend>规则包</legend>
+        <label class="opt">
+          <input type="radio" name="pack" value="base" checked>
+          <span class="opt-title">基础包</span>
+          <small class="opt-note">UNO 牌 + 首批 10 个技能。</small>
+        </label>
+        <label class="opt">
+          <input type="radio" name="pack" value="gods">
+          <span class="opt-title">诸神包</span>
+          <small class="opt-note">进阶内容，建议先玩过基础包。</small>
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>技能获取</legend>
+        <div class="fixed-row"><b>抽 3 选 1</b><span class="hint">本版本固定</span></div>
+      </fieldset>
+
+      <button class="btn btn--primary btn--block">创建房间</button>
+    </section>
+
+    <section class="panel">
+      <p class="eyebrow">加入一桌</p>
+      <h2>加入房间</h2>
+      <hr class="rail">
+      <label for="code" class="hint">输入房主给的 6 位房间码</label>
+      <input id="code" class="code-input" type="text" maxlength="6" value="KX7Q2M" placeholder="KX7Q2M" autocomplete="off" spellcheck="false">
+      <button class="btn btn--block">加入房间</button>
+    </section>
+
+  </div>
+
+  <a class="more" href="encyclopedia.html">
+    <span>
+      玩家百科
+      <small class="opt-note" style="margin:0">四句总则、10 个技能的细则与例子。</small>
+    </span>
+    <span class="arrow">→</span>
+  </a>
+
+</main>
+
+</body>
+</html>
