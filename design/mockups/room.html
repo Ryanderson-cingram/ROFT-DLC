@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>等候室 · ROFT-DLC</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  body { padding-bottom: 96px; }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--sp-3);
+    border-bottom: var(--line);
+  }
+  .topbar a { text-decoration: none; font-size: 14px; }
+  .topbar b { font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.22em; color: var(--brass); }
+
+  /* 房间码：本页唯一的大字，其他一切让位 */
+  .code-hero { padding: var(--sp-5) 0 var(--sp-4); text-align: center; }
+  .code-hero .code {
+    display: block;
+    font-size: clamp(38px, 15vw, 64px);
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    line-height: 1.1;
+    color: var(--text-primary);
+    text-shadow: 0 0 24px var(--brass-glow);
+  }
+  .code-hero .btn { margin-top: var(--sp-3); }
+
+  .seats { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+  @media (min-width: 760px) { .seats { grid-template-columns: repeat(4, 1fr); } }
+  .seat {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    min-height: 108px;
+    padding: var(--sp-3);
+    border: 1px solid #2c3833;
+    border-radius: var(--radius-panel);
+    background: var(--surface-2);
+  }
+  .seat--self { border-color: var(--brass); }
+  .seat--empty {
+    border-style: dashed;
+    border-color: var(--brass-dim);
+    background: transparent;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: var(--text-secondary);
+  }
+  .seat .no {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--text-secondary);
+  }
+  .seat .who { display: flex; align-items: center; gap: var(--sp-2); font-family: var(--font-display); font-size: 18px; }
+  .seat .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: auto; }
+
+  .summary { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); }
+  .summary div { font-size: 14px; }
+  .summary span { color: var(--text-secondary); margin-right: 6px; }
+
+  /* 底部行动条 */
+  .actionbar {
+    position: fixed;
+    inset: auto 0 0;
+    padding: var(--sp-3);
+    border-top: var(--line);
+    background: rgba(13, 20, 17, 0.94);
+    backdrop-filter: blur(8px);
+  }
+  .actionbar .inner { max-width: 960px; margin: 0 auto; }
+  .actionbar .btn { width: 100%; }
+  .actionbar .hint { text-align: center; margin: var(--sp-2) 0 0; }
+</style>
+</head>
+<body data-state="host">
+
+<nav class="state-picker" aria-label="设计稿视角切换">
+  <button data-state="host" aria-pressed="true">房主视角</button>
+  <button data-state="guest" aria-pressed="false">非房主视角</button>
+</nav>
+
+<header class="topbar">
+  <a href="lobby.html">← 大厅</a>
+  <b>等候室</b>
+  <span class="hint">3 人在座</span>
+</header>
+
+<main class="wrap stack">
+
+  <section class="code-hero">
+    <p class="eyebrow">房间码</p>
+    <strong class="code">KX7Q2M</strong>
+    <button class="btn">复制房间码</button>
+    <p class="hint">把这 6 位发给朋友，他们在大厅输入即可入座。</p>
+  </section>
+
+  <section>
+    <h2>座位</h2>
+    <hr class="rail">
+    <div class="seats">
+
+      <div class="seat seat--self">
+        <span class="no">座位 1</span>
+        <span class="who"><span class="dot"></span>凛</span>
+        <span class="tags">
+          <span class="badge">房主</span>
+          <span class="badge" data-tone="ok">已准备</span>
+        </span>
+      </div>
+
+      <div class="seat">
+        <span class="no">座位 2</span>
+        <span class="who"><span class="dot"></span>阿柴</span>
+        <span class="tags"><span class="badge" data-tone="ok">已准备</span></span>
+      </div>
+
+      <div class="seat">
+        <span class="no">座位 3</span>
+        <span class="who"><span class="dot dot--off"></span>小满</span>
+        <span class="tags">
+          <span class="badge" data-tone="warn">未准备</span>
+          <span class="badge">离线</span>
+        </span>
+      </div>
+
+      <div class="seat seat--empty">
+        <span class="no">座位 4</span>
+        <span>空位</span>
+        <small class="hint">再来一人就能凑满四人桌</small>
+      </div>
+
+    </div>
+  </section>
+
+  <section class="panel">
+    <p class="eyebrow">本桌规则 · 开局后不可改</p>
+    <div class="summary">
+      <div><span>规则包</span>基础包</div>
+      <div><span>技能获取</span>抽 3 选 1</div>
+      <div><span>人数</span>3–4 人</div>
+    </div>
+  </section>
+
+</main>
+
+<div class="actionbar">
+  <div class="inner">
+    <div class="only-host">
+      <button class="btn btn--primary" disabled>开始游戏（2/3 已准备）</button>
+      <p class="hint">等小满准备好就能开桌。</p>
+    </div>
+    <div class="only-guest">
+      <button class="btn btn--primary">准备</button>
+      <p class="hint">房主是凛，等他开桌。</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.querySelector('.state-picker').addEventListener('click', e => {
+    const b = e.target.closest('button[data-state]'); if (!b) return;
+    document.body.dataset.state = b.dataset.state;
+    document.querySelectorAll('.state-picker button')
+      .forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  });
+</script>
+
+</body>
+</html>

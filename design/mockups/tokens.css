@@ -338,6 +338,49 @@ a { color: var(--brass); }
 
 .dot--off { background: #5b665f; }
 
+/* ---------- 设计稿状态切换器（仅设计稿用，真实产品无此物） ----------
+   body[data-state="x"] 控制 .only-x 的显隐；不匹配时才隐藏，
+   匹配时元素保留自己声明的 display（无需 revert）。 */
+
+.state-picker {
+  position: sticky;
+  top: 0;
+  z-index: 90;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  padding: var(--sp-2);
+  border-bottom: 1px dashed var(--brass-dim);
+  background: rgba(10, 16, 13, 0.92);
+  backdrop-filter: blur(6px);
+}
+
+.state-picker button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid #33403a;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.state-picker button[aria-pressed="true"] {
+  border-color: var(--brass);
+  background: rgba(211, 172, 90, 0.16);
+  color: var(--text-primary);
+}
+
+body:not([data-state="a"]) .only-a,
+body:not([data-state="b"]) .only-b,
+body:not([data-state="c"]) .only-c,
+body:not([data-state="d"]) .only-d,
+body:not([data-state="e"]) .only-e,
+body:not([data-state="host"]) .only-host,
+body:not([data-state="guest"]) .only-guest { display: none !important; }
+
 /* ---------- 通用小工具 ---------- */
 
 .muted { color: var(--text-secondary); }
