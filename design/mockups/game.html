@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>对局 HUD · ROFT-DLC</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  body { padding-bottom: var(--sp-3); }
+  .table { max-width: 1040px; margin: 0 auto; padding: var(--sp-3); display: grid; gap: var(--sp-3); }
+  /* 网格子项默认 min-width:auto，会被长内容撑破 375px —— 一律归零 */
+  .table > *, .mine > *, .opp, .hand-wrap { min-width: 0; }
+
+  /* ---- 顶部横幅：倒计时（惩罚/反应窗口共用） ---- */
+  .alertbar {
+    position: sticky;
+    top: 48px;
+    z-index: 80;
+    padding: var(--sp-2) var(--sp-3);
+    border-bottom: 1px solid var(--brass-dim);
+    background: rgba(31, 44, 38, 0.96);
+  }
+  .alertbar p { margin: 0 0 6px; font-size: 14px; }
+  .alertbar .secs { font-family: var(--font-mono); color: var(--brass); }
+  .timer { height: 4px; border-radius: 2px; background: var(--surface-sunken); overflow: hidden; }
+  .timer i { display: block; height: 100%; background: var(--brass); animation: drain 12s linear infinite; }
+  .alertbar--react { background: rgba(43, 26, 77, 0.96); border-color: var(--card-wild-a); }
+  .alertbar--react .timer i { background: var(--card-wild-a); animation-duration: 8s; }
+  @keyframes drain { from { width: 100%; } to { width: 0; } }
+
+  /* ---- 对手 ---- */
+  .opponents { display: grid; gap: var(--sp-2); grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .opp {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: var(--sp-2);
+    border: 1px solid #2c3833;
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+    font-size: 13px;
+  }
+  .opp--acting { border-color: var(--brass); box-shadow: 0 0 0 1px var(--brass-glow); }
+  .opp .who { display: flex; align-items: center; gap: 6px; font-family: var(--font-display); font-size: 15px; }
+  .opp .hand-count { font-family: var(--font-mono); color: var(--text-secondary); }
+  .opp .hand-count b { color: var(--text-primary); font-size: 15px; }
+  .opp .tags { display: flex; flex-wrap: wrap; gap: 4px; }
+  .skillchip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border: 1px solid var(--brass-dim);
+    border-radius: var(--radius-pill);
+    background: rgba(211, 172, 90, 0.08);
+    font-size: 12px;
+  }
+  .skillchip .sigil { font-family: var(--font-mono); color: var(--brass); }
+  .skillchip--hidden { border-style: dashed; color: var(--text-secondary); }
+
+  /* ---- 牌桌中央 ---- */
+  .center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sp-4);
+    padding: var(--sp-4) 0;
+  }
+  .center .slot { text-align: center; }
+  .center .slot span { display: block; margin-top: 6px; font-size: 12px; color: var(--text-secondary); }
+  .center .card { --card-w: 68px; --card-h: 102px; }
+  .dirs { font-family: var(--font-mono); font-size: 22px; color: var(--brass); }
+
+  /* ---- 惩罚叠链横幅 ---- */
+  .chain {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: var(--sp-2) var(--sp-3);
+    border: 1px solid var(--danger);
+    border-radius: var(--radius-panel);
+    background: rgba(201, 58, 43, 0.14);
+  }
+  .chain .seg { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+  .chain .seg b { font-family: var(--font-mono); font-size: 16px; }
+  .chain .arrow { color: var(--text-secondary); font-family: var(--font-mono); }
+  .chain .total {
+    margin-left: auto;
+    padding: 2px 10px;
+    border-radius: var(--radius-pill);
+    background: var(--danger);
+    color: #fff;
+    font-family: var(--font-mono);
+    font-weight: 700;
+  }
+  .swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+  }
+
+  /* ---- 阶段条：黄铜刻度轨 ---- */
+  .turnline { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
+  .turnline .owner { font-family: var(--font-display); font-size: 16px; }
+  .phase { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; margin: var(--sp-2) 0; padding: 0; list-style: none; }
+  .phase li {
+    padding: 6px 4px 0;
+    border-top: 2px solid #2c3833;
+    font-size: 11px;
+    line-height: 1.35;
+    color: var(--text-secondary);
+  }
+  .hudsay {
+    margin: 0;
+    padding: var(--sp-2) var(--sp-3);
+    border-left: 3px solid var(--brass);
+    background: rgba(211, 172, 90, 0.08);
+    font-size: 15px;
+  }
+
+  /* ---- 四句总则 ---- */
+  .rules summary,
+  .l1 summary {
+    cursor: pointer;
+    list-style: none;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    color: var(--text-secondary);
+  }
+  .rules summary::after,
+  .l1 summary::after { content: "▾"; font-size: 11px; }
+  .rules[open] summary::after,
+  .l1[open] summary::after { content: "▴"; }
+  .rules ol { margin: 0; padding-left: 1.4em; font-size: 14px; }
+  .rules li { margin-bottom: 4px; }
+
+  /* ---- 自己：技能卡 + 手牌 + 行动 ---- */
+  .mine { display: grid; gap: var(--sp-3); }
+  .skillcard {
+    position: relative;
+    padding: var(--sp-3);
+    border: 1px solid var(--brass);
+    border-radius: var(--radius-panel);
+    background: linear-gradient(180deg, rgba(211, 172, 90, 0.12), transparent 70%), var(--surface-2);
+  }
+  .skillcard .sc-head { display: flex; align-items: center; gap: var(--sp-2); }
+  .skillcard .sigil { font-family: var(--font-mono); color: var(--brass); }
+  .skillcard h3 { font-family: var(--font-display); font-size: 18px; }
+  .skillcard .l0 { margin: 6px 0 0; font-size: 14px; }
+  .l1 { margin-top: var(--sp-2); border-top: 1px dashed var(--brass-dim); }
+  .l1 p { margin: 0 0 var(--sp-2); font-size: 14px; color: var(--text-secondary); }
+  .l2 {
+    display: flex;
+    gap: 6px;
+    margin: var(--sp-2) 0 0;
+    font-size: 13px;
+    color: var(--danger-text);
+  }
+  .l2::before { content: "✕"; }
+
+  .hand-wrap { position: relative; }
+  .hand {
+    display: flex;
+    gap: var(--sp-2);
+    padding: 10px var(--sp-1) var(--sp-2);
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .hand .card { cursor: pointer; }
+  .hand-meta { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-secondary); }
+
+  .actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; }
+  .actions .btn { flex: 1 1 140px; }
+  .uno-note { flex: 1 1 100%; margin: 0; }
+
+  /* ---- 各状态差异 ---- */
+  body[data-state="a"] .phase li:nth-child(1),
+  body[data-state="b"] .phase li:nth-child(2),
+  body[data-state="c"] .phase li:nth-child(2) { border-top-color: var(--brass); color: var(--text-primary); }
+
+  /* B：惩罚回合 —— 只有 +4 能接，技能卡置灰 */
+  body[data-state="b"] .hand .card { filter: saturate(0.3) brightness(0.55); transform: none; box-shadow: inset 0 0 0 2px #f6f1e6; }
+  body[data-state="b"] .hand .card[data-face="+4"] {
+    filter: none;
+    transform: translateY(-6px);
+    box-shadow: inset 0 0 0 2px #f6f1e6, 0 0 0 2px var(--brass), 0 0 16px var(--brass-glow);
+  }
+  body[data-state="b"] .skillcard { border-color: #3a4640; background: var(--surface); opacity: 0.75; }
+</style>
+</head>
+<body data-state="a">
+
+<nav class="state-picker" aria-label="设计稿状态切换">
+  <button data-state="a" aria-pressed="true">A 我的回合</button>
+  <button data-state="b" aria-pressed="false">B 惩罚叠链</button>
+  <button data-state="c" aria-pressed="false">C 反应窗口</button>
+  <button data-state="d" aria-pressed="false">D 选颜色</button>
+  <button data-state="e" aria-pressed="false">E 开局抽技能</button>
+</nav>
+
+<div class="alertbar only-b">
+  <p>你被叠到了：接着叠，或者吃下这一叠 · <span class="secs">12s</span></p>
+  <div class="timer"><i></i></div>
+</div>
+
+<main class="table">
+
+  <section class="opponents">
+    <div class="opp">
+      <span class="who"><span class="dot"></span>阿柴</span>
+      <span class="hand-count">手牌 <b>2</b></span>
+      <span class="skillchip"><span class="sigil">♦10</span>劫营</span>
+      <span class="tags"><span class="badge" data-tone="ok">已喊 UNO</span></span>
+    </div>
+    <div class="opp">
+      <span class="who"><span class="dot"></span>小满</span>
+      <span class="hand-count">手牌 <b>4</b></span>
+      <span class="skillchip skillchip--hidden"><span class="sigil">?</span>未亮出</span>
+      <span class="tags"><span class="badge" data-tone="warn">恋战</span></span>
+    </div>
+    <div class="opp">
+      <span class="who"><span class="dot"></span>老白</span>
+      <span class="hand-count">手牌 <b>11</b></span>
+      <span class="skillchip"><span class="sigil">♦2</span>血棘</span>
+      <span class="tags">
+        <span class="badge">神化 <span class="pips"><i class="pip"></i><i class="pip"></i></span></span>
+      </span>
+    </div>
+  </section>
+
+  <section class="center">
+    <div class="slot">
+      <span class="card" data-color="back"></span>
+      <span>牌堆 38</span>
+    </div>
+    <div class="dirs" title="出牌方向">↻</div>
+    <div class="slot">
+      <span class="card" data-color="red" data-face="7"></span>
+      <span>牌顶</span>
+    </div>
+  </section>
+
+  <div class="chain only-b">
+    <span class="seg"><i class="swatch" style="background:var(--card-yellow)"></i>阿柴 <b>+2</b></span>
+    <span class="arrow">→</span>
+    <span class="seg"><i class="swatch" style="background:var(--card-red)"></i>老白 <b>+4</b></span>
+    <span class="total">累计 6 张</span>
+  </div>
+
+  <section>
+    <div class="turnline">
+      <span class="owner">你的回合</span>
+      <span class="hint">第 3 轮</span>
+    </div>
+    <ol class="phase">
+      <li>回合开始<br>用技能</li>
+      <li>出牌 / 摸牌</li>
+      <li>结算</li>
+      <li>回合结束</li>
+    </ol>
+    <p class="hudsay only-a">你的回合：可以先用技能，或直接出牌</p>
+    <p class="hudsay only-b">被 +2/+4 了：只能出 +4 接着叠，或者吃下 6 张</p>
+  </section>
+
+  <details class="rules panel">
+    <summary>四句总则</summary>
+    <ol>
+      <li>回合开始用技能，然后出牌。</li>
+      <li>被 +2/+4 时先叠或不叠；叠的时候只算你自己那张的加成。</li>
+      <li>一人一个技能；亮出来才会生效。</li>
+      <li>神化 = 多几轮出牌；并列 = 一轮里多张。</li>
+    </ol>
+  </details>
+
+  <section class="mine">
+
+    <div class="skillcard">
+      <div class="sc-head">
+        <span class="sigil">♠1</span>
+        <h3>恒心</h3>
+        <span class="badge" data-tone="ok">已亮出</span>
+      </div>
+      <p class="l0">弃一张牌，摸一张牌</p>
+      <details class="l1">
+        <summary>细则</summary>
+        <p>回合开始阶段使用。从手牌里选一张丢进弃牌堆，再从牌堆摸一张。手牌数不变，用来换掉打不出去的牌。每回合一次。</p>
+      </details>
+      <p class="l2 only-b">惩罚回合不能用主动技能</p>
+    </div>
+
+    <div class="hand-wrap">
+      <div class="hand-meta"><span>你的手牌 <b class="count">7</b></span><span class="only-a">高亮 = 现在能打</span></div>
+      <div class="hand">
+        <span class="card card--legal" data-color="red" data-face="3"></span>
+        <span class="card card--legal" data-color="red" data-face="7"></span>
+        <span class="card card--legal" data-color="blue" data-face="7"></span>
+        <span class="card" data-color="green" data-face="0"></span>
+        <span class="card card--legal" data-color="yellow" data-face="+2"></span>
+        <span class="card" data-color="wild" data-face="变色"></span>
+        <span class="card" data-color="wild" data-face="+4"></span>
+      </div>
+    </div>
+
+    <div class="actions only-a">
+      <button class="btn">摸牌</button>
+      <button class="btn" disabled>喊 UNO</button>
+      <p class="uno-note hint">剩 2 张牌时才需要喊。</p>
+    </div>
+
+    <div class="actions only-b">
+      <button class="btn btn--primary">叠 +4</button>
+      <button class="btn btn--danger">吃下 6 张</button>
+    </div>
+
+  </section>
+
+</main>
+
+<script>
+  document.querySelector('.state-picker').addEventListener('click', e => {
+    const b = e.target.closest('button[data-state]'); if (!b) return;
+    document.body.dataset.state = b.dataset.state;
+    document.querySelectorAll('.state-picker button')
+      .forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  });
+</script>
+
+</body>
+</html>
