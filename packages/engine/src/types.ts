@@ -49,7 +49,6 @@ export interface GameState {
   board?: Board;
 }
 export type Action =
-  | { type: "ping"; seat: number }
   | { type: "startGame"; seat: number }
   | { type: "playCards"; seat: number; cardIds: string[]; chosenColor?: Color }
   | { type: "drawCard"; seat: number }
@@ -57,5 +56,36 @@ export type Action =
   | { type: "claimTimeout"; seat: number; windowId: string }
   | { type: "respond"; seat: number; windowId: string; choice: string };
 export interface EngineEvent { type: string; public: Record<string, unknown>; private?: { seat: number; payload: Record<string, unknown> } }
+/** 他人只剩公开计数——手牌牌面不进这个结构。 */
+export interface SnapshotPlayer {
+  seat: number;
+  userId: string;
+  handCount: number;
+  saidUno: boolean;
+  /** 本轮恒为 null / 0：技能与神化是下一个计划的事。 */
+  skillId: string | null;
+  ascensions: number;
+}
+/** 发给单个座位的视角快照；客户端只渲染它，永远不自己判规则。 */
+export interface ClientSnapshot {
+  version: number;
+  phase: Phase;
+  youSeat: number;
+  yourHand: Card[];
+  players: SnapshotPlayer[];
+  currentSeat: number | null;
+  direction: 1 | -1;
+  activeColor: Color | null;
+  discardTop: Card | null;
+  drawPileCount: number;
+  drawnPlayable?: Card | null;
+  punish?: PunishChain;
+  pendingWindow?: PendingWindow;
+  windowId?: string;
+  winner?: number;
+  legalActions: Action[];
+  /** 按 action 类型给出的「为什么现在不能」人话（UI 的 L2 层）。 */
+  disabledReasons: Record<string, string>;
+}
 export interface Ctx { rng: () => number; now: string }
 export interface ApplyResult { state: GameState; events: EngineEvent[]; rejected?: { reason: string } }
