@@ -49,6 +49,20 @@
 
 ---
 
+## 1b. 调研对账（`docs/research/2026-07-28-card-game-architecture-best-practices.md`）
+
+那份调研逐条核对了一手来源（boardgame.io / Colyseus / MTG CR / 炉石 GDC / Fowler / Postgres / Stripe 官方文档），**实施前必读 §3、§4、§5**。它点名三处「需补」，现状：
+
+| 调研结论 | 现状 | 归属 |
+|---|---|---|
+| §7 丢铃铛兜底（Realtime 官方不保证送达） | ✅ 已做：自适应轮询 30s/3s + visibilitychange + 重连必拉 | 已完成 |
+| §4 随机结果必须落事件日志 | ✅ 已做：`audit` 通道记录洗牌牌序（commit `42b47ac`） | 已完成 |
+| §3 反应窗口需显式 priority-pass 状态机 | ⚠️ 部分：有 `pendingWindow`，**缺 `respondersRemaining` 与显式 `pass`** | **本计划 Task 6** |
+| §5 服务端权威回合计时器 | ⚠️ 偏离：`claimTimeout` 由客户端催促、服务端校验 `now > deadline`。**全员掉线则窗口永不结算**——私房局可接受，正式匹配前必须加 pg_cron 兜底 | 记入 spec，非本计划 |
+| §6 Edge Function 与 Vercel 函数 pin 到 DB 区域 | ❌ 未做（目前只有本地栈） | 部署前必做，非本计划 |
+
+调研还确认了两件我们已经做对、**不要在实施中回退**的事：视角投影必须在服务端做（§2，绝不能发全量再由前端隐藏）；`realtime.send()` 放在 DB 触发器里与状态写入同事务（§7），消除「写库成功但发铃铛失败」的双写问题。
+
 ## 2. 与既有计划的关系
 
 - **不冲突、是承接**：`skill-catalog-structuring` 产出标注（A 类维度），本计划建消费它的引擎（B 类机制）
@@ -104,7 +118,9 @@
 
 ### Task 6: 反应窗口与惩罚贡献（原语 `reactionWindow` / `punishContribution`）
 
-- [ ] **Step 1: `reactionWindow`** — 技能可声明「在什么事件上开窗口、谁是 actors、默认解法」；复用既有 `pendingWindow` 与 `claimTimeout`
+> **必读：`docs/research/2026-07-28-card-game-architecture-best-practices.md` §3。** 这是调研点名的三处「需补」之一，且是本计划唯一正面处理它的地方。行业范式是 **MTG CR 117 的优先权传递状态机**：逐一授予行动权，**全员连续 pass 才结算**（117.4）；boardgame.io 用 stages/activePlayers 表达同一件事。当前引擎只有单 actor 的 `punishStack` 窗口，没有显式 `pass`，也没有 `respondersRemaining`——多个劫营持有者同时可响应时不够用。
+
+- [ ] **Step 1: `reactionWindow`** — 技能可声明「在什么事件上开窗口、谁是 actors、默认解法」；复用既有 `pendingWindow` 与 `claimTimeout`。**按 CR 117.4 补两件事**：`respondersRemaining[]`（谁还没表态）与**显式 `pass` choice**；全员 pass 或超时 → 按 `defaultChoice` 结算。并发抢答由乐观锁天然串行化（调研 §3 结尾原话），后到者拿 409 重拉再决策，不需要额外的锁
 - [ ] **Step 2:** 劫营♦10（G5 打断当前轮、被打断者摸 1、打断者不进回合、从其下家继续；Q&A：可响应并列任意一张）。**已知缺口：G5 的「剩余神化轮次作废」无法实现——基础包没有任何东西授予神化，`roundsLeft` 恒为 1。本轮只做单轮打断，在代码里留 `ponytail:` 注释并在报告中说明**
 - [ ] **Step 3:** 远星♦J（P7 弃代价牌并摸 2，视为合法叠链接法；代价摸牌不计惩罚）
 - [ ] **Step 4: `punishContribution`** + 强袭♦1（掷骰改倍率，P6 只作用于自己那张；可替任何人重掷）

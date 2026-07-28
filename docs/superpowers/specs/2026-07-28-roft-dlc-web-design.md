@@ -170,6 +170,8 @@ pendingWindow {
 - MVP 断线：**保留座位，不自动出牌**——但仅限「轮到你出牌」的主回合；**反应窗口不豁免超时**，否则一个 AFK 玩家会卡死全桌（MVP 首批就含劫营/远星两个响应技能，此问题在 MVP 范围内）  
 - **反应窗口超时**：每个 pendingWindow 带 `deadline` + `defaultChoice`（= 视为不响应）。Edge Function 是请求驱动、无服务端定时器，MVP 采用**客户端催促**：任意成员在 deadline 过后调用 `room-action { type: "claimTimeout", windowId }`，服务端校验 `now > deadline` 后按 defaultChoice 结算（谁先到谁生效，乐观锁保证只结算一次）；客户端在窗口出现时本地起倒计时并自动发起。后续如需兜底再加 pg_cron 扫描超时窗口（非 MVP）  
 - 主回合出牌无强制计时（MVP 私房局，熟人自治）；正式匹配再引入回合计时器，复用同一 deadline 机制  
+- **已知偏离（调研 §5）**：行业惯例是服务端权威定时器触发超时（炉石 rope、BGA clock；boardgame.io 无内置需自建）。我们的 `claimTimeout` 是客户端催促 + 服务端校验 `now > deadline`——**决策是服务端权威的，但触发不是**。后果：一个反应窗口若所有成员同时掉线，将永不结算。私房局可接受；**正式匹配上线前必须补 pg_cron 扫描超时窗口**  
+- **部署前必做（调研 §6）**：Edge Function 与 Vercel 函数都 pin 到数据库所在区域。跨洲 RTT × 多次 DB 往返会吃穿 1s 的回合制延迟预算（Claypool 2006 给策略类的阈值）  
 - 测试：引擎 fixture（规则 ID）+ Edge 集成（裁剪/冲突/超时争抢）+ E2E 烟雾  
 
 ---
