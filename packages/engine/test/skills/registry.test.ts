@@ -26,35 +26,41 @@ describe("skill registry", () => {
     expect(r.byId.get("nope")).toBeUndefined();
   });
 
-  it("定义引用未注册的原语 → 抛错，点名技能与字段", () => {
+  // 进池的门槛是「机制全部已注册」，不是「标注完整」——否则玩家会抽到一个亮出后什么都不发生的技能
+  it("引用未注册原语的技能不进可抽池，并点名技能与字段", () => {
     const bad = doc(def({
       id: "spade-9",
       structured: true,
-      effects: [{ kind: "passive" }, { kind: "replacement" }],
+      effects: [{ key: "1", kind: "passive" }, { key: "2", kind: "replacement" }],
     }));
-    expect(() => loadSkills(bad, new Set(["passive"]))).toThrowError(
-      /spade-9[\s\S]*effects\[1\]\.kind[\s\S]*replacement/,
-    );
+    const r = loadSkills(bad, new Set(["passive"]));
+    expect(r.pool).toEqual([]);
+    expect(r.unsupported).toEqual([{ id: "spade-9", missing: ['effects[1].kind: "replacement"'] }]);
   });
 
-  it("原语已注册 → 正常加载，不抛", () => {
+  it("原语已注册 → 进池", () => {
     const ok = doc(def({
       id: "heart-1",
       structured: true,
-      effects: [{ kind: "passive", modifies: ["drawModifier"] }],
+      effects: [{ key: "passive", kind: "passive", modifies: ["drawModifier"] }],
     }));
-    expect(() => loadSkills(ok, new Set(["passive", "drawModifier"]))).not.toThrow();
+    const r = loadSkills(ok, new Set(["passive", "drawModifier"]));
+    expect(r.pool.map((s) => s.id)).toEqual(["heart-1"]);
+    expect(r.unsupported).toEqual([]);
   });
 
-  it("未注册的原语不是被跳过，而是逐条报出来", () => {
-    const bad = doc(def({ id: "club-3", structured: true, effects: [{ modifies: "marks" }] }));
-    expect(() => loadSkills(bad, new Set())).toThrowError(/club-3[\s\S]*effects\[0\]\.modifies[\s\S]*marks/);
+  it("缺哪个机制是逐条报出来的，不是笼统说一句不支持", () => {
+    const bad = doc(def({ id: "club-3", structured: true, effects: [{ key: "1", modifies: ["marks"] }, { key: "2", kind: "response" }] }));
+    expect(loadSkills(bad, new Set()).unsupported[0].missing).toEqual([
+      'effects[0].modifies: "marks"',
+      'effects[1].kind: "response"',
+    ]);
   });
 
   it("unimplemented 的技能不进可抽池，也不被校验", () => {
     const d = doc(
-      def({ id: "done", structured: true, effects: [{ kind: "passive" }] }),
-      def({ id: "declared-not-built", structured: true, unimplemented: true, effects: [{ kind: "no-such" }] }),
+      def({ id: "done", structured: true, effects: [{ key: "1", kind: "passive" }] }),
+      def({ id: "declared-not-built", structured: true, unimplemented: true, effects: [{ key: "1", kind: "no-such" as never }] }),
       def({ id: "not-structured" }),
     );
     const r = loadSkills(d, new Set(["passive"]));
@@ -66,7 +72,7 @@ describe("skill registry", () => {
   it("mechanismRefs 把一条定义引用的机制名连同字段路径全列出来", () => {
     expect(mechanismRefs(def({
       id: "x",
-      effects: [{ kind: "active", modifies: ["a", "b"] }],
+      effects: [{ key: "1", kind: "active", modifies: ["a", "b"] }],
     }))).toEqual([
       { path: "effects[0].kind", name: "active" },
       { path: "effects[0].modifies", name: "a" },
@@ -74,13 +80,19 @@ describe("skill registry", () => {
     ]);
   });
 
-  it("真实的 56 条定义：此刻一条都没结构化，所以可抽池是空的", () => {
+  // 真实定义的当下状态：10 个 MVP 技能已标注完整，但原语一个都还没建，所以池是空的、
+  // 它们全在 unsupported 里。primitives 计划每完成一波，就有技能从 unsupported 挪进 pool；
+  // Task 8 的 CI 断言会在全部建完时要求 MVP 10 必须在 pool 里。
+  it("标注已完成但原语未建：MVP 技能落在 unsupported 而不是池里", () => {
     const r = loadSkills(skillDefs, primitives);
-    expect(r.byId.size).toBe(56);
+    expect(r.byId.size).toBe(60);
     expect(r.pool).toEqual([]);
+    expect(r.unsupported.map((u) => u.id)).toContain("heart-1"); // 恩惠
+    // 报出来的是具体缺哪个机制，不是一句「不支持」
+    expect(r.unsupported.find((u) => u.id === "heart-1")!.missing.length).toBeGreaterThan(0);
   });
 
-  it("默认参数就是生产用的那两个源，不抛", () => {
+  it("默认参数就是生产用的那两个源，加载不抛", () => {
     expect(() => loadSkills()).not.toThrow();
   });
 });
