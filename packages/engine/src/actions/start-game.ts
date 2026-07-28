@@ -48,7 +48,11 @@ export function startGame(state: GameState, ctx: Ctx): ApplyResult {
         currentSeat: 0,
         direction: 1,
         saidUno: hands.map(() => false),
-        skills: hands.map(() => null),
+        skills: hands.map(() => null),          // 抽 3 选 1 还没实现，开局无人持有技能
+        revealed: hands.map(() => false),
+        activatedThisTurn: hands.map(() => false),
+        marks: hands.map(() => ({})),
+        statuses: hands.map(() => []),
         drawnPlayable: null,
       },
     },

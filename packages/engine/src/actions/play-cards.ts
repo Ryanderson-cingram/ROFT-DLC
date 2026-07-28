@@ -1,4 +1,4 @@
-import { commit, isNumberCard, isPlayable, isWild, nextSeat, reject } from "../legal.ts";
+import { commit, isNumberCard, isPlayable, isWild, passTurn, reject } from "../legal.ts";
 import { drawCards, drawEvents, giveTo } from "./draw.ts";
 import { canStack, extendChain, openPunishWindow, punishFace } from "./punish.ts";
 import type { ApplyResult, Board, Card, Color, Ctx, EngineEvent, GameState } from "../types.ts";
@@ -68,7 +68,7 @@ function resolvePlay(
   // 「停」跳过下家的回合开始窗口（U3 + 传统 UNO）
   const step = card.face === "skip" ? 2 : 1;
   return {
-    state: commit(state, { ...played, currentSeat: nextSeat(played, seat, step) }, "turnStart"),
+    state: commit(state, { ...played, ...passTurn(played, seat, step) }, "turnStart"),
     events,
   };
 }

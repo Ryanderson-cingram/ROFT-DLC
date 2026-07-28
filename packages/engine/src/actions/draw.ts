@@ -1,5 +1,5 @@
 import { shuffle } from "../deck.ts";
-import { commit, isPlayable, nextSeat, reject } from "../legal.ts";
+import { commit, isPlayable, passTurn, reject } from "../legal.ts";
 import { resolveDrawCount } from "../skills/primitives/draw-modifier.ts";
 import type { DrawModifier, DrawRequest, DrawResolution } from "../skills/primitives/draw-modifier.ts";
 import type { ApplyResult, Board, Card, Ctx, EngineEvent, GameState } from "../types.ts";
@@ -69,7 +69,7 @@ export function drawCard(state: GameState, seat: number, ctx: Ctx): ApplyResult 
   if (playable) return { state: commit(state, { ...withCard, drawnPlayable: drawn[0] }, "play"), events };
   // 摸到的牌打不出去 → 回合直接结束，不必再点一次
   return {
-    state: commit(state, { ...withCard, drawnPlayable: null, currentSeat: nextSeat(withCard, seat) }, "turnStart"),
+    state: commit(state, { ...withCard, drawnPlayable: null, ...passTurn(withCard, seat) }, "turnStart"),
     events,
   };
 }
@@ -82,7 +82,7 @@ export function endTurn(state: GameState, seat: number): ApplyResult {
   if (seat !== b.currentSeat) return reject(state, "not_your_turn");
   if (!b.drawnPlayable) return reject(state, "must_draw_first");
   return {
-    state: commit(state, { ...b, drawnPlayable: null, currentSeat: nextSeat(b, seat) }, "turnStart"),
+    state: commit(state, { ...b, drawnPlayable: null, ...passTurn(b, seat) }, "turnStart"),
     events: [{ type: "turnEnded", public: { seat } }],
   };
 }

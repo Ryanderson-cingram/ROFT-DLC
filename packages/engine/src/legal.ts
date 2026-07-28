@@ -33,3 +33,12 @@ export const nextSeat = (b: Board, from = b.currentSeat, step = 1) => {
   const n = b.hands.length;
   return (((from + b.direction * step) % n) + n) % n;
 };
+
+/**
+ * 交出回合。V7 的「每回合一条主动」额度在这里清零——所有换手的路径都得走它，
+ * 否则漏掉一条就会出现「上回合发动过、这回合发动不了」的偶发 bug。
+ */
+export const passTurn = (b: Board, from = b.currentSeat, step = 1): Pick<Board, "currentSeat" | "activatedThisTurn"> => ({
+  currentSeat: nextSeat(b, from, step),
+  activatedThisTurn: b.activatedThisTurn.map(() => false),
+});

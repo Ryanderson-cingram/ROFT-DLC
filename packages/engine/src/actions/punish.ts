@@ -1,5 +1,5 @@
 import { drawCards, drawEvents, giveTo } from "./draw.ts";
-import { commit, nextSeat, reject } from "../legal.ts";
+import { commit, nextSeat, passTurn, reject } from "../legal.ts";
 import type { ApplyResult, Board, Card, Ctx, GameState, PunishChain } from "../types.ts";
 
 const WINDOW_MS = 30_000;
@@ -97,7 +97,7 @@ function settle(state: GameState, seat: number, choice: string, ctx: Ctx): Apply
     hands: giveTo(board, seat, drawn),
     punish: undefined,
     drawnPlayable: null,
-    currentSeat: nextSeat(board, seat),
+    ...passTurn(board, seat),
   };
   return {
     state: commit(state, eaten, "turnStart"),

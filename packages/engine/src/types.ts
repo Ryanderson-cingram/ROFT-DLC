@@ -33,8 +33,25 @@ export interface Board {
   currentSeat: number;
   direction: 1 | -1;
   saidUno: boolean[];
-  /** 本轮技能未实现（S1/S2 的持有槽位，只存不用）。 */
+  /** S2 一人一技能：持有的技能 id，未持有为 null。持有 ≠ 亮出。 */
   skills: (string | null)[];
+  /** V3/V4：亮出后被动才生效、主动才可发动。未亮出的技能对局面毫无影响。 */
+  revealed: boolean[];
+  /**
+   * V7：本回合已发动过一条主动的座位。V6 亮出不占次数、V8 被动触发不占次数，
+   * 所以只有「发动」写这里。回合切换时清空。
+   */
+  activatedThisTurn: boolean[];
+  /**
+   * 通用计数标记（03 §5）：魂/盗/异/形/颠/陨。按座位存，键是标记名。
+   * 做成通用表而不是每技能一个计数器，是因为「颠可当作异/盗/魂/形」本身就要求它们同构。
+   */
+  marks: Record<string, number>[];
+  /**
+   * 状态（03 §4）：五彩/恋战/心盲/领域/同命/封印…按座位存。
+   * 03 §4 的「负面三者互斥、不叠层」由 statuses 原语统一实施，不在各技能里重复判断。
+   */
+  statuses: string[][];
   /** U1：刚摸到且可打的那张牌；非 null 时本回合只能打它或结束回合。 */
   drawnPlayable?: Card | null;
   punish?: PunishChain;
@@ -58,7 +75,11 @@ export type Action =
   | { type: "drawCard"; seat: number }
   | { type: "endTurn"; seat: number }
   | { type: "claimTimeout"; seat: number; windowId: string }
-  | { type: "respond"; seat: number; windowId: string; choice: string };
+  | { type: "respond"; seat: number; windowId: string; choice: string }
+  /** V1：默认只能在己方回合亮出；V2 的白名单例外由技能定义的 reveal_window 放行。 */
+  | { type: "revealSkill"; seat: number }
+  /** V7：发动一条主动。`effectKey` 对应 04 标注里的 ①②③，同回合只能选一条。 */
+  | { type: "activateSkill"; seat: number; effectKey: string };
 export interface EngineEvent {
   type: string;
   public: Record<string, unknown>;

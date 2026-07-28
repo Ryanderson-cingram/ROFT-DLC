@@ -1,8 +1,10 @@
 import { drawCard, endTurn } from "./actions/draw.ts";
 import { playCards } from "./actions/play-cards.ts";
 import { canStack, claimTimeout, respond, windowIdOf } from "./actions/punish.ts";
+import { activateSkill, revealSkill } from "./actions/skill.ts";
 import { startGame } from "./actions/start-game.ts";
 import { isPlayable } from "./legal.ts";
+import { isSuppressed } from "./skills/primitives/suppression.ts";
 import type { Action, ApplyResult, ClientSnapshot, Ctx, GameState } from "./types.ts";
 export * from "./types.ts";
 export { buildDeck, shuffle } from "./deck.ts";
@@ -24,6 +26,10 @@ export function applyAction(state: GameState, action: Action, ctx: Ctx): ApplyRe
       return respond(state, action, ctx);
     case "claimTimeout":
       return claimTimeout(state, action, ctx);
+    case "revealSkill":
+      return revealSkill(state, action.seat);
+    case "activateSkill":
+      return activateSkill(state, action.seat, action.effectKey);
     default:
       return { state, events: [], rejected: { reason: "unknown_action" } };
   }
@@ -49,6 +55,12 @@ export function legalActions(state: GameState, seat: number): Action[] {
   }
 
   if (seat !== b.currentSeat) return [];
+
+  // V1/V6：持有未亮出就能亮，且亮出不占额度，所以它和出牌并列可选。
+  // activateSkill 暂不进这里——effectKey 要从技能定义读，等各技能的 handler 接上再说。
+  const skillActions: Action[] =
+    b.skills[seat] && !b.revealed[seat] && !isSuppressed(b, seat) ? [{ type: "revealSkill", seat }] : [];
+
   const top = b.discardPile[0];
   // U1：摸到可打的牌之后，只剩「打那一张」和「结束回合」
   if (b.drawnPlayable)
@@ -59,7 +71,7 @@ export function legalActions(state: GameState, seat: number): Action[] {
   const plays = b.hands[seat]
     .filter((c) => (b.punish ? canStack(c, b.punish) : isPlayable(c, top, b.activeColor)))
     .map((c): Action => ({ type: "playCards", seat, cardIds: [c.id] }));
-  return b.punish ? plays : [...plays, { type: "drawCard", seat }];
+  return b.punish ? plays : [...skillActions, ...plays, { type: "drawCard", seat }];
 }
 
 /** 视角投影：只有 `seat` 自己的手牌进快照，其余玩家降级为公开计数。 */
@@ -75,7 +87,8 @@ export function projectView(state: GameState, seat: number): ClientSnapshot {
       userId: s.userId,
       handCount: b?.hands[i].length ?? 0,
       saidUno: b?.saidUno[i] ?? false,
-      skillId: b?.skills[i] ?? null,
+      // V3：没亮出的技能等于暗牌，别人不该看见。自己的当然自己知道。
+      skillId: (i === seat || b?.revealed[i] ? b?.skills[i] : null) ?? null,
       // ponytail: 神化是下一个计划（G1）的事，本轮恒为 0
       ascensions: 0,
     })),
