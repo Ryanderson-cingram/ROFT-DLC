@@ -9,9 +9,9 @@ serveAuthed(async ({ body, user, svc }) => {
   };
   const action = body.action as Action;
 
-  const { data: dup } = await svc.from("room_events").select("seq")
+  const { data: dup } = await svc.from("room_events").select("room_version")
     .eq("room_id", roomId).eq("idempotency_key", idempotencyKey).maybeSingle();
-  if (dup) return json({ version: Math.floor(dup.seq / 100), idempotent: true });
+  if (dup) return json({ version: dup.room_version, idempotent: true });
 
   const { data: room } = await svc.from("rooms").select("created_by, status").eq("id", roomId).single();
   if (!room) return json({ error: "room_not_found" }, 404);
@@ -32,19 +32,20 @@ serveAuthed(async ({ body, user, svc }) => {
   });
   if (result.rejected) return json({ reason: result.rejected.reason }, 400);
 
-  const { data: cas } = await svc.from("rooms")
-    .update({ version: expectedVersion + 1 })
-    .eq("id", roomId).eq("version", expectedVersion).select("version");
-  if (!cas?.length) return json({ error: "version_conflict" }, 409);
-
-  await svc.from("room_state_private").update({ state: result.state }).eq("room_id", roomId);
-  if (action.type === "startGame") await svc.from("rooms").update({ status: "playing" }).eq("id", roomId);
-
-  await svc.from("room_events").insert(result.events.map((e, i) => ({
-    // seq 语义：每 action 一批事件，seq = 新version*100 + 批内序号（单 action 事件数 <100）
-    room_id: roomId, seq: (expectedVersion + 1) * 100 + i, actor: user.id, type: e.type,
-    public_payload: e.public, private_payload: e.private ?? null,
-    idempotency_key: i === 0 ? idempotencyKey : null,
-  })));
-  return json({ version: expectedVersion + 1 });
+  // CAS + state + status + events 全在这一个事务里。null = 版本冲突且零副作用。
+  const { data: applied, error } = await svc.rpc("apply_room_action", {
+    p_room: roomId,
+    p_expected_version: expectedVersion,
+    p_actor: user.id,
+    p_state: result.state,
+    p_events: result.events,
+    p_idempotency_key: idempotencyKey,
+    p_new_status: action.type === "startGame" ? "playing" : null,
+  });
+  if (error) {
+    console.error("apply_room_action failed", error);
+    return json({ error: "apply_failed" }, 500);
+  }
+  if (!applied) return json({ error: "version_conflict" }, 409);
+  return json({ version: applied.version });
 });
