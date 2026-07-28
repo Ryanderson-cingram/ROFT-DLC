@@ -38,8 +38,8 @@ export type RevealWindow = 'own_turn' | 'any_time' | 'when_skipped' | 'when_chal
 export interface SkillEffect {
   /** `1` / `2` / `3` / `passive` / `on_reveal`，与 04 散文里的 ①②③ 对应 */
   key: string;
-  kind: SkillEffectKind | null;
-  window: SkillWindow | null;
+  kind?: SkillEffectKind | null;
+  window?: SkillWindow | null;
   /** 弃牌 / 标记 / 一次性等代价，自然语言 */
   cost?: string | null;
   targeting?: 'self' | 'single' | 'all_others' | 'global' | null;

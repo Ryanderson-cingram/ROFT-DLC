@@ -17,10 +17,10 @@ describe('skill defs 生成源', () => {
     expect(committed('sql')).toContain(committed('json'));
   });
 
-  it('56 条（4★ + 52 点位），id 唯一，版本锚定 4.1', () => {
+  it('60 条（4★ + 52 点位 + 4 神），id 唯一，版本锚定 4.1', () => {
     expect(skillDefs.rulesetVersion).toBe('4.1');
-    expect(skillDefs.skills).toHaveLength(56);
-    expect(new Set(skillDefs.skills.map((s) => s.id)).size).toBe(56);
+    expect(skillDefs.skills).toHaveLength(60);
+    expect(new Set(skillDefs.skills.map((s) => s.id)).size).toBe(60);
   });
 
   it('structured 只在完整标注时为 true，且必带 effects', () => {

@@ -12,22 +12,62 @@
 
 ### 宏伟★ — ✅/❓
 
+- **id**：`star-grandeur`
 - **类型**：一次性 + 持续监控 + 升级检定  
 - **摘要**：摸 1，扣置 1。他人打出相同（色+牌面）时：其摸 1，你亮出弃置扣置。之后**每个**你的回合开始掷 1 骰，直到为 2：翻开判定并替换为宝藏★。  
 - **疑点**：惩罚回合开始是否仍掷（无主动技能但仍有回合开始？）；与「挑战/技能二选一」是否并行。
 
+```yaml
+id: star-grandeur
+upgrade_to: star-treasure
+```
+
 ### 宝藏★ — ✅
 
+- **id**：`star-treasure`
 - **摘要**：翻开判定锁定一支——变色/功能/数字均为**常驻**；毒→替换为古神。变色：跳过并视为 +4 进叠链（你定色）。功能：可反复弃不同色功能→摸等量并指定一人摸等量。数字：可持续双出同色同数，0 当任意数字。
+
+```yaml
+id: star-treasure
+upgrade_to: god-ricin
+```
 
 ### 灾难★ — ✅
 
+- **id**：`star-disaster`
 - **摘要**：摸 1，扣置 1。他人打出相同牌时亮出弃置扣置；其回合结束：该玩家掷 2、你掷 4；双方获狂欢 buff；对方技能不变；**你的灾难技能移除**（若你骰和≥5 则获得时神技能）。
+
+```yaml
+id: star-disaster
+upgrade_to: god-fade
+```
 
 ### 狂欢★ — ✅ buff（非技能牌）
 
+- **id**：`star-carnival`
 - **摘要**：按自己的骰和：0 五彩 / 1 恋战 / 2 所有摸牌+1 / 3 惩罚摸牌+1 / 4 被惩罚不摸+单体不能以你为目标 / ≥5 时神（**仅掷4骰方可**）。  
 - **注**：不占技能栏（时神除外，时神是技能替换）。
+
+部分标注：只把 [02 §7](./02-methodology.md#7-摸牌数结算层级决策层级-) 点名的三档摸牌修正落到条目上（和2 / 和3 在 L2 加减，和4 在 L4 覆盖）。和0 / 和1 / 和≥5 与和4 的「单体不能以你为目标」尚未标注，故 `structured` 保持 false。
+
+```yaml
+id: star-carnival
+upgrade_to: god-fade
+effects:
+  - key: 和2
+    kind: passive
+    modifies: [draw_count]
+    layer: [L2]
+  - key: 和3
+    kind: passive
+    modifies: [draw_count]
+    layer: [L2]
+  - key: 和4
+    kind: passive
+    window: on_punish_resolve
+    modifies: [draw_count]
+    layer: [L4]
+```
 
 ---
 
@@ -98,6 +138,49 @@ effects:
     stacks_with_turn_limit:
     modifies: [play_legality]
     duration: while_revealed
+```
+
+以下是**部分标注**（只把已定条款落到条目上，其余子效果尚未标注，`structured` 保持 false）。
+
+极运「可任意时刻亮出」是 01-V2 白名单例外：
+
+```yaml
+id: heart-7
+reveal_window: any_time
+```
+
+异议②「弃异每张 −1」在 02 §7 的 L2；「不可强制使用」按 01-F3 = 仍可强制亮出、不能强制发动：
+
+```yaml
+id: heart-8
+force_activate_ok: false
+effects:
+  - key: 2
+    kind: passive
+    window: on_punish_resolve
+    targeting: self
+    modifies: [draw_count]
+    layer: [L2]
+```
+
+伤逝在 02 §7 的 L1 替换层：整体改写计算，命中即得最终值（01-P13：忽略贡献总和与吟游等一切改摸数）：
+
+```yaml
+id: heart-10
+effects:
+  - key: passive
+    kind: replacement
+    window: on_punish_resolve
+    targeting: self
+    modifies: [draw_count]
+    layer: [L1]
+```
+
+偏折「质疑时可亮出」是 01-V2 白名单例外（喊 UNO 的时机本身未定，见 06-Q26）：
+
+```yaml
+id: heart-q
+reveal_window: when_challenged_uno
 ```
 
 ---
@@ -226,6 +309,27 @@ effects:
     duration: instant
 ```
 
+以下是**部分标注**。夜魇「不可强制使用」同异议，按 01-F3：
+
+```yaml
+id: diamond-6
+force_activate_ok: false
+```
+
+寄生「可任意时刻亮出」是 01-V2 白名单例外；令目标「摸牌+1」在 02 §7 的 L2：
+
+```yaml
+id: diamond-9
+reveal_window: any_time
+effects:
+  - key: 1
+    kind: status_grant
+    targeting: single
+    once: per_player_count
+    modifies: [draw_count]
+    layer: [L2]
+```
+
 ---
 
 ## ♠ 黑桃
@@ -262,6 +366,37 @@ effects:
     once: unlimited
     stacks_with_turn_limit: true
     duration: instant
+```
+
+以下是**部分标注**。契约「可在被跳过时亮出」是 01-V2 白名单例外：
+
+```yaml
+id: spade-4
+reveal_window: when_skipped
+```
+
+八门②「回合结束获五彩且所有摸牌+1」在 02 §7 的 L2；①的「不受其他技能」范围仍是本条疑点，未标注：
+
+```yaml
+id: spade-8
+effects:
+  - key: 2
+    kind: passive
+    modifies: [draw_count]
+    layer: [L2]
+```
+
+忍戒在 02 §7 的 L6 后置程序——**不改数字，只改执行方式**（按最终值 N 多摸 min(N,6) 再弃等量），所以 `modifies` 用 `draw_procedure` 而不是 `draw_count`：
+
+```yaml
+id: spade-j
+effects:
+  - key: passive
+    kind: passive
+    window: on_punish_resolve
+    targeting: self
+    modifies: [draw_procedure]
+    layer: [L6]
 ```
 
 ---
@@ -319,11 +454,76 @@ effects:
     duration: instant
 ```
 
+以下是**部分标注**。吟游：选/切换歌声占主动条（01-S20）；三支被 02 §7 点名的歌声各有层级（活泼板 +1 在 L2、战争序 ×2 在 L3、樱时雨恒为 1 在 L4）。歌声全表不在 04 里，故只标注这三支：
+
+```yaml
+id: club-5
+effects:
+  - key: 1
+    kind: active
+    window: turn_start
+    targeting: self
+    stacks_with_turn_limit: true
+  - key: 活泼板
+    kind: passive
+    modifies: [draw_count]
+    layer: [L2]
+  - key: 战争序
+    kind: passive
+    modifies: [draw_count]
+    layer: [L3]
+  - key: 樱时雨
+    kind: passive
+    modifies: [draw_count]
+    layer: [L4]
+```
+
+预兆与飞升的升级目标（02 §5 的升级链）：
+
+```yaml
+id: club-9
+upgrade_to: god-omorph
+```
+
+```yaml
+id: club-k
+upgrade_to: god-tindra
+```
+
+---
+
+## 神 四神
+
+替换原技能后生效（01-S3）。条文照搬 [05-gods-omens-deck.md §1](./05-gods-omens-deck.md)，此处只补条目与 id。四神不进开局池、不进万变池（01-S5 / S18b）。
+
+### ※古神 Ricin — ✅
+
+- **id**：`god-ricin`
+- **摘要**：1. 所有玩家的变色牌皆视为「毒」。2. 你打出「毒」时改为其他所有玩家分别打出此「毒」。3. 若有毒池♦5：你每次打出毒时将此毒明置在其明置区；毒池胜利时你同时胜利。  
+- **疑点**：专精♥9 / 毒池♦5 / 毒师♠10 的疑点栏均挂着与古神的互动。
+
+### ✣邪神 Omorph — ✅
+
+- **id**：`god-omorph`
+- **摘要**：1. 回合开始可掷骰一次，获点数枚「颠」（可当作异/盗/魂/形）。2. 获得任意标记时额外 +1（陨除外）。3. 若有强袭♦1：可控制其是否帮你改掷骰；强袭改为可重掷两次并任选结果；强袭胜利时你同时胜利。
+
+### ❂时神 Fade — ❓
+
+- **id**：`god-fade`
+- **摘要**：成神时按掷骰点数解锁能力（≥5 / ≥6 / ≥7 / =8）；失去神技能时获得灾难★。  
+- **疑点**：05 §1 只写了四档门槛，**四档各自解锁什么能力没有落进任何文档**；01-S6 只说失神后按 Excel 例。
+
+### ⌘主神 Tindra — ✅
+
+- **id**：`god-tindra`
+- **摘要**：1. 所有玩家最多 3 枚神化（**仅主神在场时**，见 01-G4）。2. 你回合开始：神官将一张牌放牌堆顶；你观看玩家人数张顶牌，排序并交一张给神官。3. 可将观看的全部交给神官；每如此做两次，神官获一枚神化。4. 神官指定：降临 > 无念 > 终结 > 手牌最多，取**行动顺序下家方向最近**者；神官达成胜利条件时主神同时胜利。  
+- **注**：Q&A 写「θ主神」，表内为「⌘主神」——文档统一用 ⌘主神（06-Q19）。
+
 ---
 
 ## 统计（粗算）
 
-- 技能条目：4★ + 52 点位 = 56（含升级态则更多形态）  
+- 技能条目：4★ + 52 点位 + 4 神 = 60（含升级态则更多形态）  
 - 框架已定、可写测试骨架：恒心、精英、并列、劫营、远星、血棘（核心）、强制使用相关  
 - 高疑点集中：★链、合纵连横、神授、成神四神、预兆、毒体系  
 

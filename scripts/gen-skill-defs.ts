@@ -18,19 +18,10 @@ const GENERATOR = 'scripts/gen-skill-defs.ts';
 
 const repoRoot = new URL('..', import.meta.url);
 
-/** 04 §统计：4 条 ★ + 52 个点位。少一条就是解析漏了，别静默通过。 */
-const EXPECTED_COUNT = 56;
+/** 04 §统计：4 条 ★ + 52 个点位 + 4 尊神。少一条就是解析漏了，别静默通过。 */
+const EXPECTED_COUNT = 60;
 
 const SUITS: Record<string, string> = { '♥': 'heart', '♦': 'diamond', '♠': 'spade', '♣': 'club' };
-
-// ★ 条目的 id 只在 02-methodology 举了一个例（宏伟 = star-grandeur），
-// 其余三条没有文档依据，这里手工锚定；改名要同时改文档与本表。
-const STAR_IDS: Record<string, string> = {
-  宏伟: 'star-grandeur',
-  宝藏: 'star-treasure',
-  灾难: 'star-disaster',
-  狂欢: 'star-carnival',
-};
 
 // ── 围栏块的字段与取值白名单（02-methodology §1/§2/§3/§6/§7）。
 // 白名单之外一律抛错：拼错字段名静默变成「没标注」是最难查的漂移。
@@ -254,47 +245,49 @@ function applyFences(md: string, skills: SkillDef[]) {
 
 export function parseCatalog(md: string): SkillDef[] {
   const skills: SkillDef[] = [];
+  // 当前小节：花色字符 / '★' / '神' / null
   let suit: string | null = null;
 
   for (const raw of md.split('\n')) {
     const line = clean(raw);
 
-    // 花色小节：`## ♥ 红心`
+    // 小节头：`## ♥ 红心` / `## ★ 升级链` / `## 神 四神`
     const section = /^## +(.)/.exec(line);
     if (section) {
-      suit = SUITS[section[1]] ? section[1] : null;
+      const c = section[1];
+      suit = SUITS[c] || c === '★' || c === '神' ? c : null;
       continue;
     }
 
-    // ★ 条目：`### 宏伟★ — ✅/❓` + 其后的 `- **摘要**：…` 要点
-    const star = /^### +(.+?)★ +— +(.+)$/.exec(line);
-    if (star) {
-      const [status, ...rest] = star[2].split(' ');
-      const name = star[1];
-      const id = STAR_IDS[name];
-      if (!id) throw new Error(`★ 技能「${name}」没有 id 映射，先在 STAR_IDS 里锚定`);
-      skills.push({
-        id,
-        name,
-        suit_rank: '★',
-        status,
-        summary: '',
-        caveats: null,
-        ...(rest.length ? { notes: rest.join(' ') } : {}),
-        structured: false,
-      });
-      continue;
-    }
+    // ★ / 神 小节里的条目：`### 宏伟★ — ✅/❓` + 其后的 `- **id**：…` `- **摘要**：…` 要点
+    if (suit === '★' || suit === '神') {
+      const entry = /^### +(.+?) +— +(.+)$/.exec(line);
+      if (entry) {
+        const [status, ...rest] = entry[2].split(' ');
+        skills.push({
+          id: '', // 由紧随其后的 `- **id**：` 要点填上；缺了在下面抛
+          name: suit === '★' ? entry[1].replace(/★$/, '') : entry[1],
+          suit_rank: suit,
+          status,
+          summary: '',
+          caveats: null,
+          ...(rest.length ? { notes: rest.join(' ') } : {}),
+          structured: false,
+        });
+        continue;
+      }
 
-    // ★ 条目的要点：`- **摘要**：…` / `- **疑点**：…` / 其余归入 notes
-    const bullet = /^- +\*\*(.+?)\*\*：(.*)$/.exec(line);
-    if (bullet && skills.length && skills[skills.length - 1].suit_rank === '★') {
-      const cur = skills[skills.length - 1];
-      const [label, text] = [bullet[1], clean(bullet[2])];
-      if (label === '摘要') cur.summary = text;
-      else if (label === '疑点') cur.caveats = orNull(text);
-      else cur.notes = [cur.notes, `${label}：${text}`].filter(Boolean).join('；');
-      continue;
+      // 条目要点：`- **id**：…` / `- **摘要**：…` / `- **疑点**：…` / 其余归入 notes
+      const bullet = /^- +\*\*(.+?)\*\*：(.*)$/.exec(line);
+      if (bullet && skills.length) {
+        const cur = skills[skills.length - 1];
+        const [label, text] = [bullet[1], clean(bullet[2])];
+        if (label === 'id') cur.id = text.replace(/`/g, '');
+        else if (label === '摘要') cur.summary = text;
+        else if (label === '疑点') cur.caveats = orNull(text);
+        else cur.notes = [cur.notes, `${label}：${text}`].filter(Boolean).join('；');
+      }
+      continue; // ★ / 神 小节里没有表格
     }
 
     // 花色表格行：`| 点 | 名 | 状态 | 摘要 | 疑点 |`
@@ -328,6 +321,10 @@ export function build(): { json: string; ts: string; sql: string } {
 
   if (skills.length !== EXPECTED_COUNT) {
     throw new Error(`解析到 ${skills.length} 条，期望 ${EXPECTED_COUNT} 条——${SOURCE} 的格式变了？`);
+  }
+  const anonymous = skills.filter((s) => !s.id);
+  if (anonymous.length) {
+    throw new Error(`缺 id（★/神 条目要写 \`- **id**：\`）: ${anonymous.map((s) => s.name).join(', ')}`);
   }
   const dupes = skills.map((s) => s.id).filter((id, i, a) => a.indexOf(id) !== i);
   if (dupes.length) throw new Error(`重复 id: ${dupes.join(', ')}`);
