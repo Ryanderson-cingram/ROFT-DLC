@@ -7,4 +7,9 @@
  *
  * 新增一个原语 = 在这里加一行。此刻只有摸牌层级 reducer（02 §7）。
  */
-export const primitives: ReadonlySet<string> = new Set<string>([]);
+export const primitives: ReadonlySet<string> = new Set<string>([
+  "drawModifier", // 02 §7 摸牌数结算层级
+]);
+
+export { resolveDrawCount } from "./draw-modifier.ts";
+export type { DrawEventKind, DrawModifier, DrawProcedure, DrawRequest, DrawResolution } from "./draw-modifier.ts";

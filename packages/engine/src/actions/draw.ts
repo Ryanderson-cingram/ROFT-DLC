@@ -1,21 +1,28 @@
 import { shuffle } from "../deck.ts";
 import { commit, isPlayable, nextSeat, reject } from "../legal.ts";
+import { resolveDrawCount } from "../skills/primitives/draw-modifier.ts";
+import type { DrawModifier, DrawRequest, DrawResolution } from "../skills/primitives/draw-modifier.ts";
 import type { ApplyResult, Board, Card, Ctx, EngineEvent, GameState } from "../types.ts";
 
 /**
- * 从摸牌堆取 n 张。摸空时把弃牌堆（除牌顶）洗回摸牌堆；洗回后仍不够就摸到几张算几张。
- * 随机源只来自注入的 `rng`。
+ * 唯一的摸牌出口：先把请求过一遍 02 §7 的层级 reducer 得出张数，再真的从牌堆取。
+ * 层级在这里而不是在各调用点，是为了没有哪条摸牌路径能绕开它（spec §8 禁止 ad-hoc 排序）。
+ *
+ * 摸空时把弃牌堆（除牌顶）洗回摸牌堆；洗回后仍不够就摸到几张算几张
+ * ——所以 `drawn.length` 可能小于 `resolution.count`。随机源只来自注入的 `rng`。
  */
 export function drawCards(
   b: Board,
-  n: number,
+  req: DrawRequest,
   rng: () => number,
-): { board: Board; drawn: Card[]; reshuffledOrder: string[] | null } {
+  mods: readonly DrawModifier[] = [],
+): { board: Board; drawn: Card[]; reshuffledOrder: string[] | null; resolution: DrawResolution } {
+  const resolution = resolveDrawCount(req, mods);
   let drawPile = b.drawPile.slice();
   let discardPile = b.discardPile;
   const drawn: Card[] = [];
   let reshuffledOrder: string[] | null = null;
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < resolution.count; i++) {
     if (drawPile.length === 0) {
       if (discardPile.length <= 1) break;
       drawPile = shuffle(discardPile.slice(1), rng);
@@ -25,7 +32,7 @@ export function drawCards(
     }
     drawn.push(drawPile.shift()!);
   }
-  return { board: { ...b, drawPile, discardPile }, drawn, reshuffledOrder };
+  return { board: { ...b, drawPile, discardPile }, drawn, reshuffledOrder, resolution };
 }
 
 /** 摸牌事件：公开只说谁摸了几张，具体牌面走 private 投影（spec §4）。 */
@@ -53,7 +60,8 @@ export function drawCard(state: GameState, seat: number, ctx: Ctx): ApplyResult 
   if (b.punish) return reject(state, "must_stack");
   if (b.drawnPlayable) return reject(state, "already_drawn");
 
-  const { board, drawn, reshuffledOrder } = drawCards(b, 1, ctx.rng);
+  // U1 是规则摸牌，不是惩罚（01-P1）
+  const { board, drawn, reshuffledOrder } = drawCards(b, { kind: "rule", base: 1 }, ctx.rng);
   const withCard: Board = { ...board, hands: giveTo(board, seat, drawn) };
   const events = drawEvents(seat, drawn, reshuffledOrder);
 
