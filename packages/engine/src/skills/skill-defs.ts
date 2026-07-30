@@ -96,6 +96,14 @@ export const skillDefs: SkillDefsDoc = {
           "key": "passive",
           "kind": "passive",
           "window": "any",
+          "values": {
+            "L2": -2,
+            "L5": 1
+          },
+          "applies_to": [
+            "punish",
+            "skill"
+          ],
           "targeting": "self",
           "once": "unlimited",
           "stacks_with_turn_limit": false,
@@ -125,17 +133,21 @@ export const skillDefs: SkillDefsDoc = {
       "name": "精英",
       "suit_rank": "♥3",
       "status": "✅",
-      "summary": "被动：数字可当 +1 打出（仅 1 张手牌时失效）；最大 9",
+      "summary": "**主动**：出牌时可选择把一张数字牌当作大 1 点打出（仅 1 张手牌时失效）；最大 9；下家按牌面数字继续；占 V7 的每回合一条主动",
       "caveats": null,
       "notes": "Q&A 已补",
       "effects": [
         {
-          "key": "passive",
-          "kind": "passive",
+          "key": "1",
+          "kind": "meta_rule",
           "window": "play_phase",
+          "values": {
+            "card_value": 1,
+            "max": 9
+          },
           "targeting": "self",
           "once": "unlimited",
-          "stacks_with_turn_limit": false,
+          "stacks_with_turn_limit": true,
           "modifies": [
             "card_value"
           ],
@@ -158,7 +170,7 @@ export const skillDefs: SkillDefsDoc = {
           "window": "play_phase",
           "targeting": "self",
           "once": "unlimited",
-          "stacks_with_turn_limit": null,
+          "stacks_with_turn_limit": false,
           "modifies": [
             "play_legality"
           ],
@@ -284,8 +296,8 @@ export const skillDefs: SkillDefsDoc = {
       "name": "强袭",
       "suit_rank": "♦1",
       "status": "✅/❓",
-      "summary": "打出 +2/+4 后可掷骰改该张倍率；任意玩家掷骰后可重掷同数量一次并采用你的结果",
-      "caveats": "重掷是否每骰事件一次；与邪神联动",
+      "summary": "打出 +2/+4 后可掷骰改该张倍率；**任意玩家**（不限回合）掷骰后可重掷同数量一次并采用你的结果，只替掉掷骰这一步、回合照常流转；①②均不占主动额度",
+      "caveats": "与邪神联动",
       "effects": [
         {
           "key": "1",
@@ -305,8 +317,8 @@ export const skillDefs: SkillDefsDoc = {
           "kind": "response",
           "window": "any",
           "targeting": "global",
-          "once": null,
-          "stacks_with_turn_limit": null,
+          "once": "unlimited",
+          "stacks_with_turn_limit": false,
           "modifies": [
             "dice"
           ],
@@ -464,7 +476,7 @@ export const skillDefs: SkillDefsDoc = {
           "window": "interrupt",
           "targeting": "single",
           "once": "unlimited",
-          "stacks_with_turn_limit": null,
+          "stacks_with_turn_limit": true,
           "modifies": [
             "turn_flow"
           ],
@@ -487,9 +499,13 @@ export const skillDefs: SkillDefsDoc = {
           "kind": "response",
           "window": "interrupt",
           "cost": "弃 1 张 + 摸 2",
+          "values": {
+            "discard": 1,
+            "draws": 2
+          },
           "targeting": "self",
           "once": "unlimited",
-          "stacks_with_turn_limit": null,
+          "stacks_with_turn_limit": false,
           "modifies": [
             "play_legality",
             "color_rule"
@@ -530,6 +546,10 @@ export const skillDefs: SkillDefsDoc = {
           "kind": "active",
           "window": "turn_start",
           "cost": "弃 1 张手牌",
+          "values": {
+            "discard": 1,
+            "draws": 1
+          },
           "targeting": "self",
           "once": "unlimited",
           "stacks_with_turn_limit": true,
@@ -730,7 +750,7 @@ export const skillDefs: SkillDefsDoc = {
           "cost": "3 或 5 盗",
           "targeting": "self",
           "once": "unlimited",
-          "stacks_with_turn_limit": null,
+          "stacks_with_turn_limit": true,
           "modifies": [
             "play_legality"
           ],

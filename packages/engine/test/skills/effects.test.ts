@@ -8,8 +8,7 @@ import { applyAction } from "../../src/index.ts";
 import { drawModifiersFor, SKILL_DATA } from "../../src/skills/draw-passives.ts";
 import { resolveDrawCount } from "../../src/skills/primitives/draw-modifier.ts";
 import type { SkillData } from "../../src/skills/draw-passives.ts";
-import type { ParamSource } from "../../src/skills/params.ts";
-import type { SkillDef } from "../../src/skills/types.ts";
+import type { SkillDef, SkillEffect } from "../../src/skills/types.ts";
 import type { Board, GameState, PunishChain } from "../../src/types.ts";
 import { card, ctx, table } from "../helpers.ts";
 
@@ -186,19 +185,22 @@ describe("恩惠♥1：被动，惩罚/他人技能摸牌 −2（至少 1）", (
 describe("数据驱动：改定义，行为跟着变，引擎代码一行不动", () => {
   const board = () => seated("heart-1").board!;
   const req = { kind: "punish" as const, base: 6, seat: 0 };
-  const withParams = (over: ParamSource): SkillData => ({ ...SKILL_DATA, params: { ...SKILL_DATA.params, ...over } });
+  /** 只改定义里的那条子效果——数值就在定义里，没有第二处可改（原 Q53 裁定后）。 */
+  const withEffect = (id: string, over: Partial<SkillEffect>): SkillData => {
+    const def = SKILL_DATA.byId.get(id)!;
+    const patched: SkillDef = { ...def, effects: [{ ...def.effects![0], ...over }] };
+    return { byId: new Map(SKILL_DATA.byId).set(id, patched) };
+  };
   const count = (src: SkillData) => resolveDrawCount(req, drawModifiersFor(board(), req, src)).count;
 
   it("把恩惠的 −2 改成 −3，摸的张数从 4 变成 3", () => {
-    const tweaked = withParams({ "heart-1#passive": { draw: { L2: -3, L5: 1 }, appliesTo: ["punish", "skill"] } });
+    const tweaked = withEffect("heart-1", { values: { L2: -3, L5: 1 } });
     expect(count(SKILL_DATA)).toBe(4);
     expect(count(tweaked)).toBe(3);
   });
 
   it("把定义里的 layer 从 [L2, L5] 删成 [L2]，「至少 1」的下限就没了", () => {
-    const def = SKILL_DATA.byId.get("heart-1")!;
-    const only2: SkillDef = { ...def, effects: [{ ...def.effects![0], layer: ["L2"] }] };
-    const tweaked: SkillData = { ...SKILL_DATA, byId: new Map(SKILL_DATA.byId).set("heart-1", only2) };
+    const tweaked = withEffect("heart-1", { layer: ["L2"], values: { L2: -2 } });
     const small = { kind: "punish" as const, base: 2, seat: 0 };
     expect(resolveDrawCount(small, drawModifiersFor(board(), small, SKILL_DATA)).count).toBe(1);
     expect(resolveDrawCount(small, drawModifiersFor(board(), small, tweaked)).count).toBe(0);
@@ -206,14 +208,14 @@ describe("数据驱动：改定义，行为跟着变，引擎代码一行不动"
 
   it("把恩惠的 appliesTo 放开到普通摸牌，普通摸牌也开始受影响", () => {
     const rule = { kind: "rule" as const, base: 1, seat: 0 };
-    const tweaked = withParams({ "heart-1#passive": { draw: { L2: -2, L5: 1 }, appliesTo: ["rule"] } });
+    const tweaked = withEffect("heart-1", { applies_to: ["rule"] });
     expect(drawModifiersFor(board(), rule, SKILL_DATA)).toEqual([]);
     expect(drawModifiersFor(board(), rule, tweaked)).toHaveLength(2);
   });
 
   it("恒心弃几张摸几张也来自定义数据，不是写死的 1", () => {
     const s = seated("spade-1", { hands: [[card("R", "3"), card("R", "4"), card("R", "5")], [], []] });
-    const two = withParams({ "spade-1#1": { discard: 2, draws: 2 } });
+    const two = withEffect("spade-1", { values: { discard: 2, draws: 2 } });
     const r = activateSkill(s, { seat: 0, effectKey: "1", cardIds: s.board!.hands[0].slice(0, 2).map((c) => c.id) }, ctx(), two);
     expect(r.rejected).toBeUndefined();
     expect(r.state.board!.hands[0]).toHaveLength(3);

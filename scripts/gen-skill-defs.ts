@@ -45,6 +45,8 @@ const EFFECT_KEYS = new Set([
   'kind',
   'window',
   'cost',
+  'values',
+  'applies_to',
   'targeting',
   'once',
   'stacks_with_turn_limit',
@@ -105,6 +107,9 @@ const ENUMS: Record<string, Set<string>> = {
   reveal_window: new Set(['own_turn', 'any_time', 'when_skipped', 'when_challenged_uno']),
 };
 const LAYERS = new Set(['L0', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6']);
+/** 02 §6 `values` 的键白名单：§7 的层名 + 代价/张数名。拼错键名 = 这个数静默没标。 */
+const VALUE_KEYS = new Set([...LAYERS, 'discard', 'draws', 'marks', 'dice', 'card_value', 'max']);
+const DRAW_EVENTS = new Set(['punish', 'skill', 'rule']);
 const MODIFIES = new Set([
   'draw_count',
   'draw_procedure',
@@ -120,12 +125,12 @@ const clean = (s: string) => s.trim().replace(/\s+$/, '');
 const orNull = (s: string) => (s === '' || s === '—' || s === '-' ? null : s);
 
 // ── 极小 YAML 子集解析器（02-methodology §6 的格式，Node 内置 API，无依赖）。
-// 只认三样东西：顶层 `键: 值`、`effects:` 下的对象列表、行内数组 `[a, b]`。
+// 只认四样东西：顶层 `键: 值`、`effects:` 下的对象列表、行内数组 `[a, b]`、行内映射 `{ k: 1 }`。
 // 超出子集就抛错，绝不「尽力而为」地静默吃掉一行标注。
 type Scalar = string | boolean | null;
 const FIELD = /^([a-z_]+):[ ]?(.*)$/;
 
-function parseValue(v: string, at: string): Scalar | string[] {
+function parseValue(v: string, at: string): Scalar | string[] | Record<string, number> {
   const t = v.trim();
   if (t === '') return null; // 显式留空 = 文档未裁定
   if (t === 'true') return true;
@@ -134,6 +139,20 @@ function parseValue(v: string, at: string): Scalar | string[] {
     if (!t.endsWith(']')) throw new Error(`${at}: 行内数组未闭合「${t}」`);
     const inner = t.slice(1, -1).trim();
     return inner === '' ? [] : inner.split(',').map((s) => s.trim());
+  }
+  // 行内映射只用于 `values`（02 §6）：键是白名单里的名字，值只能是整数
+  if (t.startsWith('{')) {
+    if (!t.endsWith('}')) throw new Error(`${at}: 行内映射未闭合「${t}」`);
+    const out: Record<string, number> = {};
+    const inner = t.slice(1, -1).trim();
+    if (inner === '') return out;
+    for (const pair of inner.split(',')) {
+      const m = /^([A-Za-z_0-9]+):[ ]*(-?\d+)$/.exec(pair.trim());
+      if (!m) throw new Error(`${at}: 行内映射项只能是「键: 整数」，收到「${pair.trim()}」`);
+      if (m[1] in out) throw new Error(`${at}: 行内映射键「${m[1]}」重复`);
+      out[m[1]] = Number(m[2]);
+    }
+    return out;
   }
   return t;
 }
@@ -186,14 +205,39 @@ function checkEnum(field: string, value: unknown, at: string) {
   }
 }
 
-function toEffect(raw: Record<string, unknown>, at: string): SkillEffect {
+/**
+ * `values` 是数值的唯一机读落点（02 §6，原 Q53）。这里守两件事：
+ * 键在白名单里（拼错 = 这个数静默没标），以及层名键与 `layer` 对得上。
+ * 完整标注（`structured: true`）双向都得齐——声明了 L2 却没给数，引擎跑到那一层只能炸。
+ */
+function checkValues(raw: Record<string, unknown>, at: string, structured: boolean) {
+  const v = raw.values;
+  const layers = Array.isArray(raw.layer) ? (raw.layer as string[]) : [];
+  if (v === undefined || v === null) {
+    if (structured && layers.length) throw new Error(`${at}: 声明了 layer ${layers.join('/')} 却没有 values`);
+    return;
+  }
+  if (typeof v !== 'object' || Array.isArray(v)) throw new Error(`${at}: values 必须写成行内映射 { 键: 数字 }`);
+  const keys = Object.keys(v as Record<string, number>);
+  for (const k of keys) {
+    if (!VALUE_KEYS.has(k)) throw new Error(`${at}: values 含未登记的键「${k}」——先加进 02-methodology §6`);
+    if (LAYERS.has(k) && !layers.includes(k)) throw new Error(`${at}: values 给了 ${k} 的数，但 layer 里没有 ${k}`);
+  }
+  if (structured) {
+    for (const l of layers) if (!keys.includes(l)) throw new Error(`${at}: layer 声明了 ${l}，但 values 里没有它的数`);
+  }
+}
+
+export function toEffect(raw: Record<string, unknown>, at: string, structured: boolean): SkillEffect {
   if (typeof raw.key !== 'string' || raw.key === '') {
     throw new Error(`${at}: 每条子效果都要有非空的 key（02-methodology §6）`);
   }
   for (const f of ['kind', 'window', 'targeting', 'once', 'duration']) checkEnum(f, raw[f], at);
+  checkValues(raw, at, structured);
   for (const [f, allowed] of [
     ['modifies', MODIFIES],
     ['layer', LAYERS],
+    ['applies_to', DRAW_EVENTS],
   ] as const) {
     const v = raw[f];
     if (v === undefined || v === null) continue;
@@ -230,7 +274,8 @@ function applyFences(md: string, skills: SkillDef[]) {
       skill.notes = [skill.notes, doc.notes].filter(Boolean).join('；');
     }
     if ('effects' in doc) {
-      skill.effects = (doc.effects as Record<string, unknown>[]).map((e) => toEffect(e, at));
+      const structured = doc.structured === true;
+      skill.effects = (doc.effects as Record<string, unknown>[]).map((e) => toEffect(e, at, structured));
     }
     if ('structured' in doc) {
       if (doc.structured !== true) throw new Error(`${at}: structured 只在完整标注时写 true`);

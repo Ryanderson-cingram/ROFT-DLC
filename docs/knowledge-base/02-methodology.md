@@ -27,7 +27,9 @@
 | `key` | `1` / `2` / `passive` / `on_reveal` |
 | `kind` | 见 §2 效果类型 |
 | `window` | 见 §3 时机窗口 |
-| `cost` | 弃牌/标记/一次性等 |
+| `cost` | 弃牌/标记/一次性等，**自然语言，给人读**；机器要的数字见 `values` |
+| `values` | 本效果的**数值**（唯一机读落点）：改摸牌数按层给 `{ L2: -2, L5: 1 }`；代价与效果自带的张数给 `{ discard: 1, draws: 1, marks: 2 }` |
+| `applies_to` | 摸牌修正只作用于哪类摸牌事件：`punish` / `skill` / `rule`；缺席 = 一切摸牌 |
 | `targeting` | `self` / `single` / `all_others` / `global` |
 | `once` | 一次性 / 每名玩家限一次 / 玩家人数次 / 无限 |
 | `stacks_with_turn_limit` | 是否占用「每回合一条主动」——主动 true，被动 false |
@@ -109,7 +111,7 @@ Q&A：只能指定一名玩家的技能为**单体技能**。
 
 **位置**：★ / 神条目放在该条目要点之后；花色技能放在该花色表格后的「结构化标注」小节。围栏块靠块内的 `id` 与条目配对，位置只影响可读性。
 
-**字段**：只用 §1 的字段名，逐字沿用。技能级 `id`（必填）/ `category` / `reveal_window` / `force_reveal_ok` / `force_activate_ok` / `sealable` / `upgrade_to` / `notes` / `effects[]`；子效果级 `key` / `kind` / `window` / `cost` / `targeting` / `once` / `stacks_with_turn_limit` / `priority` / `modifies` / `duration` / `layer`。**一个技能的每条子效果都要有自己的 `key`**（`1` / `2` / `3` / `passive` / `on_reveal`，与 04 散文里的 ①②③ 对应）。
+**字段**：只用 §1 的字段名，逐字沿用。技能级 `id`（必填）/ `category` / `reveal_window` / `force_reveal_ok` / `force_activate_ok` / `sealable` / `upgrade_to` / `notes` / `effects[]`；子效果级 `key` / `kind` / `window` / `cost` / `values` / `applies_to` / `targeting` / `once` / `stacks_with_turn_limit` / `priority` / `modifies` / `duration` / `layer`。**一个技能的每条子效果都要有自己的 `key`**（`1` / `2` / `3` / `passive` / `on_reveal`，与 04 散文里的 ①②③ 对应）。
 
 **完整度**：只有当条目的**全部**子效果都标注完时才写 `structured: true`。
 
@@ -124,8 +126,14 @@ Q&A：只能指定一名玩家的技能为**单体技能**。
 | `once` | `once` / `once_per_player` / `per_player_count` / `unlimited` | 一次性 / 每名玩家限一次 / 玩家人数次 / 无限 |
 | `targeting` | `self` / `single` / `all_others` / `global` | 见 §4 |
 | `modifies` | `draw_count` / `draw_procedure` / `punish_amount` / `card_value` / `color_rule` / `play_legality` / `turn_flow` / `dice` | 「改摸数、改惩罚、改颜色规则等标签」 |
+| `values` | 行内映射 `{ 键: 数字 }`，键取自：§7 的层名 `L0`–`L6`，或 `discard` / `draws` / `marks` / `dice` / `card_value` / `max` | 数值槽 |
+| `applies_to` | `punish` / `skill` / `rule`（行内数组） | 摸牌事件类型 |
 
 约定（只是标注约定，不新增裁定）：
+
+- **每个数字都必须在 `values` 里有落点**。04 散文里的「−2」「至少 1」「弃 1 摸 1」如果只写在散文和 `cost` 里，引擎就只能把它们另存一份，那份不会跟着 04 变，CI 也查不出漂移（2026-07-29 裁定，原 Q53）。`cost` 与散文照旧写给人读，两者说的是同一个数
+- `values` 里的层名键必须同时出现在本效果的 `layer` 里，反之亦然
+- 键是白名单，**新增一个键要先加到上表**：拼错键名静默变成「这个数没标」，是最难查的漂移
 
 - `layer` 可写多层，如恩惠 `[L2, L5]`——L2 做 −2、L5 兜自带的「至少 1」（§7 两层都点名了恩惠）
 - **摸牌类效果必须带 `layer`**：`modifies` 含 `draw_count`（L0–L5 改数字）或 `draw_procedure`（L6 只改执行方式）时 `layer` 必填；反过来 `layer` 不得出现在其他效果上。技能**自己造成**的摸牌（恒心摸 1、远星的代价摸 2、劫营让对方摸 1）不是「改摸牌数」，不带 `layer`
@@ -143,8 +151,10 @@ Q&A：只能指定一名玩家的技能为**单体技能**。
 
 ```text
 L0 定型   事件类型（惩罚 / 技能 / 规则摸牌）+ 基础值
-          · 惩罚：链上各段贡献先加总（01-P11）；强袭×点数、精英+1 等
+          · 惩罚：链上各段贡献先加总（01-P11）；强袭×点数等
             「只作用于自己那张」的修正在进链时已入贡献（01-P6），不在此重复
+          · 精英不在此列：它只改数字牌打出时的点数，惩罚牌不是数字牌，
+            不给惩罚加点数（2026-07-29 裁定，原 Q28——此处原写「精英+1」是笔误）
 L1 替换   整体改写计算的效果（伤逝：按张数掷骰，明文「不受其他技能影响」）
           → 命中 L1 直接得最终值，跳到 L5
 L2 加减   恩惠 −2 / 狂欢和2「所有摸牌+1」/ 狂欢和3「惩罚+1」/

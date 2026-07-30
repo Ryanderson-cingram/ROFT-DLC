@@ -12,6 +12,8 @@ export const primitives: ReadonlySet<string> = new Set<string>([
   "draw_count", //   同上，`modifies` 那一侧的名字
   "marks", //        03 §5 计数标记的获得/上限/花费
   "statuses", //     03 §4 状态的赋予/互斥/移除
+  "card_value", //   改写一张牌算几点（精英♥3）
+  "meta_rule", //    02 §2 的 kind：改写全局或自身规则
   // 下面两个是 02 §2 的 `kind` 值，不是机制。放进来只是因为 kind 与原语名共用一个
   // 命名空间；「这个技能真的能执行吗」由 loadSkills 另外查 HANDLERS，见 registry.ts。
   "active", //       阶段 1 声明发动，占 V7 的额度
@@ -21,4 +23,6 @@ export const primitives: ReadonlySet<string> = new Set<string>([
 export { resolveDrawCount } from "./draw-modifier.ts";
 export type { DrawEventKind, DrawModifier, DrawProcedure, DrawRequest, DrawResolution } from "./draw-modifier.ts";
 export { gainMarks, markCount, spendMarks } from "./marks.ts";
+export { valueOverrideFor } from "./playability.ts";
+export type { ValueOverride } from "./playability.ts";
 export { canGrantStatus, grantStatus, hasStatus, removeStatus } from "./statuses.ts";

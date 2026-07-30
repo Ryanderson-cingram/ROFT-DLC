@@ -71,7 +71,12 @@ export interface GameState {
 }
 export type Action =
   | { type: "startGame"; seat: number }
-  | { type: "playCards"; seat: number; cardIds: string[]; chosenColor?: Color }
+  /**
+   * `useSkill`：这次出牌要动用自己的技能才合法（精英♥3 把数字牌当作大 1 点）。
+   * 是个显式开关而不是自动生效——精英是**主动**（2026-07-29 裁定，原 Q45），
+   * 用不用玩家自己决定，而且要占 V7 的每回合一条主动。牌本来就能打时这个开关无效果。
+   */
+  | { type: "playCards"; seat: number; cardIds: string[]; chosenColor?: Color; useSkill?: boolean }
   | { type: "drawCard"; seat: number }
   | { type: "endTurn"; seat: number }
   | { type: "claimTimeout"; seat: number; windowId: string }

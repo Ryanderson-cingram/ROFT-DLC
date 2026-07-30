@@ -30,8 +30,8 @@ export type SkillHandler = (
 
 /** 恒心♠1：弃 `discard` 张手牌，摸 `draws` 张。两个数都来自定义数据。 */
 const steadfast: SkillHandler = (state, b, seat, effect, ctx, data) => {
-  const p = paramsOf("spade-1", effect.key, data.params);
-  const need = p.discard ?? 0;
+  const p = paramsOf("spade-1", effect.key, data.byId);
+  const need = p.counts.discard ?? 0;
   if (effect.cardIds.length !== need) return reject(state, "cost_unpayable");
 
   const paid = effect.cardIds.map((id) => b.hands[seat].find((c) => c.id === id));
@@ -48,7 +48,7 @@ const steadfast: SkillHandler = (state, b, seat, effect, ctx, data) => {
   };
 
   // 02 §6：技能自己造成的摸牌不是「改摸牌数」，但仍然只能从 drawCards 这一个出口走
-  const { board, drawn, reshuffledOrder } = drawCards(paidBoard, { kind: "skill", base: p.draws ?? 0, seat }, ctx.rng);
+  const { board, drawn, reshuffledOrder } = drawCards(paidBoard, { kind: "skill", base: p.counts.draws ?? 0, seat }, ctx.rng);
   return {
     state: commit(state, { ...board, hands: giveTo(board, seat, drawn) }),
     events: [

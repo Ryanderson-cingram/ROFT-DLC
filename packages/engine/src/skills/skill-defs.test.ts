@@ -2,7 +2,7 @@
 // 迁移里的 seed 必须内嵌同一份 JSON。任一处手改（双源漂移）都在这里红。
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { build, outPath } from '../../../../scripts/gen-skill-defs.ts';
+import { build, outPath, parseFence, toEffect } from '../../../../scripts/gen-skill-defs.ts';
 import { skillDefs } from './skill-defs.ts';
 
 const built = build();
@@ -59,6 +59,31 @@ describe('MVP 技能子集的结构化覆盖', () => {
     const keys = s!.effects!.map((e) => e.key);
     expect(keys.every(Boolean)).toBe(true);
     expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
+// 原 Q53 的裁定：数值只有一处落点。这几条守的是「数字没被写进 values」不会静默过关。
+describe('数值槽 values（02-methodology §1/§6）', () => {
+  const fence = (effect: string) => {
+    const doc = parseFence(`id: heart-1\nstructured: true\neffects:\n  - key: passive\n${effect}`, '围栏块');
+    return (doc.effects as Record<string, unknown>[]).map((e) => toEffect(e, '围栏块', doc.structured === true));
+  };
+
+  it('完整标注声明了 layer 就必须给出这一层的数', () => {
+    expect(() => fence('    layer: [L2]')).toThrow(/却没有 values/);
+    expect(() => fence('    layer: [L2, L5]\n    values: { L2: -2 }')).toThrow(/values 里没有它的数/);
+  });
+
+  it('给了层的数却没在 layer 里声明这层，也红', () => {
+    expect(() => fence('    layer: [L2]\n    values: { L2: -2, L5: 1 }')).toThrow(/layer 里没有 L5/);
+  });
+
+  it('键必须先登记进 02 §6 的白名单，拼错不放行', () => {
+    expect(() => fence('    values: { discrad: 1 }')).toThrow(/未登记的键/);
+  });
+
+  it('值只能是整数，写成自然语言就红', () => {
+    expect(() => fence('    values: { discard: 一张 }')).toThrow(/键: 整数/);
   });
 });
 

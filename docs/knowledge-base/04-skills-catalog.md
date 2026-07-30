@@ -80,7 +80,7 @@ effects:
 |---|---|---|---|---|
 | 1 | 恩惠 | ✅ | 被动：因惩罚或他人技能的摸牌数 -2（至少 1）；叠链时作用在贡献总和上 | — |
 | 2 | 迫近 | ❓ | 可明置同色递增 0→9；每明置 9 可接管他人各一次 | 接管是否占被接管者回合；与明示洗牌 |
-| 3 | 精英 | ✅ | 被动：数字可当 +1 打出（仅 1 张手牌时失效）；最大 9 | — |
+| 3 | 精英 | ✅ | **主动**：出牌时可选择把一张数字牌当作大 1 点打出（仅 1 张手牌时失效）；最大 9；下家按牌面数字继续；占 V7 的每回合一条主动 | — |
 | 4 | 并列 | ✅ | 主动规则：2 同色同数 / 4 同数 / 6 同色；与神化按「轮」互动已定 | 与劫营响应「任意一张」的牌顶 |
 | 5 | 神授 | ✅ | 仅列情形必摸；否则无牌可出可不摸结束；优先于恋战；>10可主动亮出 | — |
 | 6 | 近卫 | ✅ | 受 ≥4 惩罚时，每张 +2/+4 可交 1 张手牌给**链首** | — |
@@ -106,6 +106,8 @@ effects:
     targeting: self
     once: unlimited
     stacks_with_turn_limit: false
+    values: { L2: -2, L5: 1 }
+    applies_to: [punish, skill]
     modifies: [draw_count]
     duration: while_revealed
     layer: [L2, L5]
@@ -113,22 +115,34 @@ effects:
 
 精英改的是**牌面点数**（03 Q&A：最大为 9，下家按牌面数字继续），不是摸牌数，因此没有 `layer`。
 
+**2026-07-29 裁定（原 Q45 / Q28）**：精英是**主动**——用不用由玩家在出牌时自己选，不是自动生效。
+例：牌顶红 4，手里只有蓝 3，可以把蓝 3 当作蓝 4 打出；**牌顶按牌面记作蓝 3**，下家跟蓝 3。
+只对**数字牌**有效，惩罚牌不是数字牌，不给惩罚加点数（02 §7 的「精英+1」是笔误，已删）。
+**占** 01-V7 的每回合一条主动：S2 一人一技能，持有者除了「用或不用精英」没有第二条主动可选，
+占不占在牌桌上几乎看不出差别，**但逻辑上就是占**，照实标。
+唯一看得出差别的场合：持有者同时有**神化**（一回合出多张）时，一回合只能给其中一张加点数。
+
 ```yaml
 id: heart-3
 notes: Q&A 已补
 structured: true
 effects:
-  - key: passive
-    kind: passive
+  - key: 1
+    kind: meta_rule
     window: play_phase
     targeting: self
     once: unlimited
-    stacks_with_turn_limit: false
+    stacks_with_turn_limit: true
+    values: { card_value: 1, max: 9 }
     modifies: [card_value]
     duration: while_revealed
 ```
 
-并列改的是「一次合法打出几张」（01-G2），发生在阶段 2；摘要写的是「主动规则」，**是否占用 01-V7 的每回合一条主动没有裁定过**，`stacks_with_turn_limit` 故意留空等裁定。
+并列改的是「一次合法打出几张」（01-G2），发生在阶段 2。
+
+**2026-07-29 裁定（原 Q35）**：并列是**改出牌规则**，不是阶段 1 声明的主动技能——阶段 1 什么都不做，
+直接在出牌阶段一次打出 2 张同色同数即合法，**不占 01-V7 的每回合一条主动**。04 摘要里的「主动规则」
+指的是玩家自己选择这么打，不是 T1 意义上的「阶段 1 发动」。
 
 ```yaml
 id: heart-4
@@ -139,7 +153,7 @@ effects:
     window: play_phase
     targeting: self
     once: unlimited
-    stacks_with_turn_limit:
+    stacks_with_turn_limit: false
     modifies: [play_legality]
     duration: while_revealed
 ```
@@ -193,7 +207,7 @@ reveal_window: when_challenged_uno
 
 | 点 | 名 | 状态 | 摘要 | 疑点 |
 |---|---|---|---|---|
-| 1 | 强袭 | ✅/❓ | 打出 +2/+4 后可掷骰改该张倍率；任意玩家掷骰后可重掷同数量一次并采用你的结果 | 重掷是否每骰事件一次；与邪神联动 |
+| 1 | 强袭 | ✅/❓ | 打出 +2/+4 后可掷骰改该张倍率；**任意玩家**（不限回合）掷骰后可重掷同数量一次并采用你的结果，只替掉掷骰这一步、回合照常流转；①②均不占主动额度 | 与邪神联动 |
 | 2 | 血棘 | ✅ | 你**发起**的惩罚使目标封印技能直至条件；回合开始可掷骰令被血棘者摸等量；优先；未亮出也被封则不能亮出；合纵连横双封 | — |
 | 3 | 影歌 | ✅ | ① 一次性阶段1攒魂（**上限 6**）；② 花2魂跳过（可惩罚回合），占主动条 | — |
 | 4 | 攻心 | ❓ | 每名玩家限一次展示比牌摸 1/2/3；累计摸满人数获神化 | 「首次累计」计数跨谁 |
@@ -209,7 +223,14 @@ reveal_window: when_challenged_uno
 
 ### 结构化标注（♦）
 
-强袭①改的是自己那张惩罚牌的倍率，按 01-P6 在**进链时**结算，02 §7 明确这类修正已计入 L0 贡献、不再走层级，故无 `layer`。②「重掷一次」的计次范围正是本条疑点（每骰事件一次？每回合一次？），`once` 留空；02 §3 也没有掷骰窗口，暂记 `any`。
+强袭①改的是自己那张惩罚牌的倍率，按 01-P6 在**进链时**结算，02 §7 明确这类修正已计入 L0 贡献、不再走层级，故无 `layer`。02 §3 没有掷骰窗口，②暂记 `any`（补窗口见 06 Q40）。
+
+**2026-07-29 裁定（原 Q34 的强袭部分）**：①②**都不占** 01-V7 的每回合一条主动。
+
+- ①② 不可能同时要用：①在打出 +2/+4 时触发，此后到惩罚链结算完为止没有别人掷骰，②没有可接管的对象
+- ②的触发条件是「**场上有人掷骰**」，**不限回合**——不是他的回合也能接管
+- ②只**替掉掷骰这一步**，回合照常流转：接管不夺取行动权、不打断当前回合、不改变谁在行动
+- 「每次掷骰都能接管」故 `once: unlimited`；同一次掷骰事件里按 04 摘要仍是「重掷同数量一次」
 
 ```yaml
 id: diamond-1
@@ -227,8 +248,8 @@ effects:
     kind: response
     window: any
     targeting: global
-    once:
-    stacks_with_turn_limit:
+    once: unlimited
+    stacks_with_turn_limit: false
     modifies: [dice]
     duration: instant
 ```
@@ -281,7 +302,11 @@ effects:
     duration: instant
 ```
 
-劫营按 01-G5 打断当前轮、作废剩余神化轮。「对方摸 1」是本效果**造成**的摸牌，不是改摸牌数，无 `layer`。02 §2 说 `response` 的次数「按技能」，而 04/01 都没写劫营响应算不算占主动条，`stacks_with_turn_limit` 留空。
+劫营按 01-G5 打断当前轮、作废剩余神化轮。「对方摸 1」是本效果**造成**的摸牌，不是改摸牌数，无 `layer`。
+
+**2026-07-29 裁定（原 Q34）**：劫营是**主动使用**的——响应与否由持有者自己决定，所以**占**主动次数。
+额度是**持有者自己**的那一条，不是被打断者的：按 01-G5 打断者不进回合，等于把自己这一轮的出牌与
+主动一并用在了打断上。牌桌顺序：A 出牌 → B 劫营（打出同色同数）→ 轮到 B 的下家 C，**C 的主动额度不受影响**。
 
 ```yaml
 id: diamond-10
@@ -293,12 +318,15 @@ effects:
     window: interrupt
     targeting: single
     once: unlimited
-    stacks_with_turn_limit:
+    stacks_with_turn_limit: true
     modifies: [turn_flow]
     duration: instant
 ```
 
-远星按 01-P7 是**合法叠链接法**，摸的 2 张是代价、不计惩罚，所以既不是改摸牌数也无 `layer`；「视为的 +4 用所弃 +2 的颜色」是改颜色规则。`stacks_with_turn_limit` 同劫营留空。
+远星按 01-P7 是**合法叠链接法**，摸的 2 张是代价、不计惩罚，所以既不是改摸牌数也无 `layer`；「视为的 +4 用所弃 +2 的颜色」是改颜色规则。
+
+**2026-07-29 裁定（原 Q34）**：远星只在**惩罚轮**用，而惩罚轮按 01-T3/P1 本来就关闭主动技能——
+占不占额度**改变不了任何事实**（持有者此刻也没有别的主动可发）。故记 `false`，不给它编一条用不上的账。
 
 ```yaml
 id: diamond-j
@@ -309,9 +337,10 @@ effects:
     kind: response
     window: interrupt
     cost: 弃 1 张 + 摸 2
+    values: { discard: 1, draws: 2 }
     targeting: self
     once: unlimited
-    stacks_with_turn_limit:
+    stacks_with_turn_limit: false
     modifies: [play_legality, color_rule]
     duration: instant
 ```
@@ -369,6 +398,7 @@ effects:
     kind: active
     window: turn_start
     cost: 弃 1 张手牌
+    values: { discard: 1, draws: 1 }
     targeting: self
     once: unlimited
     stacks_with_turn_limit: true
@@ -430,7 +460,13 @@ effects:
 
 ### 结构化标注（♣）
 
-司夜三条：①获盗按 01-T2 在**阶段 3**；②花盗换牌要等到下次**阶段 1**（同 T2），占主动条；③3/5 盗放宽末牌是 01-U5 的例外（01-S16），发生在出牌时。02 §2 没给 `meta_rule` 的占位默认，③ 的 `stacks_with_turn_limit` 留空。
+司夜三条：①获盗按 01-T2 在**阶段 3**；②花盗换牌要等到下次**阶段 1**（同 T2）；③3/5 盗放宽末牌是 01-U5 的例外（01-S16），发生在出牌时。
+
+**2026-07-29 裁定（原 Q34）**：分界线是**拿标记还是花标记**。
+
+- **①获盗 = 被动，不占**。打出变色牌就掷骰，不是一个可选的发动；**惩罚轮里打出 +4 照样获盗**——惩罚轮关的是主动，拿标记不受影响
+- **②③花盗 = 主动，占**。所以惩罚轮里花不了盗（T3/P1 关主动），只能在自己的主动回合花
+- **由此 ②③ 同回合只能选一条**（01-V7：同一技能多条主动每回合只能发动一条）：要么阶段 1 花盗换牌，要么留着盗在出牌时放宽末牌
 
 ```yaml
 id: club-3
@@ -458,7 +494,7 @@ effects:
     cost: 3 或 5 盗
     targeting: self
     once: unlimited
-    stacks_with_turn_limit:
+    stacks_with_turn_limit: true
     modifies: [play_legality]
     duration: instant
 ```

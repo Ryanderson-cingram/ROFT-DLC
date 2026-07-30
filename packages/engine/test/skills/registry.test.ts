@@ -86,10 +86,10 @@ describe("skill registry", () => {
   it("原语建到哪一波，池里就有几个技能", () => {
     const r = loadSkills(skillDefs, primitives);
     expect(r.byId.size).toBe(60);
-    expect(r.pool.map((s) => s.id).sort()).toEqual(["heart-1", "spade-1"]); // 恩惠、恒心
-    expect(r.unsupported.map((u) => u.id)).toContain("heart-3"); // 精英要 card_value，还没建
+    expect(r.pool.map((s) => s.id).sort()).toEqual(["heart-1", "heart-3", "spade-1"]); // 恩惠、精英、恒心
+    expect(r.unsupported.map((u) => u.id)).toContain("heart-4"); // 并列要 play_legality，还没建
     // 报出来的是具体缺哪个机制，不是一句「不支持」
-    expect(r.unsupported.find((u) => u.id === "heart-3")!.missing).toEqual(['effects[0].modifies: "card_value"']);
+    expect(r.unsupported.find((u) => u.id === "heart-4")!.missing).toEqual(['effects[0].modifies: "play_legality"']);
   });
 
   // 注册表里有 "active" 只说明「阶段 1 发动」这个 kind 引擎认识，不代表某个技能真有行为。

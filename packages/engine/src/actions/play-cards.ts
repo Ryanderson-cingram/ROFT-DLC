@@ -1,12 +1,16 @@
 import { commit, isNumberCard, isPlayable, isWild, passTurn, reject } from "../legal.ts";
+import { SKILL_DATA } from "../skills/draw-passives.ts";
+import { valueOverrideFor } from "../skills/primitives/playability.ts";
 import { drawCards, drawEvents, giveTo } from "./draw.ts";
 import { canStack, extendChain, openPunishWindow, punishFace } from "./punish.ts";
+import type { SkillData } from "../skills/draw-passives.ts";
 import type { ApplyResult, Board, Card, Color, Ctx, EngineEvent, GameState } from "../types.ts";
 
 export function playCards(
   state: GameState,
-  action: { seat: number; cardIds: string[]; chosenColor?: Color },
+  action: { seat: number; cardIds: string[]; chosenColor?: Color; useSkill?: boolean },
   ctx: Ctx,
+  data: SkillData = SKILL_DATA,
 ): ApplyResult {
   const b = state.board;
   if (!b) return reject(state, "not_started");
@@ -22,10 +26,41 @@ export function playCards(
   if (b.drawnPlayable && b.drawnPlayable.id !== card.id) return reject(state, "must_play_drawn_or_end");
   // P3/P4/P5：惩罚链未结算时，只能接合法的惩罚牌
   if (b.punish && !canStack(card, b.punish)) return reject(state, "must_stack");
-  if (!isPlayable(card, b.discardPile[0], b.activeColor)) return reject(state, "illegal_card");
   if (isWild(card) && !action.chosenColor) return reject(state, "color_required");
 
-  return resolvePlay(state, b, action.seat, card, ctx, action.chosenColor);
+  // 本来就能打的牌不走技能——带不带 useSkill 都不该白吃掉 V7 的额度
+  if (isPlayable(card, b.discardPile[0], b.activeColor))
+    return resolvePlay(state, b, action.seat, card, ctx, action.chosenColor);
+
+  const used = action.useSkill ? useValueOverride(b, action.seat, card, data) : null;
+  if (!used) return reject(state, "illegal_card");
+  if ("rejected" in used) return reject(state, used.rejected);
+  return resolvePlay(state, used.board, action.seat, card, ctx, action.chosenColor, used.events);
+}
+
+/**
+ * 精英式的点数改写（原语 `playability`）：只在牌本来打不出去时才动用。
+ * 改的是判定不是牌——牌照常按牌面进牌顶，所以这里只回答「算不算合法」。
+ */
+function useValueOverride(
+  b: Board,
+  seat: number,
+  card: Card,
+  data: SkillData,
+): { board: Board; events: EngineEvent[] } | { rejected: string } | null {
+  const id = b.skills[seat];
+  const ov = valueOverrideFor(b, seat, card, id ? data.byId.get(id) : undefined);
+  // 加点后要能跟上牌顶的**点数**（颜色对不上正是精英的用武之地）
+  if (!ov || String(ov.value) !== b.discardPile[0].face) return null;
+
+  // V7：精英占额度（2026-07-29 裁定，原 Q45）。今天只有神化能让一回合出多张，
+  // 所以这条账在基础包里看不出差别；照裁定记上，神化到了就是对的。
+  if (!ov.effect.stacks_with_turn_limit) return { board: b, events: [] };
+  if (b.activatedThisTurn[seat]) return { rejected: "already_activated" };
+  return {
+    board: { ...b, activatedThisTurn: b.activatedThisTurn.map((x, i) => (i === seat ? true : x)) },
+    events: [{ type: "skillActivated", public: { seat, skillId: id, effectKey: ov.effect.key } }],
+  };
 }
 
 function resolvePlay(
@@ -35,6 +70,7 @@ function resolvePlay(
   card: Card,
   ctx: Ctx,
   chosenColor?: Color,
+  before: EngineEvent[] = [],
 ): ApplyResult {
   const hands = b.hands.map((h, i) => (i === seat ? h.filter((c) => c.id !== card.id) : h));
   const face = punishFace(card);
@@ -47,7 +83,7 @@ function resolvePlay(
     drawnPlayable: null,
     punish: face ? extendChain(b.punish, seat, face) : b.punish,
   };
-  const events: EngineEvent[] = [{ type: "cardPlayed", public: { seat, card, chosenColor: chosenColor ?? null } }];
+  const events: EngineEvent[] = [...before, { type: "cardPlayed", public: { seat, card, chosenColor: chosenColor ?? null } }];
 
   if (played.hands[seat].length === 0) {
     // U5：只有数字牌能打完获胜；功能牌打空手牌 → 摸 1 张代价牌，游戏继续。

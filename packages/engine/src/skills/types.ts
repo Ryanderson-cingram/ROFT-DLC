@@ -4,6 +4,8 @@
 // 文档明确「未裁定」的字段为 null——两者不可混同，缺席取 §1 的文档默认值，null 等裁定。
 // 注意：这是 skills 子模块自己的类型，不是 src/types.ts 那份引擎↔前端共享契约。
 
+import type { DrawEventKind } from './primitives/draw-modifier.ts';
+
 export type SkillStatus = '✅' | '❓' | '⚠️' | '✅/❓';
 
 /** 02-methodology §2 效果类型 */
@@ -40,8 +42,15 @@ export interface SkillEffect {
   key: string;
   kind?: SkillEffectKind | null;
   window?: SkillWindow | null;
-  /** 弃牌 / 标记 / 一次性等代价，自然语言 */
+  /** 弃牌 / 标记 / 一次性等代价，自然语言**给人读**；同一个数的机读版在 `values` */
   cost?: string | null;
+  /**
+   * 本效果的数值，02-methodology §1/§6 的唯一机读落点（原 Q53）。
+   * 键为 §7 的层名（`L2` / `L5`…）或 `discard` / `draws` / `marks` / `dice` / `card_value` / `max`。
+   */
+  values?: Record<string, number> | null;
+  /** 摸牌修正只作用于哪类摸牌事件；缺席 = 一切摸牌 */
+  applies_to?: DrawEventKind[];
   targeting?: 'self' | 'single' | 'all_others' | 'global' | null;
   /** 一次性 / 每名玩家限一次 / 玩家人数次 / 无限 */
   once?: 'once' | 'once_per_player' | 'per_player_count' | 'unlimited' | null;

@@ -4,6 +4,8 @@ import { canStack, claimTimeout, respond, windowIdOf } from "./actions/punish.ts
 import { activateSkill, revealSkill } from "./actions/skill.ts";
 import { startGame } from "./actions/start-game.ts";
 import { isPlayable } from "./legal.ts";
+import { SKILL_DATA } from "./skills/draw-passives.ts";
+import { valueOverrideFor } from "./skills/primitives/playability.ts";
 import { isSuppressed } from "./skills/primitives/suppression.ts";
 import type { Action, ApplyResult, ClientSnapshot, Ctx, GameState } from "./types.ts";
 export * from "./types.ts";
@@ -71,7 +73,15 @@ export function legalActions(state: GameState, seat: number): Action[] {
   const plays = b.hands[seat]
     .filter((c) => (b.punish ? canStack(c, b.punish) : isPlayable(c, top, b.activeColor)))
     .map((c): Action => ({ type: "playCards", seat, cardIds: [c.id] }));
-  return b.punish ? plays : [...skillActions, ...plays, { type: "drawCard", seat }];
+  if (b.punish) return plays;
+
+  // 精英♥3：本来打不出去、但当作大 1 点就能跟上牌顶的牌。带 useSkill 才合法，
+  // 所以它们是**另一条**动作，不是上面那批的变体（V7：用了就占掉本回合的主动）。
+  const def = b.skills[seat] ? SKILL_DATA.byId.get(b.skills[seat]!) : undefined;
+  const skillPlays = b.hands[seat]
+    .filter((c) => !isPlayable(c, top, b.activeColor) && String(valueOverrideFor(b, seat, c, def)?.value) === top.face)
+    .map((c): Action => ({ type: "playCards", seat, cardIds: [c.id], useSkill: true }));
+  return [...skillActions, ...plays, ...skillPlays, { type: "drawCard", seat }];
 }
 
 /** 视角投影：只有 `seat` 自己的手牌进快照，其余玩家降级为公开计数。 */

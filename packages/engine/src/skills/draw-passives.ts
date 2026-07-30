@@ -8,18 +8,17 @@
  * 摆在 `skills/` 而不是 `actions/`，是因为它依赖定义与参数；`drawCards` 反过来调它，
  * 一个方向，没有环。规则：01-V3（亮出才生效）、01-P9/02 §2（封印）、02 §7。
  */
-import { paramsOf, SKILL_PARAMS } from "./params.ts";
+import { paramsOfEffect } from "./params.ts";
 import { skills } from "./registry.ts";
 import { suppressionOf } from "./primitives/suppression.ts";
-import type { ParamSource } from "./params.ts";
+import type { EffectParams } from "./params.ts";
 import type { DrawLayer, SkillDef, SkillEffect } from "./types.ts";
 import type { DrawModifier, DrawRequest } from "./primitives/draw-modifier.ts";
 import type { Board } from "../types.ts";
 
-/** 定义 + 数值。生产用的那一份是 `SKILL_DATA`；测试与「改数据看行为」注入自己的。 */
+/** 定义（数值就在定义里）。生产用的那一份是 `SKILL_DATA`；测试与「改数据看行为」注入自己的。 */
 export interface SkillData {
   byId: ReadonlyMap<string, SkillDef>;
-  params: ParamSource;
 }
 
 /**
@@ -33,13 +32,12 @@ export const SKILL_DATA: SkillData = {
   get byId() {
     return skills.byId;
   },
-  params: SKILL_PARAMS,
 };
 
-/** 一层修正的形状。L2/L5 之外的层要 scope / procedure，参数表还没有承载它们的槽位。 */
+/** 一层修正的形状。L2/L5 之外的层要 scope / procedure，`values` 还没有承载它们的槽位。 */
 function toModifier(layer: DrawLayer, source: string, n: number | undefined): DrawModifier {
   // 计划 §1：数据点名了一层，引擎给不出它的值——静默失效比报错难查得多，宁可炸。
-  if (n === undefined) throw new Error(`${source}: 定义声明了 ${layer}，但参数表里没有它的数值`);
+  if (n === undefined) throw new Error(`${source}: 定义声明了 ${layer}，但 values 里没有它的数值`);
   switch (layer) {
     case "L2":
       return { layer, source, delta: n };
@@ -54,7 +52,7 @@ function toModifier(layer: DrawLayer, source: string, n: number | undefined): Dr
  * 这条子效果此刻是否作用于 `req` 这次摸牌。
  * `targeting: "self"` = 只改自己那次摸牌（恩惠救不了别人）。
  */
-const applies = (e: SkillEffect, holder: number, req: DrawRequest, p: ReturnType<typeof paramsOf>) =>
+const applies = (e: SkillEffect, holder: number, req: DrawRequest, p: EffectParams) =>
   (e.targeting !== "self" || holder === req.seat) && (!p.appliesTo || p.appliesTo.includes(req.kind));
 
 export function drawModifiersFor(b: Board, req: DrawRequest, data: SkillData = SKILL_DATA): DrawModifier[] {
@@ -72,9 +70,9 @@ export function drawModifiersFor(b: Board, req: DrawRequest, data: SkillData = S
     if (def.sealable !== false && suppressionOf(b, seat).includes("sealed")) return;
     for (const e of def.effects ?? []) {
       if (!e.modifies?.includes("draw_count") || !e.layer) continue;
-      const p = paramsOf(id, e.key, data.params);
+      const p = paramsOfEffect(e);
       if (!applies(e, seat, req, p)) continue;
-      for (const layer of e.layer) mods.push(toModifier(layer, def.name, p.draw?.[layer]));
+      for (const layer of e.layer) mods.push(toModifier(layer, def.name, p.draw[layer]));
     }
   });
   return mods;
