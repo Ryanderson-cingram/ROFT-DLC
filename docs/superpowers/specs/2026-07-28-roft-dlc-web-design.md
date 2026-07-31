@@ -224,6 +224,20 @@ pendingWindow {
 
 ---
 
+## 12A. 现状快照（2026-07-30 补记——本节之前的内容是设计时点的原文，与实现有出入时以本节 + KB 为准）
+
+**已落地**（引擎 267 测试全绿时点）：
+
+- §10 的 1–4 步全部完成；第 5 步进行中：技能框架 + 恒心/恩惠/精英已实现，其余七个见 `2026-07-30-skill-batch/`（每技能一份实施 spec）
+- **开局抽 3 选 1 已实现**：`dealing` 阶段 + `skillDraft` 反应窗口（收集全员语义，与 punishStack 的先到先得并列为两种窗口范式）；池子 = registry 里机制齐备的技能
+- **牌河分三堆**（06-Q55）：`playedPile`（出牌堆，[0] 为跟牌目标）/ `discardPile`（弃牌堆，全公开）/ `drawPile`；洗回 = 出牌堆(除顶) + 弃牌堆
+- **喊 UNO / 抓漏喊已实现**（01-U6/U7）：`sayUno` 随出牌、`callUno` 补喊、`catchUno` 不限回合不被窗口挡；「已喊随手牌数作废」在 `commit::syncUno` 一处强制
+- **快照契约新增**：`playedTop`（原 discardTop 改名）、`discardPile`、`draftOptions`（仅本座位）、`players[].revealed`；行动记录 UI 直接读 `room_events` 公开列（成员 RLS + 列级 grant，无新后端）
+- 反应窗口实现细节：windowId 由 version 派生（结算即失效）；claimTimeout 客户端催促已装（AlertBar/DraftSheet 自动发起）
+- 技能定义管线运转中：04 yaml → `gen:skills` → json/ts/sql 三份同源；`suppression_exempt` 字段与 `on_draw`/`on_dice_roll` 窗口已入词表（06-Q39/Q40）
+
+**首批十技能的规则裁定已全部清零**（06 中 2026-07-29/30 的 ✅ 批次）；诸神包仍余 Q48–Q52 等标记/状态细则。
+
 ## 12. 审阅门闩
 
 请审阅本文件。确认后进入 **implementation plan**（writing-plans）；若需修改请直接指出章节。
