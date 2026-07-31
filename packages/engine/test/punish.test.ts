@@ -16,7 +16,7 @@ function opened() {
   const p2 = card("R", "+2");
   const s = table(
     [[p2, card("R", "1")], [card("Y", "+2"), card(null, "+4"), card("Y", "3")], [card("Y", "2")]],
-    { discardPile: [R7] },
+    { playedPile: [R7] },
   );
   return { start: s, after: play(s, 0, p2.id).state, p2 };
 }
@@ -72,7 +72,7 @@ describe("punish stacking (01 §5)", () => {
     const p4 = card(null, "+4");
     const s = table(
       [[p4, card("R", "1")], [card("Y", "+2"), card("Y", "3")], [card("Y", "2")]],
-      { discardPile: [R7] },
+      { playedPile: [R7] },
     );
     const after = play(s, 0, p4.id, "Y").state;
     const stacked = applyAction(

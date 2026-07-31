@@ -34,10 +34,15 @@ describe("applyAction", () => {
       const seat = s.pendingWindow?.actors[0] ?? s.board!.currentSeat;
       const next = legalActions(s, seat)[0];
       if (!next) break;
-      // legalActions 不带 chosenColor——定色是客户端提交前的模态，不是引擎的事
+      // legalActions 不带 chosenColor / cardIds——定色与代价都是客户端提交前的模态，不是引擎的事
       if (next.type === "playCards") {
         const c = s.board!.hands[seat].find((x) => x.id === next.cardIds[0])!;
         if (c.color === null) next.chosenColor = "R";
+      }
+      if (next.type === "activateSkill") {
+        next.cardIds = [s.board!.hands[seat][0].id];
+        // 影歌①还要当众指定一张「色+数」（不要求自己手里有），同样是提交前的选择
+        next.declared = { color: "B", face: "2" };
       }
       const before = s.version;
       const r = applyAction(s, next, ctx());

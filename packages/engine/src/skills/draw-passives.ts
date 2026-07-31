@@ -51,9 +51,13 @@ function toModifier(layer: DrawLayer, source: string, n: number | undefined): Dr
 /**
  * 这条子效果此刻是否作用于 `req` 这次摸牌。
  * `targeting: "self"` = 只改自己那次摸牌（恩惠救不了别人）。
+ * 技能摸牌还要过 06-Q56 那一关：`applies_to` 里的 `skill` 指的是**他人**技能造成的摸牌，
+ * 所以发起者就是摸牌者本人（含缺席 = 自己）时不生效——恒心自己弃 1 摸 1 不该被自己的恩惠减掉。
  */
 const applies = (e: SkillEffect, holder: number, req: DrawRequest, p: EffectParams) =>
-  (e.targeting !== "self" || holder === req.seat) && (!p.appliesTo || p.appliesTo.includes(req.kind));
+  (e.targeting !== "self" || holder === req.seat) &&
+  (!p.appliesTo || p.appliesTo.includes(req.kind)) &&
+  (req.kind !== "skill" || (req.initiator ?? req.seat) !== req.seat);
 
 export function drawModifiersFor(b: Board, req: DrawRequest, data: SkillData = SKILL_DATA): DrawModifier[] {
   const mods: DrawModifier[] = [];

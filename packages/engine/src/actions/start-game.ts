@@ -1,10 +1,12 @@
 import { buildDeck, shuffle } from "../deck.ts";
+import { openDraft } from "./draft.ts";
 import type { ApplyResult, Card, Ctx, EngineEvent, GameState } from "../types.ts";
 
 const HAND_SIZE = 7; // S1b
 
 /**
- * 开局：每人 7 张（S1b），再翻开牌顶第一张作为起始弃牌。
+ * 开局：每人 7 张（S1b），翻开牌顶第一张作为起始牌，然后进抽 3 选 1（S1；
+ * S1c 手牌与技能先后不强制，这里先发牌后选技能）。
  * 起始牌翻到无色牌（变色 / +4）时压回牌堆底重翻，直到翻出四色牌为止——
  * 否则 `activeColor` 无从确定。
  */
@@ -34,28 +36,23 @@ export function startGame(state: GameState, ctx: Ctx): ApplyResult {
       private: { seat, payload: { cards } },
     })),
   ];
-  return {
-    state: {
-      ...state,
-      version: state.version + 1,
-      phase: "turnStart",
-      board: {
-        rulePack,
-        drawPile: pile,
-        discardPile: [starter],
-        hands,
-        activeColor: starter.color,
-        currentSeat: 0,
-        direction: 1,
-        saidUno: hands.map(() => false),
-        skills: hands.map(() => null),          // 抽 3 选 1 还没实现，开局无人持有技能
-        revealed: hands.map(() => false),
-        activatedThisTurn: hands.map(() => false),
-        marks: hands.map(() => ({})),
-        statuses: hands.map(() => []),
-        drawnPlayable: null,
-      },
-    },
-    events,
-  };
+  const dealt: GameState = { ...state, version: state.version + 1, phase: "turnStart" };
+  const drafted = openDraft(dealt, {
+    rulePack,
+    drawPile: pile,
+    playedPile: [starter],
+    discardPile: [],
+    hands,
+    activeColor: starter.color,
+    currentSeat: 0,
+    direction: 1,
+    saidUno: hands.map(() => false),
+    skills: hands.map(() => null),
+    revealed: hands.map(() => false),
+    activatedThisTurn: hands.map(() => false),
+    marks: hands.map(() => ({})),
+    statuses: hands.map(() => []),
+    drawnPlayable: null,
+  }, ctx);
+  return { state: drafted.state, events: [...events, ...drafted.events] };
 }

@@ -1,5 +1,5 @@
 import { shuffle } from "../deck.ts";
-import { commit, isPlayable, passTurn, reject } from "../legal.ts";
+import { commit, isPlayable, MAX_RESHUFFLES, passTurn, reject } from "../legal.ts";
 import { drawModifiersFor } from "../skills/draw-passives.ts";
 import { resolveDrawCount } from "../skills/primitives/draw-modifier.ts";
 import type { DrawModifier, DrawRequest, DrawResolution } from "../skills/primitives/draw-modifier.ts";
@@ -13,8 +13,10 @@ import type { ApplyResult, Board, Card, Ctx, EngineEvent, GameState } from "../t
  * 场上有谁在改这个数不是它该知道的事。`mods` 参数留给调用方**当场算出来**的修正
  * （掷骰之类），它与采集到的合并后一起进 reducer。
  *
- * 摸空时把弃牌堆（除牌顶）洗回摸牌堆；洗回后仍不够就摸到几张算几张
- * ——所以 `drawn.length` 可能小于 `resolution.count`。随机源只来自注入的 `rng`。
+ * 摸空时把出牌堆（除牌顶）与弃牌堆一并洗回摸牌堆（06-Q55 三堆模型），**整局最多洗 2 次**
+ * （01-U8）；洗满或洗回后仍不够就摸到几张算几张——所以 `drawn.length` 可能小于
+ * `resolution.count`。洗满之后摸牌堆再见底即平局，那一步由 `index.ts::settleStalemate` 判。
+ * 随机源只来自注入的 `rng`。
  */
 export function drawCards(
   b: Board,
@@ -24,20 +26,27 @@ export function drawCards(
 ): { board: Board; drawn: Card[]; reshuffledOrder: string[] | null; resolution: DrawResolution } {
   const resolution = resolveDrawCount(req, [...drawModifiersFor(b, req), ...mods]);
   let drawPile = b.drawPile.slice();
+  let playedPile = b.playedPile;
   let discardPile = b.discardPile;
+  let reshuffles = b.reshuffles ?? 0;
   const drawn: Card[] = [];
   let reshuffledOrder: string[] | null = null;
   for (let i = 0; i < resolution.count; i++) {
     if (drawPile.length === 0) {
-      if (discardPile.length <= 1) break;
-      drawPile = shuffle(discardPile.slice(1), rng);
-      discardPile = [discardPile[0]];
+      // U8：洗满 2 次就不再洗了，摸到几张算几张——平局的判定在 applyAction 的出口
+      if (reshuffles >= MAX_RESHUFFLES) break;
+      const back = [...playedPile.slice(1), ...discardPile];
+      if (back.length === 0) break;
+      drawPile = shuffle(back, rng);
+      playedPile = playedPile.slice(0, 1);
+      discardPile = [];
+      reshuffles++;
       // 洗出来的牌序要留档（调研 §4）：重放读事件，不重新洗
       reshuffledOrder = drawPile.map((c) => c.id);
     }
     drawn.push(drawPile.shift()!);
   }
-  return { board: { ...b, drawPile, discardPile }, drawn, reshuffledOrder, resolution };
+  return { board: { ...b, drawPile, playedPile, discardPile, reshuffles }, drawn, reshuffledOrder, resolution };
 }
 
 /** 摸牌事件：公开只说谁摸了几张，具体牌面走 private 投影（spec §4）。 */
@@ -70,7 +79,7 @@ export function drawCard(state: GameState, seat: number, ctx: Ctx): ApplyResult 
   const withCard: Board = { ...board, hands: giveTo(board, seat, drawn) };
   const events = drawEvents(seat, drawn, reshuffledOrder);
 
-  const playable = drawn[0] && isPlayable(drawn[0], withCard.discardPile[0], withCard.activeColor);
+  const playable = drawn[0] && isPlayable(drawn[0], withCard.playedPile[0], withCard.activeColor, withCard.activeFace);
   if (playable) return { state: commit(state, { ...withCard, drawnPlayable: drawn[0] }, "play"), events };
   // 摸到的牌打不出去 → 回合直接结束，不必再点一次
   return {

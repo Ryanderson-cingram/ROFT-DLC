@@ -120,6 +120,24 @@ describe("02 §7 摸牌数结算层级", () => {
       expect(n({ kind: "punish", base: 2 }, mods)).toBe(1);
     });
 
+    // 2026-07-31 裁定：下限只在**本次确实减了**时生效——它是减免的地板，不是无中生有的保底。
+    // 强袭掷 0 时惩罚基数就是 0，亮着恩惠的人不该反而摸 1 张。
+    it("基数本来就在下限之下（掷 0 的惩罚）→ 不抬，摸 0", () => {
+      const mods: DrawModifier[] = [
+        { layer: "L2", source: "恩惠", delta: -2 },
+        { layer: "L5", source: "恩惠", min: 1 },
+      ];
+      expect(n({ kind: "punish", base: 0 }, mods)).toBe(0);
+    });
+
+    it("基数恰好等于下限（劫营让人摸 1）→ 仍是 1，减不下去", () => {
+      const mods: DrawModifier[] = [
+        { layer: "L2", source: "恩惠", delta: -2 },
+        { layer: "L5", source: "恩惠", min: 1 },
+      ];
+      expect(n({ kind: "punish", base: 1 }, mods)).toBe(1);
+    });
+
     it("效果下限与全局 ≥0 同时存在时，取更高的那个（下限 1 胜过 0）", () => {
       const mods: DrawModifier[] = [
         { layer: "L2", source: "恩惠", delta: -9 },

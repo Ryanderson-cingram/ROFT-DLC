@@ -70,11 +70,12 @@ describe("恒心♠1：主动，弃 1 摸 1", () => {
     expect(r.state.board!.drawPile).toHaveLength(19);
   });
 
-  it("弃 ≠ 出牌：弃牌堆顶与当前颜色都不受影响", () => {
+  it("弃 ≠ 出牌（06-Q55 三堆）：弃的牌进弃牌堆，出牌堆与当前颜色都不受影响", () => {
     const s = seated("spade-1");
-    const before = s.board!.discardPile[0];
-    const r = activate(s, [s.board!.hands[0][0].id]);
-    expect(r.state.board!.discardPile[0]).toEqual(before);
+    const dropped = s.board!.hands[0][0];
+    const r = activate(s, [dropped.id]);
+    expect(r.state.board!.playedPile).toEqual(s.board!.playedPile);
+    expect(r.state.board!.discardPile.map((c) => c.id)).toEqual([dropped.id]);
     expect(r.state.board!.activeColor).toBe(s.board!.activeColor);
   });
 
@@ -87,6 +88,15 @@ describe("恒心♠1：主动，弃 1 摸 1", () => {
     const s = seated("spade-1");
     const r = activate(s, [s.board!.hands[0][0].id]);
     expect(r.state.board!.activatedThisTurn[0]).toBe(true);
+  });
+
+  it("弃掉最后一张不判胜：胜利只认出牌打空（01 U5 补充），摸 1 后回到 1 张", () => {
+    const s = seated("spade-1", { hands: [[card("R", "3")], [card("Y", "1")], [card("Y", "2")]] });
+    const r = activate(s, [s.board!.hands[0][0].id]);
+    expect(r.rejected).toBeUndefined();
+    expect(r.state.board!.winner).toBeUndefined();
+    expect(r.state.phase).not.toBe("finished");
+    expect(r.state.board!.hands[0]).toHaveLength(1);
   });
 
   it("边界：手牌为空就付不起代价，发动被拒", () => {
@@ -169,6 +179,19 @@ describe("恩惠♥1：被动，惩罚/他人技能摸牌 −2（至少 1）", (
     expect(drawModifiersFor(b, { kind: "rule", base: 1, seat: 0 })).toEqual([]);
     const r = applyAction(seated("heart-1"), { type: "drawCard", seat: 0 }, ctx());
     expect(r.state.board!.hands[0]).toHaveLength(3);
+  });
+
+  // 06-Q56：「他人技能」= 发起者不是自己。发起者由 DrawRequest.initiator 带进来。
+  it("自己技能造成的自摸不减（initiator 就是摸牌者）", () => {
+    const b = seated("heart-1").board!;
+    expect(drawModifiersFor(b, { kind: "skill", base: 3, seat: 0, initiator: 0 })).toEqual([]);
+    // initiator 缺席 = 自己，所以恒心那种自摸路径不用改调用也照样不减
+    expect(drawModifiersFor(b, { kind: "skill", base: 3, seat: 0 })).toEqual([]);
+  });
+
+  it("他人技能造成的摸牌照减", () => {
+    const b = seated("heart-1").board!;
+    expect(drawModifiersFor(b, { kind: "skill", base: 3, seat: 0, initiator: 1 })).toHaveLength(2);
   });
 
   it("修正是按定义里的 layer 逐层生成的，不是硬编码的两条", () => {

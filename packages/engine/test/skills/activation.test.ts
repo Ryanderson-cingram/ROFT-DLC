@@ -34,6 +34,24 @@ describe("revealSkill", () => {
     expect(applyAction(s, { type: "revealSkill", seat: 0 }, ctx()).rejected?.reason).toBe("already_revealed");
   });
 
+  // 01 §3「可亮出技能；可发动主动技能（非惩罚回合）」——括号只修饰「发动」。
+  // 01-V6 亮出不占额度，01-P14 又特意写「封印连未亮出也不能亮」（惩罚回合本就禁止的话那句是废话）。
+  it("惩罚回合照样可以亮出技能（只有封印挡得住）", () => {
+    const punish = { punish: { initiator: 1, segments: [{ seat: 1, face: "+2" as const, draw: 2 }], total: 2 } };
+    const s = { ...withSkill("diamond-j", punish), phase: "play" as const };
+    const r = applyAction(s, { type: "revealSkill", seat: 0 }, ctx());
+    expect(r.rejected).toBeUndefined();
+    expect(r.state.board!.revealed[0]).toBe(true);
+    // 可点性同源：legalActions 也要给出这条，否则 UI 上根本没有亮出的按钮
+    expect(legalActions(s, 0)).toContainEqual({ type: "revealSkill", seat: 0 });
+  });
+
+  it("被封印时仍然亮不出来（01-P14）", () => {
+    const s = withSkill("diamond-j", { statuses: [["封印"], [], []] });
+    expect(applyAction(s, { type: "revealSkill", seat: 0 }, ctx()).rejected?.reason).toBe("suppressed");
+    expect(legalActions(s, 0).some((a) => a.type === "revealSkill")).toBe(false);
+  });
+
   it("V6：亮出不占「每回合一条主动」的额度", () => {
     const r = applyAction(withSkill("spade-1"), { type: "revealSkill", seat: 0 }, ctx());
     expect(r.state.board!.activatedThisTurn[0]).toBe(false);
@@ -102,10 +120,25 @@ describe("legalActions 暴露亮出与发动", () => {
     expect(legalActions(withSkill(null), 0).some((a) => a.type === "revealSkill")).toBe(false);
   });
 
-  it("惩罚窗口里既不能亮出也不能发动（P1）", () => {
+  it("亮出的恒心在 turnStart 暴露 activateSkill；发动后消失（V7）", () => {
+    const s = withSkill("spade-1", { revealed: [true, false, false] });
+    const act = legalActions(s, 0).find((a) => a.type === "activateSkill");
+    expect(act).toEqual({ type: "activateSkill", seat: 0, effectKey: "1" });
+    const used = applyAction(s, { type: "activateSkill", seat: 0, effectKey: "1", cardIds: [s.board!.hands[0][0].id] }, ctx()).state;
+    expect(legalActions(used, 0).some((a) => a.type === "activateSkill")).toBe(false);
+  });
+
+  it("被动技能（恩惠）没有 activateSkill 可暴露", () => {
+    const s = withSkill("heart-1", { revealed: [true, false, false] });
+    expect(legalActions(s, 0).some((a) => a.type === "activateSkill")).toBe(false);
+  });
+
+  // 01 §3 的括号只修饰「发动」：惩罚回合关的是主动，亮出照给（V6 不占额度）。
+  it("惩罚回合里可以亮出，但不能发动（P1）", () => {
     const s = withSkill("spade-1", { punish: { initiator: 1, segments: [{ seat: 1, face: "+2", draw: 2 }], total: 2 } });
     const acts = legalActions(s, 0);
-    expect(acts.some((a) => a.type === "revealSkill" || a.type === "activateSkill")).toBe(false);
+    expect(acts.some((a) => a.type === "revealSkill")).toBe(true);
+    expect(acts.some((a) => a.type === "activateSkill")).toBe(false);
   });
 });
 

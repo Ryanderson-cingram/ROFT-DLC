@@ -20,7 +20,7 @@ describe("startGame", () => {
     for (const n of [3, 4]) {
       const b = start(n).state.board!;
       expect(b.drawPile).toHaveLength(164 - 7 * n - 1);
-      expect(b.discardPile).toHaveLength(1);
+      expect(b.playedPile).toHaveLength(1);
     }
   });
 
@@ -28,7 +28,7 @@ describe("startGame", () => {
     const s = { ...lobby(3), config: { rulePack: "gods", skillDraft: "draft3" } as const };
     const b = applyAction(s, { type: "startGame", seat: 0 }, ctx()).state.board!;
     expect(b.rulePack).toBe("gods");
-    expect([...b.drawPile, ...b.discardPile, ...b.hands.flat()]).toHaveLength(172);
+    expect([...b.drawPile, ...b.playedPile, ...b.hands.flat()]).toHaveLength(172);
   });
 
   it("a room with no config falls back to the base pack", () => {
@@ -38,27 +38,28 @@ describe("startGame", () => {
 
   it("S1b: no card is lost or duplicated by dealing", () => {
     const b = start(4).state.board!;
-    const all = [...b.drawPile, ...b.discardPile, ...b.hands.flat()];
+    const all = [...b.drawPile, ...b.playedPile, ...b.hands.flat()];
     expect(all).toHaveLength(164);
     expect(new Set(all.map((c) => c.id)).size).toBe(164);
   });
 
-  it("S1b: play begins at seat 0 in turnStart with the starter's colour active", () => {
+  it("S1: dealing opens a skillDraft window; the table itself is ready for seat 0", () => {
     const r = start(3);
     expect(r.rejected).toBeUndefined();
-    expect(r.state.phase).toBe("turnStart");
+    expect(r.state.phase).toBe("dealing");
+    expect(r.state.pendingWindow?.type).toBe("skillDraft");
     expect(r.state.version).toBe(1);
     const b = r.state.board!;
     expect(b.currentSeat).toBe(0);
     expect(b.direction).toBe(1);
-    expect(b.activeColor).toBe(b.discardPile[0].color);
+    expect(b.activeColor).toBe(b.playedPile[0].color);
   });
 
   it("U3: the starter is always a coloured card, re-flipping past wild/+4", () => {
     let wouldHaveBeenColourless = 0;
     for (let seed = 1; seed <= 200; seed++) {
       const b = start(3, ctx(lcg(seed))).state.board!;
-      expect(b.discardPile[0].color).not.toBeNull();
+      expect(b.playedPile[0].color).not.toBeNull();
       expect(b.activeColor).not.toBeNull();
       expect(b.drawPile).toHaveLength(164 - 21 - 1);
       // 同一 rng 下若原本翻到的是无色牌，说明这一 seed 走了重翻分支

@@ -10,7 +10,7 @@ import { card, ctx, table } from "../helpers.ts";
 /** 牌顶红 4；座位 0 持精英并已亮出，手上有蓝 3（当作蓝 4 才打得出去）。 */
 const elite = (over: Partial<Board> = {}, state: Partial<GameState> = {}) =>
   table([[card("B", "3"), card("Y", "8")], [card("Y", "1")], [card("Y", "2")]], {
-    discardPile: [card("R", "4")],
+    playedPile: [card("R", "4")],
     skills: ["heart-3", null, null],
     revealed: [true, false, false],
     ...over,
@@ -28,12 +28,12 @@ describe("精英♥3：数字牌当作大 1 点", () => {
 
   it("牌顶按**牌面**记作蓝 3，下家跟的是蓝 3 不是蓝 4", () => {
     const b = play(elite()).state.board!;
-    expect(b.discardPile[0].face).toBe("3");
+    expect(b.playedPile[0].face).toBe("3");
     expect(b.activeColor).toBe("B");
     // 下家可以跟蓝色、也可以跟牌面 3；跟不了 4——被当作的那个点数不留在桌上
-    expect(isPlayable(card("B", "7"), b.discardPile[0], b.activeColor)).toBe(true);
-    expect(isPlayable(card("Y", "3"), b.discardPile[0], b.activeColor)).toBe(true);
-    expect(isPlayable(card("Y", "4"), b.discardPile[0], b.activeColor)).toBe(false);
+    expect(isPlayable(card("B", "7"), b.playedPile[0], b.activeColor)).toBe(true);
+    expect(isPlayable(card("Y", "3"), b.playedPile[0], b.activeColor)).toBe(true);
+    expect(isPlayable(card("Y", "4"), b.playedPile[0], b.activeColor)).toBe(false);
   });
 
   it("不带 useSkill 就不生效——它是主动，不自动帮你圆牌", () => {
@@ -54,7 +54,7 @@ describe("精英♥3：数字牌当作大 1 点", () => {
 
 describe("精英的边界", () => {
   it("9 不能当作 10——上限 9 来自定义里的 values.max", () => {
-    const s = elite({ hands: [[card("B", "9"), card("Y", "8")], [], []], discardPile: [card("R", "0")] });
+    const s = elite({ hands: [[card("B", "9"), card("Y", "8")], [], []], playedPile: [card("R", "0")] });
     expect(play(s).rejected).toEqual({ reason: "illegal_card" });
   });
 
@@ -72,21 +72,21 @@ describe("精英的边界", () => {
   });
 
   it("功能牌加不了点数（原 Q28：只对数字牌有效）", () => {
-    const s = elite({ hands: [[card("B", "+2"), card("Y", "8")], [], []], discardPile: [card("R", "3")] });
+    const s = elite({ hands: [[card("B", "+2"), card("Y", "8")], [], []], playedPile: [card("R", "3")] });
     expect(play(s).rejected).toEqual({ reason: "illegal_card" });
   });
 
   it("牌顶是功能牌时也帮不上——没有点数可跟", () => {
-    const s = elite({ hands: [[card("B", "3"), card("Y", "8")], [], []], discardPile: [card("R", "skip")] });
+    const s = elite({ hands: [[card("B", "3"), card("Y", "8")], [], []], playedPile: [card("R", "skip")] });
     expect(play(s).rejected).toEqual({ reason: "illegal_card" });
   });
 
   it("加点后差得更远也不行：牌顶红 7，蓝 3 只能当 4", () => {
-    expect(play(elite({ discardPile: [card("R", "7")] })).rejected).toEqual({ reason: "illegal_card" });
+    expect(play(elite({ playedPile: [card("R", "7")] })).rejected).toEqual({ reason: "illegal_card" });
   });
 
   it("本来就能打的牌不吃额度，也不发技能事件", () => {
-    const s = elite({ hands: [[card("R", "9"), card("Y", "8")], [], []], discardPile: [card("R", "4")] });
+    const s = elite({ hands: [[card("R", "9"), card("Y", "8")], [], []], playedPile: [card("R", "4")] });
     const r = play(s); // 同色，本来就合法
     expect(r.rejected).toBeUndefined();
     expect(r.events[0].type).toBe("cardPlayed");

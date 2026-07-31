@@ -1,5 +1,6 @@
 /**
- * 原语 `playability`：改写「这张牌现在能不能打」（02 §6 的 `modifies: card_value`）。
+ * 原语 `playability`：改写「这张牌现在能不能打」（02 §6 的 `modifies: card_value`）
+ * 与「这一次能打几张」（`modifies: play_legality`）。
  *
  * 第一个用户是精英♥3：数字牌可以**当作大 1 点**打出，最高 9（04 ♥3）。
  * 关键在于它**只改合法性判定**——牌照常按**牌面**落到牌顶，下家跟的是牌面数字
@@ -41,4 +42,19 @@ export function valueOverrideFor(b: Board, seat: number, c: Card, def?: SkillDef
     return { value, effect: e };
   }
   return null;
+}
+
+/**
+ * `seat` 此刻能不能一次打出多张（并列♥4）。拦下的条件与上面同源：
+ * V3 亮出才生效；封印走压制层（P9）。**哪些形状合法是出牌规则，不在这里判**——
+ * 这里只回答「这个人有没有多打这项权利」。
+ *
+ * 司夜♣3③ 也点名 `play_legality`（04 两处都这么标），所以光看标签会把司夜也放进多打。
+ * 区分它们的是生命周期：并列是亮出期间**常驻**改写「一次能打几张」（`while_revealed`），
+ * 司夜③是出末牌时**当场**结算一次的放宽（`instant`，且要付盗，见 actions/nightlord.ts）。
+ */
+export function multiPlayAllowed(b: Board, seat: number, def?: SkillDef): boolean {
+  if (!def || !b.revealed[seat]) return false;
+  if (suppressionOf(b, seat).length > 0) return false;
+  return (def.effects ?? []).some((e) => e.modifies?.includes("play_legality") && e.duration === "while_revealed");
 }

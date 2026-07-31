@@ -28,6 +28,8 @@ export type SkillWindow =
   | 'on_punish_resolve'
   | 'on_stack_contribute'
   | 'interrupt'
+  | 'on_draw'
+  | 'on_dice_roll'
   | 'any';
 
 /** 02-methodology §7 摸牌数结算层级 */
@@ -56,6 +58,8 @@ export interface SkillEffect {
   once?: 'once' | 'once_per_player' | 'per_player_count' | 'unlimited' | null;
   /** 是否占用「每回合一条主动」（01-V7） */
   stacks_with_turn_limit?: boolean | null;
+  /** 压制例外（06-Q39）：本效果无视的压制来源，如影歌② `["punish_turn"]`。封印不可例外（`sealable` 管）。 */
+  suppression_exempt?: string[] | null;
   /** 如血棘「优先其他技能」 */
   priority?: boolean | null;
   /** 改摸数 / 改惩罚 / 改颜色规则等标签，取值表见 02-methodology §6 */
@@ -97,6 +101,11 @@ export interface SkillDef {
    * 部分标注（例如只搬了 §7 的 layer）保持 false——宁可少而准。
    */
   structured: boolean;
+  /**
+   * 标注完整、但引擎还没建它的行为。`loadSkills` 据此把它挡在抽 3 选 1 之外——
+   * 否则玩家会抽到一个亮出后什么都不发生的技能。实现之后从 04 的围栏块里删掉这一行。
+   */
+  unimplemented?: boolean;
 }
 
 export interface SkillDefsDoc {

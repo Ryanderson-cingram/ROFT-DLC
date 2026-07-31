@@ -28,11 +28,11 @@ describe("isPlayable (U1/U3)", () => {
 describe("playCards", () => {
   it("U1: playing a matching card moves it to the discard pile and passes the turn", () => {
     const mine = card("R", "3");
-    const s = table([[mine, card("B", "3")], [card("Y", "1")], [card("Y", "2")]], { discardPile: [R7] });
+    const s = table([[mine, card("B", "3")], [card("Y", "1")], [card("Y", "2")]], { playedPile: [R7] });
     const r = applyAction(s, { type: "playCards", seat: 0, cardIds: [mine.id] }, ctx());
     expect(r.rejected).toBeUndefined();
     const b = r.state.board!;
-    expect(b.discardPile[0]).toEqual(mine);
+    expect(b.playedPile[0]).toEqual(mine);
     expect(b.activeColor).toBe("R");
     expect(b.hands[0]).toHaveLength(1);
     expect(b.currentSeat).toBe(1);
@@ -41,7 +41,7 @@ describe("playCards", () => {
 
   it("U3: a wild needs a chosen colour", () => {
     const w = card(null, "wild");
-    const s = table([[w], [card("Y", "1")], [card("Y", "2")]], { discardPile: [R7] });
+    const s = table([[w], [card("Y", "1")], [card("Y", "2")]], { playedPile: [R7] });
     expect(applyAction(s, { type: "playCards", seat: 0, cardIds: [w.id] }, ctx()).rejected?.reason)
       .toBe("color_required");
     const r = applyAction(s, { type: "playCards", seat: 0, cardIds: [w.id], chosenColor: "G" }, ctx());
@@ -49,35 +49,35 @@ describe("playCards", () => {
   });
 
   it("rejects a card the player does not hold", () => {
-    const s = table([[card("R", "3")], [card("Y", "1")], [card("Y", "2")]], { discardPile: [R7] });
+    const s = table([[card("R", "3")], [card("Y", "1")], [card("Y", "2")]], { playedPile: [R7] });
     expect(applyAction(s, { type: "playCards", seat: 0, cardIds: ["nope"] }, ctx()).rejected?.reason)
       .toBe("not_in_hand");
   });
 
   it("rejects an illegal card", () => {
     const bad = card("B", "3");
-    const s = table([[bad], [card("Y", "1")], [card("Y", "2")]], { discardPile: [R7] });
+    const s = table([[bad], [card("Y", "1")], [card("Y", "2")]], { playedPile: [R7] });
     expect(applyAction(s, { type: "playCards", seat: 0, cardIds: [bad.id] }, ctx()).rejected?.reason)
       .toBe("illegal_card");
   });
 
   it("rejects a play out of turn", () => {
     const mine = card("R", "3");
-    const s = table([[card("Y", "1")], [mine], [card("Y", "2")]], { discardPile: [R7] });
+    const s = table([[card("Y", "1")], [mine], [card("Y", "2")]], { playedPile: [R7] });
     expect(applyAction(s, { type: "playCards", seat: 1, cardIds: [mine.id] }, ctx()).rejected?.reason)
       .toBe("not_your_turn");
   });
 
   it("U3: skip jumps over the next player", () => {
     const c = card("R", "skip");
-    const s = table([[c, card("R", "1")], [card("Y", "1")], [card("Y", "2")]], { discardPile: [R7] });
+    const s = table([[c, card("R", "1")], [card("Y", "1")], [card("Y", "2")]], { playedPile: [R7] });
     const r = applyAction(s, { type: "playCards", seat: 0, cardIds: [c.id] }, ctx());
     expect(r.state.board!.currentSeat).toBe(2);
   });
 
   it("U3: reverse flips the direction of play", () => {
     const c = card("R", "rev");
-    const s = table([[c, card("R", "1")], [card("Y", "1")], [card("Y", "2")]], { discardPile: [R7] });
+    const s = table([[c, card("R", "1")], [card("Y", "1")], [card("Y", "2")]], { playedPile: [R7] });
     const r = applyAction(s, { type: "playCards", seat: 0, cardIds: [c.id] }, ctx());
     expect(r.state.board!.direction).toBe(-1);
     expect(r.state.board!.currentSeat).toBe(2);
@@ -85,7 +85,7 @@ describe("playCards", () => {
 
   it("U1: emptying your hand ends the game with you as the winner", () => {
     const last = card("R", "3");
-    const s = table([[last], [card("Y", "1")], [card("Y", "2")]], { discardPile: [R7] });
+    const s = table([[last], [card("Y", "1")], [card("Y", "2")]], { playedPile: [R7] });
     const r = applyAction(s, { type: "playCards", seat: 0, cardIds: [last.id] }, ctx());
     expect(r.state.phase).toBe("finished");
     expect(r.state.board!.winner).toBe(0);
@@ -95,7 +95,7 @@ describe("playCards", () => {
   for (const [color, face] of [["R", "+2"], ["R", "skip"], ["R", "rev"], [null, "wild"], [null, "+4"]] as const) {
     it(`U5: a final ${face} does not win -- you draw 1 and play continues`, () => {
       const last = card(color, face);
-      const s = table([[last], [card("Y", "1")], [card("Y", "2")]], { discardPile: [R7] });
+      const s = table([[last], [card("Y", "1")], [card("Y", "2")]], { playedPile: [R7] });
       const r = applyAction(
         s,
         { type: "playCards", seat: 0, cardIds: [last.id], chosenColor: color ? undefined : "B" },
@@ -110,7 +110,7 @@ describe("playCards", () => {
 
   it("U5: the final card still resolves -- a last +2 still opens the punish chain", () => {
     const last = card("R", "+2");
-    const s = table([[last], [card("Y", "1")], [card("Y", "2")]], { discardPile: [R7] });
+    const s = table([[last], [card("Y", "1")], [card("Y", "2")]], { playedPile: [R7] });
     const r = applyAction(s, { type: "playCards", seat: 0, cardIds: [last.id] }, ctx());
     expect(r.state.board!.punish?.total).toBe(2);
     expect(r.state.pendingWindow?.actors).toEqual([1]);
@@ -120,7 +120,7 @@ describe("playCards", () => {
     // 座位 0 用最后一张 +4 接上家的 +2：既叠链，又因 U5 摸 1 张
     const last = card(null, "+4");
     const s = table([[last], [card("Y", "1")], [card("Y", "2")]], {
-      discardPile: [card("B", "+2")],
+      playedPile: [card("B", "+2")],
       punish: { initiator: 1, segments: [{ seat: 1, face: "+2", draw: 2 }], total: 2 },
     });
     const r = applyAction(s, { type: "playCards", seat: 0, cardIds: [last.id], chosenColor: "B" }, ctx());
@@ -131,22 +131,22 @@ describe("playCards", () => {
 
   it("U5: a number card still wins even when the draw pile is empty", () => {
     const last = card("R", "3");
-    const s = table([[last], [card("Y", "1")], [card("Y", "2")]], { discardPile: [R7], drawPile: [] });
+    const s = table([[last], [card("Y", "1")], [card("Y", "2")]], { playedPile: [R7], drawPile: [] });
     const r = applyAction(s, { type: "playCards", seat: 0, cardIds: [last.id] }, ctx());
     expect(r.state.board!.winner).toBe(0);
   });
 
-  it("rejects multi-card plays (并列/神化 are out of scope this round)", () => {
+  it("G2: without 并列 revealed, a multi-card play is rejected", () => {
     const a = card("R", "3");
     const b = card("R", "4");
-    const s = table([[a, b], [card("Y", "1")], [card("Y", "2")]], { discardPile: [R7] });
+    const s = table([[a, b], [card("Y", "1")], [card("Y", "2")]], { playedPile: [R7] });
     expect(applyAction(s, { type: "playCards", seat: 0, cardIds: [a.id, b.id] }, ctx()).rejected?.reason)
       .toBe("single_card_only");
   });
 
   it("does not mutate the input state", () => {
     const mine = card("R", "3");
-    const s = table([[mine, card("B", "3")], [card("Y", "1")], [card("Y", "2")]], { discardPile: [R7] });
+    const s = table([[mine, card("B", "3")], [card("Y", "1")], [card("Y", "2")]], { playedPile: [R7] });
     const snapshot = JSON.stringify(s);
     applyAction(s, { type: "playCards", seat: 0, cardIds: [mine.id] }, ctx());
     expect(JSON.stringify(s)).toBe(snapshot);

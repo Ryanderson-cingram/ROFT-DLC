@@ -38,6 +38,7 @@ const SKILL_KEYS = new Set([
   'upgrade_to',
   'notes',
   'structured',
+  'unimplemented',
   'effects',
 ]);
 const EFFECT_KEYS = new Set([
@@ -50,6 +51,7 @@ const EFFECT_KEYS = new Set([
   'targeting',
   'once',
   'stacks_with_turn_limit',
+  'suppression_exempt',
   'priority',
   'modifies',
   'duration',
@@ -73,6 +75,7 @@ const SKILL_ORDER = [
   'upgrade_to',
   'effects',
   'structured',
+  'unimplemented',
 ];
 const ENUMS: Record<string, Set<string>> = {
   kind: new Set([
@@ -93,6 +96,8 @@ const ENUMS: Record<string, Set<string>> = {
     'on_punish_resolve',
     'on_stack_contribute',
     'interrupt',
+    'on_draw',
+    'on_dice_roll',
     'any',
   ]),
   targeting: new Set(['self', 'single', 'all_others', 'global']),
@@ -108,7 +113,17 @@ const ENUMS: Record<string, Set<string>> = {
 };
 const LAYERS = new Set(['L0', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6']);
 /** 02 §6 `values` 的键白名单：§7 的层名 + 代价/张数名。拼错键名 = 这个数静默没标。 */
-const VALUE_KEYS = new Set([...LAYERS, 'discard', 'draws', 'marks', 'dice', 'card_value', 'max']);
+const VALUE_KEYS = new Set([
+  ...LAYERS,
+  'discard',
+  'draws',
+  'draws_partial',
+  'marks',
+  'marks_wild',
+  'dice',
+  'card_value',
+  'max',
+]);
 const DRAW_EVENTS = new Set(['punish', 'skill', 'rule']);
 const MODIFIES = new Set([
   'draw_count',
@@ -281,6 +296,12 @@ function applyFences(md: string, skills: SkillDef[]) {
       if (doc.structured !== true) throw new Error(`${at}: structured 只在完整标注时写 true`);
       if (!skill.effects?.length) throw new Error(`${at}: structured: true 但没有 effects`);
       skill.structured = true;
+    }
+    // 标注完整、但引擎还没建它的行为：诚实地标出来，`loadSkills` 据此把它挡在抽 3 选 1 之外。
+    // 少了这条，一个「定义齐全但没人实现」的技能会被抽到、亮出，然后什么都不发生。
+    if ('unimplemented' in doc) {
+      if (doc.unimplemented !== true) throw new Error(`${at}: unimplemented 只在还没实现时写 true，实现后删掉这一行`);
+      (skill as unknown as Record<string, unknown>).unimplemented = true;
     }
   }
 

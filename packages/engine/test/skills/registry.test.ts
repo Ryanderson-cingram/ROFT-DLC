@@ -80,16 +80,30 @@ describe("skill registry", () => {
     ]);
   });
 
-  // 真实定义的当下状态：10 个 MVP 技能已标注完整，原语建到哪一波，池里就有几个。
-  // 计划 Task 3 建完 active/passive/draw_count，恒心与恩惠据此从 unsupported 挪进 pool；
-  // Task 8 的 CI 断言会在全部建完时要求 MVP 10 必须在 pool 里。
+  // 真实定义的当下状态：**进池 = 行为真的建好了**。原语齐备还不够——司夜/劫营的定义
+  // 只引用了别人注册过的机制名，又都没有 active 效果（「主动必须有 handler」那条查不到它们），
+  // 会就这么溜进池子变成「抽到即废」。这两个曾在 04 里标 `unimplemented: true` 挡着，
+  // 实现的人删掉那行、同时把 id 加进这里——这条断言就是那个提醒。
   it("原语建到哪一波，池里就有几个技能", () => {
     const r = loadSkills(skillDefs, primitives);
     expect(r.byId.size).toBe(60);
-    expect(r.pool.map((s) => s.id).sort()).toEqual(["heart-1", "heart-3", "spade-1"]); // 恩惠、精英、恒心
-    expect(r.unsupported.map((u) => u.id)).toContain("heart-4"); // 并列要 play_legality，还没建
-    // 报出来的是具体缺哪个机制，不是一句「不支持」
-    expect(r.unsupported.find((u) => u.id === "heart-4")!.missing).toEqual(['effects[0].modifies: "play_legality"']);
+    // 首批 10 个：恩惠、精英、并列、强袭、血棘、影歌、劫营、远星、恒心、司夜
+    expect(r.pool.map((s) => s.id).sort()).toEqual([
+      "club-3",
+      "diamond-1",
+      "diamond-10",
+      "diamond-2",
+      "diamond-3",
+      "diamond-j",
+      "heart-1",
+      "heart-3",
+      "heart-4",
+      "spade-1",
+    ]);
+    // 劫营（interrupt 窗口）建完后 04 里再没有 `unimplemented: true`，标注完整却缺机制的
+    // 也一个都不剩：两个筐都空了。「缺什么怎么列」由上面的合成定义继续守着。
+    expect(r.unsupported).toEqual([]);
+    expect(skillDefs.skills.filter((s) => s.unimplemented)).toEqual([]);
   });
 
   // 注册表里有 "active" 只说明「阶段 1 发动」这个 kind 引擎认识，不代表某个技能真有行为。

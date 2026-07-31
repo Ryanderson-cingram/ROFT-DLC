@@ -22,7 +22,7 @@ export type DrawModifier =
   | { layer: "L3"; source: string; factor: number }
   /** L4 覆盖：恒定值/归零。`self` = 作用于受罚者自身，冲突时胜过 `global`。 */
   | { layer: "L4"; source: string; scope: "self" | "global"; value: number }
-  /** L5 钳制：效果自带下限（恩惠「至少 1」）。 */
+  /** L5 钳制：效果自带下限（恩惠「至少 1」）；下限不得高于 L0 基数。 */
   | { layer: "L5"; source: string; min: number }
   /** L6 后置程序：不改数字，只改执行方式（忍戒摸后弃、染手改来源、领域改去向…）。 */
   | { layer: "L6"; source: string; procedure: string };
@@ -43,6 +43,12 @@ export interface DrawRequest {
    * 所以这里绝不能再加一遍。`PunishChain.total` 正是那个加总。
    */
   base: number;
+  /**
+   * 是**谁的技能**造成了这次摸牌（技能持有者的座位）。恩惠的原文是「因惩罚或**他人**技能的摸牌」，
+   * 06-Q56 裁定「他人」= 发起者不是摸牌者本人，所以引擎必须能分出这一笔账。
+   * 缺席视为「自己造成的」（恒心那种自摸自受的路径不必改调用）。
+   */
+  initiator?: number;
 }
 
 export interface DrawResolution {
@@ -76,8 +82,10 @@ export function resolveDrawCount(req: DrawRequest, mods: readonly DrawModifier[]
     if (override) v = override.value;
   }
 
-  // L5 钳制：效果自带下限，再兜全局最终值 ≥ 0
-  const count = Math.max(0, ...pick(mods, "L5").map((m) => m.min), v);
+  // L5 钳制：效果自带下限，再兜全局最终值 ≥ 0。
+  // 2026-07-31 裁定：下限**不得高于 L0 基数**——它是减免的地板，不是无中生有的保底。
+  // 强袭掷 0 时惩罚基数就是 0，亮着恩惠的人不该反而摸 1 张（基数 ≤ 下限时不抬）。
+  const count = Math.max(0, ...pick(mods, "L5").map((m) => Math.min(m.min, req.base)), v);
 
   return { count, procedures: pick(mods, "L6"), ...(replacement && { replacedBy: replacement.source }) };
 }

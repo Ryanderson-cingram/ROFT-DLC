@@ -34,7 +34,7 @@ export const skillDefs: SkillDefsDoc = {
       "name": "灾难",
       "suit_rank": "★",
       "status": "✅",
-      "summary": "摸 1，扣置 1。他人打出相同牌时亮出弃置扣置；其回合结束：该玩家掷 2、你掷 4，**六骰加总**；**只有你**按该总和获得狂欢 buff，对方无效果；对方技能不变；**你的灾难技能移除**（若六骰总和 ≥5 则获得时神技能）。",
+      "summary": "摸 1，扣置 1。他人打出相同牌时亮出弃置扣置；其回合结束：该玩家掷 2、你掷 4，**双方各按自己骰子的总和**查狂欢表获得 buff（各算各的，不相加，2026-07-30 更正）；对方技能不变；**你的灾难技能移除**（若你的 4 骰总和 ≥5 则获得时神技能）。",
       "caveats": null,
       "upgrade_to": "god-fade",
       "structured": false
@@ -45,7 +45,7 @@ export const skillDefs: SkillDefsDoc = {
       "suit_rank": "★",
       "category": "buff（非技能牌）",
       "status": "✅",
-      "summary": "按 S9 的**六骰总和**（对方 2 + 灾难方 4）：0 五彩 / 1 恋战 / 2 所有摸牌+1 / 3 惩罚摸牌+1 / 4 被惩罚不摸+单体不能以你为目标 / ≥5 时神。**只有灾难持有方获得**，对方无效果。",
+      "summary": "按 S9 **各自骰子的总和**（对方 2 骰 0–4，灾难方 4 骰 0–8）查表：0 五彩 / 1 恋战 / 2 所有摸牌+1 / 3 惩罚摸牌+1 / 4 被惩罚不摸+单体不能以你为目标 / ≥5 时神（仅灾难方可达）。**双方各按自己总和获得**（2026-07-30 更正）。",
       "caveats": null,
       "notes": "注：不占技能栏（时神除外，时神是技能替换）。",
       "upgrade_to": "god-fade",
@@ -95,7 +95,7 @@ export const skillDefs: SkillDefsDoc = {
         {
           "key": "passive",
           "kind": "passive",
-          "window": "any",
+          "window": "on_draw",
           "values": {
             "L2": -2,
             "L5": 1
@@ -203,7 +203,7 @@ export const skillDefs: SkillDefsDoc = {
       "suit_rank": "♥7",
       "status": "⚠️",
       "summary": "拼点默认 +4；亮出牌可口述；掷骰可口述；他人≤3 摸N弃N 你可同时；**可任意时刻亮出**",
-      "caveats": "口述掷骰与强袭重掷互动",
+      "caveats": null,
       "reveal_window": "any_time",
       "structured": false
     },
@@ -303,6 +303,9 @@ export const skillDefs: SkillDefsDoc = {
           "key": "1",
           "kind": "on_play",
           "window": "on_stack_contribute",
+          "values": {
+            "dice": 1
+          },
           "targeting": "self",
           "once": "unlimited",
           "stacks_with_turn_limit": false,
@@ -315,7 +318,7 @@ export const skillDefs: SkillDefsDoc = {
         {
           "key": "2",
           "kind": "response",
-          "window": "any",
+          "window": "on_dice_roll",
           "targeting": "global",
           "once": "unlimited",
           "stacks_with_turn_limit": false,
@@ -332,7 +335,7 @@ export const skillDefs: SkillDefsDoc = {
       "name": "血棘",
       "suit_rank": "♦2",
       "status": "✅",
-      "summary": "你**发起**的惩罚使目标封印技能直至条件；回合开始可掷骰令被血棘者摸等量；优先；未亮出也被封则不能亮出；合纵连横双封",
+      "summary": "你**发起**的惩罚使目标封印技能（**含被动**，至你另封新目标或其链首发起惩罚，01-P14）；回合开始可掷骰令被血棘者摸等量；优先；未亮出也被封则不能亮出；合纵连横双封",
       "caveats": null,
       "notes": "链首已定",
       "effects": [
@@ -344,15 +347,21 @@ export const skillDefs: SkillDefsDoc = {
           "once": "unlimited",
           "stacks_with_turn_limit": false,
           "priority": true,
-          "duration": null
+          "duration": "until_event"
         },
         {
           "key": "1",
           "kind": "active",
           "window": "turn_start",
+          "values": {
+            "dice": 1
+          },
           "targeting": "all_others",
           "once": "unlimited",
           "stacks_with_turn_limit": true,
+          "modifies": [
+            "dice"
+          ],
           "duration": "instant"
         }
       ],
@@ -370,7 +379,12 @@ export const skillDefs: SkillDefsDoc = {
           "key": "1",
           "kind": "active",
           "window": "turn_start",
-          "targeting": "self",
+          "values": {
+            "draws": 3,
+            "draws_partial": 1,
+            "max": 6
+          },
+          "targeting": "all_others",
           "once": "once",
           "stacks_with_turn_limit": true,
           "duration": "instant"
@@ -380,9 +394,15 @@ export const skillDefs: SkillDefsDoc = {
           "kind": "active",
           "window": "turn_start",
           "cost": "2 魂",
+          "values": {
+            "marks": 2
+          },
           "targeting": "self",
           "once": "unlimited",
           "stacks_with_turn_limit": true,
+          "suppression_exempt": [
+            "punish_turn"
+          ],
           "modifies": [
             "turn_flow"
           ],
@@ -466,7 +486,7 @@ export const skillDefs: SkillDefsDoc = {
       "name": "劫营",
       "suit_rank": "♦10",
       "status": "✅",
-      "summary": "同色同数同时打出；对方摸 1；你下家继续；可打断并列/神化；剩余神化轮作废",
+      "summary": "同色同数同时打出；对方摸 1；你下家继续；可打断**任何人打出的任何一张牌**（含并列/神化的每一张）；剩余神化轮作废",
       "caveats": null,
       "notes": "已定",
       "effects": [
@@ -474,6 +494,9 @@ export const skillDefs: SkillDefsDoc = {
           "key": "1",
           "kind": "response",
           "window": "interrupt",
+          "values": {
+            "draws": 1
+          },
           "targeting": "single",
           "once": "unlimited",
           "stacks_with_turn_limit": true,
@@ -718,13 +741,16 @@ export const skillDefs: SkillDefsDoc = {
       "name": "司夜",
       "suit_rank": "♣3",
       "status": "✅",
-      "summary": "打出变色后**掷骰一次获点数个盗（0/1/2）**；阶段1花盗换牌；3/5盗放宽末牌为功能/变色，仍须合法打出",
+      "summary": "打出变色后**掷骰一次获点数个盗（0/1/2）**；阶段1花盗换牌；3/5盗放宽末牌为功能/变色，仍须合法打出；**②③被动触发不占主动**（06-Q57）",
       "caveats": null,
       "effects": [
         {
           "key": "1",
           "kind": "on_play",
           "window": "after_play",
+          "values": {
+            "dice": 1
+          },
           "targeting": "self",
           "once": "unlimited",
           "stacks_with_turn_limit": false,
@@ -735,12 +761,15 @@ export const skillDefs: SkillDefsDoc = {
         },
         {
           "key": "2",
-          "kind": "active",
+          "kind": "meta_rule",
           "window": "turn_start",
           "cost": "盗",
+          "values": {
+            "marks": 1
+          },
           "targeting": "self",
           "once": "unlimited",
-          "stacks_with_turn_limit": true,
+          "stacks_with_turn_limit": false,
           "duration": "instant"
         },
         {
@@ -748,9 +777,13 @@ export const skillDefs: SkillDefsDoc = {
           "kind": "meta_rule",
           "window": "play_phase",
           "cost": "3 或 5 盗",
+          "values": {
+            "marks": 3,
+            "marks_wild": 5
+          },
           "targeting": "self",
           "once": "unlimited",
-          "stacks_with_turn_limit": true,
+          "stacks_with_turn_limit": false,
           "modifies": [
             "play_legality"
           ],
