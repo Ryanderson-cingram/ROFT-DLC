@@ -33,6 +33,7 @@
 | `targeting` | `self` / `single` / `all_others` / `global` |
 | `once` | 一次性 / 每名玩家限一次 / 玩家人数次 / 无限 |
 | `stacks_with_turn_limit` | 是否占用「每回合一条主动」——主动 true，被动 false |
+| `suppression_exempt` | 压制例外（06-Q39）：本效果**无视**哪些压制来源，如影歌② `[punish_turn]`（S15 惩罚回合可发动）；缺席 = 所有压制照常生效。封印（`sealed`）不可例外——那由 `sealable` 管 |
 | `priority` | 如血棘「优先其他技能」 |
 | `modifies` | 改摸数、改惩罚、改颜色规则等标签 |
 | `duration` | 效果/所赋状态的生命周期：`instant`（当场结算）/ `until_event`（直到打出 +4 等，写明事件）/ `while_revealed`（技能亮出期间）/ `until_skill_replaced`（常驻至技能被替换，如宝藏分支）/ `permanent` |
@@ -77,6 +78,8 @@
 | `on_punish_resolve` | 惩罚摸牌后 | Q&A 延后结算 |
 | `on_stack_contribute` | 惩罚牌进链时 | 强袭等只改自己那张 |
 | `interrupt` | 他人出牌时 | 劫营、远星 |
+| `on_draw` | 一次摸牌的张数被计算时 | 恩惠等改摸牌数的被动（06-Q40） |
+| `on_dice_roll` | 场上有人掷骰时 | 强袭②接管掷骰（06-Q40） |
 | `any` | — | 极运/寄生亮出例外等 |
 
 ---
@@ -111,7 +114,7 @@ Q&A：只能指定一名玩家的技能为**单体技能**。
 
 **位置**：★ / 神条目放在该条目要点之后；花色技能放在该花色表格后的「结构化标注」小节。围栏块靠块内的 `id` 与条目配对，位置只影响可读性。
 
-**字段**：只用 §1 的字段名，逐字沿用。技能级 `id`（必填）/ `category` / `reveal_window` / `force_reveal_ok` / `force_activate_ok` / `sealable` / `upgrade_to` / `notes` / `effects[]`；子效果级 `key` / `kind` / `window` / `cost` / `values` / `applies_to` / `targeting` / `once` / `stacks_with_turn_limit` / `priority` / `modifies` / `duration` / `layer`。**一个技能的每条子效果都要有自己的 `key`**（`1` / `2` / `3` / `passive` / `on_reveal`，与 04 散文里的 ①②③ 对应）。
+**字段**：只用 §1 的字段名，逐字沿用。技能级 `id`（必填）/ `category` / `reveal_window` / `force_reveal_ok` / `force_activate_ok` / `sealable` / `upgrade_to` / `notes` / `effects[]`；子效果级 `key` / `kind` / `window` / `cost` / `values` / `applies_to` / `targeting` / `once` / `stacks_with_turn_limit` / `suppression_exempt` / `priority` / `modifies` / `duration` / `layer`。**一个技能的每条子效果都要有自己的 `key`**（`1` / `2` / `3` / `passive` / `on_reveal`，与 04 散文里的 ①②③ 对应）。
 
 **完整度**：只有当条目的**全部**子效果都标注完时才写 `structured: true`。
 
@@ -126,7 +129,7 @@ Q&A：只能指定一名玩家的技能为**单体技能**。
 | `once` | `once` / `once_per_player` / `per_player_count` / `unlimited` | 一次性 / 每名玩家限一次 / 玩家人数次 / 无限 |
 | `targeting` | `self` / `single` / `all_others` / `global` | 见 §4 |
 | `modifies` | `draw_count` / `draw_procedure` / `punish_amount` / `card_value` / `color_rule` / `play_legality` / `turn_flow` / `dice` | 「改摸数、改惩罚、改颜色规则等标签」 |
-| `values` | 行内映射 `{ 键: 数字 }`，键取自：§7 的层名 `L0`–`L6`，或 `discard` / `draws` / `marks` / `dice` / `card_value` / `max` | 数值槽 |
+| `values` | 行内映射 `{ 键: 数字 }`，键取自：§7 的层名 `L0`–`L6`，或 `discard` / `draws` / `draws_partial` / `marks` / `marks_wild` / `dice` / `card_value` / `max` | 数值槽 |
 | `applies_to` | `punish` / `skill` / `rule`（行内数组） | 摸牌事件类型 |
 
 约定（只是标注约定，不新增裁定）：
@@ -134,6 +137,8 @@ Q&A：只能指定一名玩家的技能为**单体技能**。
 - **每个数字都必须在 `values` 里有落点**。04 散文里的「−2」「至少 1」「弃 1 摸 1」如果只写在散文和 `cost` 里，引擎就只能把它们另存一份，那份不会跟着 04 变，CI 也查不出漂移（2026-07-29 裁定，原 Q53）。`cost` 与散文照旧写给人读，两者说的是同一个数
 - `values` 里的层名键必须同时出现在本效果的 `layer` 里，反之亦然
 - 键是白名单，**新增一个键要先加到上表**：拼错键名静默变成「这个数没标」，是最难查的漂移
+- 一条效果里有两档摸牌数时，第二档用 `draws_partial`（影歌①：「同色或同数」摸 1 = `draws_partial`，「不亮」摸 3 = `draws`）
+- 同理，一条效果里有两档标记数时，第二档用 `marks_wild`（司夜③：末牌为功能牌的门槛 3 = `marks`，为**无色牌**的门槛 5 = `marks_wild`）
 
 - `layer` 可写多层，如恩惠 `[L2, L5]`——L2 做 −2、L5 兜自带的「至少 1」（§7 两层都点名了恩惠）
 - **摸牌类效果必须带 `layer`**：`modifies` 含 `draw_count`（L0–L5 改数字）或 `draw_procedure`（L6 只改执行方式）时 `layer` 必填；反过来 `layer` 不得出现在其他效果上。技能**自己造成**的摸牌（恒心摸 1、远星的代价摸 2、劫营让对方摸 1）不是「改摸牌数」，不带 `layer`
@@ -160,9 +165,14 @@ L1 替换   整体改写计算的效果（伤逝：按张数掷骰，明文「�
 L2 加减   恩惠 −2 / 狂欢和2「所有摸牌+1」/ 狂欢和3「惩罚+1」/
           吟游·活泼板 +1 / 八门 +1 / 寄生 +1 / 弃「异」每张 −1 …（同层全部累加）
 L3 倍率   吟游·战争序 ×2 …
-L4 覆盖   恒定值/归零（吟游·樱时雨 恒为 1；狂欢和4 被惩罚不摸=0）
+L4 覆盖   恒定值（吟游·樱时雨 恒为 1）
           → 冲突时：作用于受罚者自身的覆盖 > 全局覆盖
+          · 狂欢和4「被惩罚不摸」不在此层：它是**跳过整个摸牌事件**（06-Q27 裁定），
+            事件不发生，任何数值修正（含 L5 下限）无从生效
 L5 钳制   效果自带下限（恩惠「至少 1」）→ 全局最终值 ≥ 0
+          · 作用域（2026-07-31 裁定）：下限**只在本次确实减了时**生效，且**不得高于 L0 基数**——
+            它是减免的地板，不是无中生有的保底。强袭掷 0 → 惩罚基数 0，亮着恩惠的人摸 **0**
+            （不是 1）；基数本来就是 1（如劫营让人摸 1）时减不下去，仍摸 1
 L6 后置程序（不改数字，只改执行方式）
           忍戒：按最终值 N 多摸 min(N,6) 张再弃等量
           染手：改摸牌来源（弃牌堆）　领域：改去向（扣置）　近卫：逐张交牌
@@ -183,7 +193,7 @@ glossary 定义了 明/扣置/展示/明示/亮出手牌 五种可见性，引�
 
 | zone | 说明 |
 |---|---|
-| `deck` | 摸牌堆（全隐藏） |
+| `deck` | 摸牌堆（全隐藏）。摸空时由 `playPile`（除牌顶）+ `discardPile` 洗回，**整局至多 2 次**；洗满后再见底即平局（01-U8） |
 | `playPile` | 出牌堆（全公开） |
 | `discardPile` | 弃牌堆（全公开；染手可改抽取来源） |
 | `hand[player]` | 手牌，每张带 `revealed` 标志（明示=true，正面向上但仍是手牌；洗牌后重置，01/glossary） |
