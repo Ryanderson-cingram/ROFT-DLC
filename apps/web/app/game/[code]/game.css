@@ -141,6 +141,9 @@
   border-radius: var(--radius-panel);
   background: linear-gradient(180deg, rgba(211, 172, 90, 0.12), transparent 70%), var(--surface-2);
 }
+/* 01-P9 血棘封印：整张卡置灰（连被动一起关），置灰只是显示，可点性照旧看 legalActions */
+.skillcard--sealed { border-color: var(--brass-dim); filter: grayscale(0.7); }
+.skillcard--sealed .l2 { filter: none; }
 .skillcard .sc-head { display: flex; align-items: center; gap: var(--sp-2); }
 .skillcard .sigil { font-family: var(--font-mono); color: var(--brass); }
 .skillcard h3 { font-family: var(--font-display); font-size: 18px; }
@@ -165,6 +168,9 @@
   scrollbar-width: thin;
 }
 .hand .card { cursor: pointer; }
+/* 影歌①的宣言盘：四色 × 0–9，摆得下就换行，不横向滚 */
+.declare { display: flex; flex-wrap: wrap; gap: var(--sp-2); max-height: 46vh; overflow-y: auto; }
+.declare .card { cursor: pointer; }
 .hand-meta { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-secondary); }
 
 .actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; }
@@ -240,3 +246,101 @@ button.card { padding: 0; border: 0; font: inherit; }
 
 /* 设计稿的 alertbar 贴在状态切换器下面（top:48px）；真实页面没有那条，贴顶。 */
 .alertbar { top: 0; }
+
+/* ---- 宽屏：牌桌 + 右栏行动记录；窄屏：日志排在牌桌下方（design/mockups/game-log.html） ---- */
+.layout { max-width: 1280px; margin: 0 auto; display: grid; gap: var(--sp-3); }
+@media (min-width: 980px) {
+  .layout { grid-template-columns: minmax(0, 1fr) 300px; align-items: start; padding-right: var(--sp-3); }
+  .log-panel { position: sticky; top: 60px; }
+}
+
+/* ---- 弃牌堆槽位：牌背叠影 + 张数徽记；空堆虚线框 ---- */
+.center .slot .discard-btn { background: none; border: 0; padding: 0; color: inherit; cursor: pointer; font: inherit; }
+.center .slot .stack { position: relative; display: inline-block; margin-top: 0; }
+.center .slot .stack::before,
+.center .slot .stack::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-card);
+  background: var(--surface-2);
+  border: 1px solid #2c3833;
+}
+.center .slot .stack::before { transform: translate(4px, 3px) rotate(2deg); z-index: -1; }
+.center .slot .stack::after { transform: translate(8px, 6px) rotate(4deg); z-index: -2; }
+.center .slot .discard-count {
+  position: absolute;
+  top: -8px;
+  right: -10px;
+  margin-top: 0;
+  min-width: 22px;
+  padding: 2px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--brass);
+  color: #1c1712;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+}
+.center .slot .discard-empty {
+  display: inline-block;
+  width: 68px;
+  height: 102px;
+  margin-top: 0;
+  border: 1px dashed #3a4640;
+  border-radius: var(--radius-card);
+}
+
+/* 展开的弃牌堆全列表（02 §5 全公开）：一行小牌，横向滚动 */
+.discard-open {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px dashed var(--brass-dim);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.discard-open .card { --card-w: 40px; --card-h: 60px; flex: none; }
+.discard-open .hint { flex: none; font-size: 12px; color: var(--text-secondary); }
+
+/* ---- 行动记录 ---- */
+.log-panel {
+  margin: 0 var(--sp-3);
+  border: 1px solid #2c3833;
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  max-height: 78vh;
+}
+@media (max-width: 979px) { .log-panel { max-height: 320px; } }
+.log-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid #2c3833;
+}
+.log-head h2 { margin: 0; font-family: var(--font-display); font-size: 15px; }
+.log-head .hint { font-size: 12px; color: var(--text-secondary); }
+.log-list { margin: 0; padding: var(--sp-2) 0; list-style: none; overflow-y: auto; scrollbar-width: thin; }
+.log-list li {
+  display: flex;
+  gap: 8px;
+  padding: 6px var(--sp-3);
+  font-size: 13px;
+  line-height: 1.45;
+  border-left: 3px solid transparent;
+}
+.log-list li + li { border-top: 1px dashed rgba(44, 56, 51, 0.6); }
+.log-list .who { flex: none; font-family: var(--font-display); color: var(--brass); }
+.log-list .what { min-width: 0; }
+.log-list li[data-kind="punish"] { border-left-color: var(--danger); }
+.log-list li[data-kind="skill"]  { border-left-color: var(--brass); }
+.log-list li[data-kind="uno"]    { border-left-color: #d9a441; }
+.log-list li[data-kind="system"],
+.log-list li[data-kind="system"] .who { color: var(--text-secondary); }
+.log-list li:first-child { background: rgba(211, 172, 90, 0.07); }

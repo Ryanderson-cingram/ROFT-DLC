@@ -2,7 +2,7 @@
 
 import type { Action, ClientSnapshot } from "@roft/engine";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { callEdge, humanReason } from "./api";
+import { callEdge, humanReason, newIdempotencyKey } from "./api";
 import { createClient } from "./supabase/client";
 
 /** 铃铛 payload（0001 迁移的 notify_room_event 触发器发的）。 */
@@ -87,7 +87,7 @@ export function useGameChannel(roomId: string | null) {
       if (!roomId) return;
       setError(null);
       // 同一次意图复用同一个 key：只有这样重试才安全，服务端会还回第一次的结果。
-      const idempotencyKey = crypto.randomUUID();
+      const idempotencyKey = newIdempotencyKey();
       const post = () =>
         callEdge<{ version: number }>("room-action", {
           roomId,

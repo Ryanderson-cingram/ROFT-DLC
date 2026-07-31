@@ -11,7 +11,8 @@ const FACE_LABEL: Partial<Record<Face, string>> = {
 };
 
 export const cardColorClass = (c: Card) => (c.color ? COLOR_CLASS[c.color] : "wild");
-export const cardFaceLabel = (c: Card) => FACE_LABEL[c.face] ?? c.face;
+export const faceLabel = (f: Face) => FACE_LABEL[f] ?? f;
+export const cardFaceLabel = (c: Card) => faceLabel(c.face);
 
 export const COLORS: { value: Color; label: string }[] = [
   { value: "R", label: "红" },

@@ -23,7 +23,7 @@ const G0 = c("G0#0", "G", "0");
 const Y2 = c("Y+2#0", "Y", "+2");
 const WILD = c("Wwild#1", null, "wild");
 const W4 = c("W+4#2", null, "+4");
-const HAND = [R3, R7, B7, G0, Y2, WILD, W4];
+export const HAND = [R3, R7, B7, G0, Y2, WILD, W4];
 
 const TOP = c("R7#1", "R", "7");
 
@@ -35,11 +35,12 @@ export const FIXTURE_NAMES: Record<string, string> = {
   "u-bai": "老白",
 };
 
-const PLAYERS: ClientSnapshot["players"] = [
-  { seat: 0, userId: "u-lin", handCount: 7, saidUno: false, skillId: "恒心", ascensions: 0 },
-  { seat: 1, userId: "u-chai", handCount: 2, saidUno: true, skillId: "劫营", ascensions: 0 },
-  { seat: 2, userId: "u-man", handCount: 4, saidUno: false, skillId: null, ascensions: 0 },
-  { seat: 3, userId: "u-bai", handCount: 11, saidUno: false, skillId: "血棘", ascensions: 2 },
+/** `skillId` 是**引擎 id**（`spade-1`…），不是中文名——快照里就是这个，抄中文名等于假数据。 */
+export const PLAYERS: ClientSnapshot["players"] = [
+  { seat: 0, userId: "u-lin", handCount: 7, saidUno: false, skillId: "spade-1", revealed: true, marks: {}, statuses: [], ascensions: 0 },
+  { seat: 1, userId: "u-chai", handCount: 2, saidUno: true, skillId: "diamond-10", revealed: true, marks: {}, statuses: [], ascensions: 0 },
+  { seat: 2, userId: "u-man", handCount: 4, saidUno: false, skillId: null, revealed: false, marks: {}, statuses: ["封印"], ascensions: 0 },
+  { seat: 3, userId: "u-bai", handCount: 11, saidUno: false, skillId: "diamond-2", revealed: true, marks: {}, statuses: [], ascensions: 2 },
 ];
 
 const BASE = {
@@ -49,7 +50,11 @@ const BASE = {
   players: PLAYERS,
   direction: 1,
   activeColor: "R",
-  discardTop: TOP,
+  playedTop: TOP,
+  followFace: TOP.face,
+  // 凛持恒心，不是并列——入口按钮不该露出来（引擎算好给 UI，客户端不判技能）
+  canPlayMultiple: false,
+  discardPile: [c("G2#d0", "G", "2"), c("Y9#d1", "Y", "9"), c("B5#d2", "B", "5")],
   drawPileCount: 38,
   // Q26 未裁定前引擎不发 callUno 提示，fixture 也不装作有——
   // 否则设计稿一直摆着一个真实产品里不存在的按钮。
@@ -112,7 +117,7 @@ export const fixtureC: ClientSnapshot = {
   version: 14,
   phase: "afterPlay",
   currentSeat: 2,
-  discardTop: c("B7#0", "B", "7"),
+  playedTop: c("B7#0", "B", "7"),
   activeColor: "B",
   pendingWindow: {
     type: "interrupt",
@@ -123,7 +128,8 @@ export const fixtureC: ClientSnapshot = {
   },
   windowId: "w14:interrupt",
   legalActions: [
-    { type: "respond", seat: 0, windowId: "w14:interrupt", choice: "interrupt" },
+    // 窗口类型叫 interrupt，choice 却是 "raid"（`actions/raid.ts::RAID`）——别混
+    { type: "respond", seat: 0, windowId: "w14:interrupt", choice: "raid", cardIds: [B7.id] },
     { type: "respond", seat: 0, windowId: "w14:interrupt", choice: "pass" },
   ],
 };
@@ -143,7 +149,7 @@ export const fixtureE: ClientSnapshot = {
   currentSeat: null,
   yourHand: [],
   players: PLAYERS.map((p) => ({ ...p, skillId: null, handCount: 7, ascensions: 0 })),
-  discardTop: null,
+  playedTop: null,
   activeColor: null,
   legalActions: [],
   disabledReasons: {},
@@ -151,3 +157,33 @@ export const fixtureE: ClientSnapshot = {
 
 export const FIXTURES = { a: fixtureA, b: fixtureB, c: fixtureC, d: fixtureD, e: fixtureE };
 export type FixtureKey = keyof typeof FIXTURES;
+
+/** 每一层都可选（`makeSnapshot({ pendingWindow: { type: "interrupt" } })`）。数组整体替换，不逐项合。 */
+type DeepPartial<T> = T extends readonly unknown[] | Date
+  ? T
+  : T extends object
+    ? { [K in keyof T]?: DeepPartial<T[K]> }
+    : T;
+
+/** 只合并「普通对象」；数组、Card、null 一律整体替换——合并数组的语义太容易猜错。 */
+function deepMerge<T>(base: T, patch: unknown): T {
+  if (patch === undefined) return base;
+  if (!isPlainObject(base) || !isPlainObject(patch)) return patch as T;
+  const out: Record<string, unknown> = { ...base };
+  for (const [k, v] of Object.entries(patch)) out[k] = deepMerge((base as Record<string, unknown>)[k], v);
+  return out as T;
+}
+const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
+
+/**
+ * 测试用快照工厂：默认是 fixture A（你的回合、7 张手牌、无窗口），只写差异。
+ *
+ * 返回值标成引擎导出的 `ClientSnapshot`——这是唯一挡得住契约漂移的东西（这份 fixture
+ * 当初就是因为没人跑而烂掉的）。手写整份快照的，改回来用这个。
+ *
+ * 数组不深合并：要改某个玩家就 `players: PLAYERS.map(p => p.seat === 0 ? { ...p, saidUno: true } : p)`。
+ */
+export function makeSnapshot(overrides: DeepPartial<ClientSnapshot> = {}): ClientSnapshot {
+  return deepMerge(fixtureA, overrides);
+}

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { callEdge, humanReason } from "@/lib/api";
+import { callEdge, humanReason, newIdempotencyKey } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
 import "./room.css";
 
@@ -119,7 +119,7 @@ export default function RoomPage() {
       roomId: room!.id,
       // 读实际 version，别假设 0——大厅里没人动它只是今天的事实，不是约定
       expectedVersion: room!.version,
-      idempotencyKey: crypto.randomUUID(),
+      idempotencyKey: newIdempotencyKey(),
       action: { type: "startGame", seat: mySeat?.seat ?? 0 },
     });
     if (!res.ok) setError(humanReason(res.reason));

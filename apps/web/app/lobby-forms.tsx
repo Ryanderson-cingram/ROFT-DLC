@@ -57,13 +57,24 @@ export default function LobbyForms() {
               <small className="opt-note">UNO 牌 + 首批 10 个技能。</small>
             </label>
             {/*
-              诸神包禁用中：牌堆里的毒与洗牌引擎还没有任何行为，选了会当普通变色牌打出去，
-              规则静默跑错——比报错更糟，牌桌上没人会发现。等这两张牌与四神实现后再开。
+              诸神包开放（2026-08-01）：`rulePack: "gods"` 今天**只多出 8 张牌**——毒 5 张 + 洗牌 3 张
+              （deck.ts::buildDeck），两张的行为与全部窗口都已落地并有引擎测试 + fuzz 覆盖。
+              四神与预兆♣9 还没有；技能抽池不看 rulePack（loadSkills 只按「机制齐备」筛），
+              所以两个包能抽到的技能**完全一样**。文案必须把这点说死，否则「诸神包」三个字
+              本身就是误导——名字来自 KB 的分包，不是「能抽到神」。
             */}
-            <label className="opt opt--disabled">
-              <input type="radio" name="pack" value="gods" disabled />
+            <label className="opt">
+              <input
+                type="radio"
+                name="pack"
+                value="gods"
+                checked={rulePack === "gods"}
+                onChange={() => setRulePack("gods")}
+              />
               <span className="opt-title">诸神包</span>
-              <small className="opt-note">开发中：毒 / 洗牌与四神尚未实现，暂不可选。</small>
+              <small className="opt-note">
+                基础包 + 毒 5 张 / 洗牌 3 张（共 172 张）。技能池与基础包相同——四神与预兆尚未实现。
+              </small>
             </label>
           </fieldset>
 
