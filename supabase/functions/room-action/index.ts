@@ -8,6 +8,10 @@ serveAuthed(async ({ body, user, svc }) => {
     idempotencyKey: string;
   };
   const action = body.action as Action;
+  // 浅校验，不是主防线：字段的形状与值域由引擎裁决（它才是权威，且单测覆盖得到）。
+  // 这里只挡「连 action 都不是个对象」——那会在下面读 `action.type` 时就抛，根本到不了引擎。
+  if (!action || typeof action !== "object" || typeof action.type !== "string")
+    return json({ reason: "bad_action" }, 400);
 
   // 幂等不在这里预检查——事务外的预检查挡不住两个同 key 的并发请求。
   // 由 RPC 里的唯一约束裁决，重放走 apply_room_action 的 unique_violation 分支。
