@@ -8,3 +8,8 @@ supabase/.temp/
 # Claude Code local state
 .claude/worktrees/
 .claude/settings.local.json
+
+# 本机装的第三方 skill（属工具而非项目产物）
+.agents/
+.claude/skills/
+skills-lock.json

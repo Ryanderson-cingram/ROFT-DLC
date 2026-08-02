@@ -52,7 +52,8 @@ describe("劫营♦10 的 worked example（07 号 spec）", () => {
     expect(b.activeColor).toBe("Y");
     // 跟牌目标就是这张牌本身，不是并列算好的 follow
     expect(b.activeFace).toBeNull();
-    expect(b.hands[0]).toHaveLength(3); // 剩的黄 2 + 红 9 + 摸的 1 张
+    // 整组（两张黄 2）已经全落地，所以手上只剩红 9 + 被打断摸的 1 张
+    expect(b.hands[0]).toHaveLength(2);
     expect(b.currentSeat).toBe(3);
     expect(r.state.phase).toBe("turnStart");
   });
@@ -86,51 +87,64 @@ describe("劫营♦10 的 worked example（07 号 spec）", () => {
   });
 });
 
-// ---------------------------------------------------------------- 逐张摆与截断位置
+// ---------------------------------------------------------------- 整组落地与「截组内任意一张」
 
-describe("并列逐张摆：截在哪一张就停在哪一张", () => {
-  /** C 手里只有 `raidCard` 一张能截，所以窗口只会在与它同色同数的那一张落地时开。 */
-  const upTo = (raidCard: Card) => {
+describe("并列整组落地：一次全出，落地后只截一次（04 ♥4 2026-08-02 改判）", () => {
+  /** C 手里只有 `raidCard` 一张能截。整组落地后开**一次**窗口，配的是组内任意一张。 */
+  const opened = (raidCard: Card) => {
     const group = six();
     const s = raidTable(
       [[...group, card("R", "9")], [card("R", "1")], [raidCard, card("R", "1")], [card("R", "1")]],
       { playedPile: [card("B", "7")] },
     );
-    return { group, opened: play(s, group).state };
+    return { group, state: play(s, group).state };
   };
 
-  it("截在第 1 张：已摆 1 张进牌河，剩下 5 张还在手上", () => {
-    const { group, opened } = upTo(card("B", "1"));
-    expect(opened.pendingWindow?.type).toBe("interrupt");
-    expect(opened.board!.playedPile[0].id).toBe(group[0].id);
-    expect(opened.board!.parallelPending!.remaining).toHaveLength(5);
+  it.each([
+    ["组内第 1 张", "1"],
+    ["组内中间那张", "9"],
+    ["组内最后一张", "5"],
+  ] as const)("配上%s也能截：整组早已落地，窗口只开一次", (_name, face) => {
+    const { group, state } = opened(card("B", face));
+    expect(state.pendingWindow?.type).toBe("interrupt");
+    // 六张全在牌河，牌顶是提交顺序的最后一张；手上只剩那张红 9
+    expect(state.board!.playedPile[0].id).toBe(group[5].id);
+    expect(state.board!.hands[0]).toHaveLength(1);
+    expect(state.board!.parallelPending!.cards).toHaveLength(6);
   });
 
-  it("截在中间那张（第 3 张蓝 9）：前 3 张进牌河，后 3 张还在手上", () => {
-    const { group, opened } = upTo(card("B", "9"));
-    expect(opened.board!.playedPile.slice(0, 3).map((c) => c.id)).toEqual([group[2].id, group[1].id, group[0].id]);
-    expect(opened.board!.parallelPending!.remaining).toEqual(group.slice(3).map((c) => c.id));
-    // 未摆的牌从头到尾没离手
-    expect(opened.board!.hands[0]).toHaveLength(4);
-  });
-
-  it("截在最后一张：六张都进了牌河，remaining 为空，窗口照开", () => {
-    const { group, opened } = upTo(card("B", "5"));
-    expect(opened.pendingWindow?.type).toBe("interrupt");
-    expect(opened.board!.playedPile[0].id).toBe(group[5].id);
-    expect(opened.board!.parallelPending!.remaining).toEqual([]);
-    expect(opened.board!.hands[0]).toHaveLength(1); // 只剩那张红 9
-  });
-
-  it("被截时已摆的留牌河、未摆的留手上，跟牌目标是劫营那张（不是并列算的最大数）", () => {
+  it("被截：整组留在牌河（没有「未摆的回手」了），跟牌目标是劫营那张", () => {
     const raidCard = card("B", "9");
-    const { opened } = upTo(raidCard);
-    const b = respond(opened, 2, "raid", [raidCard.id]).state.board!;
+    const { state } = opened(raidCard);
+    const b = respond(state, 2, "raid", [raidCard.id]).state.board!;
     expect(b.playedPile[0].id).toBe(raidCard.id);
     expect(b.activeFace).toBeNull();
     expect(b.parallelPending).toBeUndefined();
-    // 后 3 张 + 红 9 留在手上，另加被打断摸的 1 张
-    expect(b.hands[0]).toHaveLength(5);
+    // 手上只剩那张红 9 + 被打断摸的 1 张 = 2（逐张模型下这里是 5）
+    expect(b.hands[0]).toHaveLength(2);
+  });
+
+  it("放弃 → 这次并列就结束了，回合交出去（不再有「下一张」）", () => {
+    const { state } = opened(card("B", "9"));
+    const r = respond(state, 2, "pass");
+    expect(r.state.pendingWindow).toBeUndefined();
+    expect(r.state.board!.parallelPending).toBeUndefined();
+    expect(r.state.board!.currentSeat).toBe(1);
+  });
+
+  it("一回合最多截一次并列：手上两张对得上也只有一个窗口", () => {
+    const group = six();
+    // 座位 2 手上蓝 1 与蓝 9 都配得上组内的牌
+    const s = raidTable(
+      [[...group, card("R", "9")], [card("R", "1")], [card("B", "1"), card("B", "9")], [card("R", "1")]],
+      { playedPile: [card("B", "7")] },
+    );
+    const first = play(s, group).state;
+    expect(first.pendingWindow?.type).toBe("interrupt");
+    // 放过这一个，就没有第二个了
+    const after = respond(first, 2, "pass").state;
+    expect(after.pendingWindow).toBeUndefined();
+    expect(after.board!.currentSeat).toBe(1);
   });
 });
 
@@ -193,14 +207,16 @@ describe("没人截得动就不开窗口——一次 apply 摆完，version 只 
 
   // 逐张模型的推论：手上还捏着牌就不算收官，所以收官组的**前几张**照样可被截住。
   // 原子模型下「多张收官不可打断」是整组一起说的，逐张之后只剩最后那一张享有这条豁免。
-  it("收官组的前几张仍可被截：那一刻他还没赢", () => {
+  // 2026-08-02 拍板：整组一次打空手牌 → 照 U5c 当场获胜，劫营窗口**根本不开**
+  it("并列收官截不了：整组落地即赢，窗口不开（逐张模型下这里会开一个）", () => {
     const group = six();
     const s = raidTable([group, [card("R", "1")], [card("B", "1")], [card("R", "1")]], {
       playedPile: [card("B", "7")],
     });
     const r = play(s, group);
-    expect(r.state.pendingWindow?.type).toBe("interrupt");
-    expect(r.state.board!.winner).toBeUndefined();
+    expect(r.state.pendingWindow).toBeUndefined();
+    expect(r.state.board!.winner).toBe(0);
+    expect(r.state.phase).toBe("finished");
   });
 });
 
@@ -309,8 +325,8 @@ describe("单张出牌也能被截（不再限于并列/神化的多打）", () 
 
 // ------------------------------------------------- 窗口不吞掉提交前的两个选择（B5/B7）
 
-describe("续摆要带上声明时的 chosenColor（B7）", () => {
-  /** 四张同数（跟色由 A 选红），C 只有绿 2 —— 窗口在第 2 张落地时开。 */
+describe("整组落地要带上声明时的 chosenColor（B7）", () => {
+  /** 四张同数（跟色由 A 选红），C 只有绿 2 —— 整组落地后开一次窗口，绿 2 配得上组内那张绿 2。 */
   const setup = () => {
     const four = [card("R", "2"), card("G", "2"), card("B", "2"), card("Y", "2")];
     const s = raidTable([[...four, card("R", "9")], [card("R", "1")], [card("G", "2"), card("R", "8")], [card("R", "1")]]);
@@ -322,32 +338,31 @@ describe("续摆要带上声明时的 chosenColor（B7）", () => {
     return { four, opened };
   };
 
-  it("窗口确实开在第 2 张（绿 2）上", () => {
+  it("整组一次落地：四张全进牌河，牌顶是提交顺序的最后一张", () => {
     const { four, opened } = setup();
     expect(opened.pendingWindow?.type).toBe("interrupt");
-    expect(opened.board!.playedPile[0].id).toBe(four[1].id);
+    expect(opened.board!.playedPile[0].id).toBe(four[3].id);
+    expect(opened.board!.hands[0]).toHaveLength(1); // 只剩红 9
   });
 
-  it("B5：喊 UNO 是另一个动作——窗口挂着时他手上 3 张喊不得，续摆完到 1 张才点得成", () => {
+  it("B5：喊 UNO 是另一个动作——窗口挂着时手上恰 1 张，点得成", () => {
     const { opened } = setup();
-    expect(opened.board!.hands[0]).toHaveLength(3); // 还没摆完，这时候点就是虚喊
-    const r = respond(opened, 2, "pass");
-    expect(r.rejected).toBeUndefined();
-    expect(r.state.board!.hands[0]).toHaveLength(1);
-    expect(r.state.board!.saidUno[0]).toBe(false);
-    const said = applyAction(r.state, { type: "callUno", seat: 0 }, ctx());
+    expect(opened.board!.hands[0]).toHaveLength(1);
+    const said = applyAction(opened, { type: "callUno", seat: 0 }, ctx());
     expect(said.rejected).toBeUndefined();
     expect(said.state.board!.saidUno[0]).toBe(true);
     expect(said.events.map((e) => e.type)).toEqual(["unoCalled"]);
   });
 
-  it("B7：续摆的 cardPlayed 仍带着 chosenColor，事件流与牌桌一致", () => {
-    const { opened } = setup();
+  it("B7：整组那一条 cardPlayed 带着 chosenColor，事件流与牌桌一致", () => {
+    const { four, opened } = setup();
+    // 整组只发一条 cardPlayed（逐张模型下会拆成两条：被截前的一半 + 续摆的一半）
     const r = respond(opened, 2, "pass");
-    const played = r.events.filter((e) => e.type === "cardPlayed");
-    expect(played).toHaveLength(1);
-    expect(played[0].public.chosenColor).toBe("R");
+    // 放弃之后不再有新的 cardPlayed——牌早就落地了
+    expect(r.events.filter((e) => e.type === "cardPlayed")).toHaveLength(0);
     expect(r.state.board!.activeColor).toBe("R");
+    expect(r.state.board!.playedPile.slice(0, 4).map((c) => c.id))
+      .toEqual([...four].reverse().map((c) => c.id));
   });
 });
 
@@ -392,18 +407,18 @@ describe("打断牌只能截刚摆的那张", () => {
     expect(respond(opened([]), 1, "raid", []).rejected?.reason).toBe("not_your_window");
   });
 
-  it("放弃 → 接着摆剩下的，摆完轮到出牌者的下家 B", () => {
+  it("放弃 → 这次并列收尾，轮到出牌者的下家 B", () => {
     const r = respond(midGroup(), 2, "pass");
     expect(r.rejected).toBeUndefined();
     expect(r.state.pendingWindow).toBeUndefined();
     expect(r.state.board!.parallelPending).toBeUndefined();
-    // 六张全摆完了：跟牌目标按并列的三形状表定（同色六张跟最大的数）
+    // 跟牌目标在整组落地时就定好了（同色六张跟最大的数），放弃只是把回合交出去
     expect(r.state.board!.activeFace).toBe("9");
     expect(r.state.board!.hands[0]).toHaveLength(1);
     expect(r.state.board!.currentSeat).toBe(1);
   });
 
-  it("超时 = 没人截，按 defaultChoice 接着摆", () => {
+  it("超时 = 没人截，按 defaultChoice 收尾", () => {
     const s = midGroup();
     const late = ctx(undefined, "2026-07-28T12:01:00.000Z");
     const r = applyAction(s, { type: "claimTimeout", seat: 1, windowId: `w${s.version}:interrupt` }, late);
@@ -412,11 +427,11 @@ describe("打断牌只能截刚摆的那张", () => {
     expect(r.state.board!.currentSeat).toBe(1);
   });
 
-  // 放弃的是**这一张**的机会，不是整次并列的：每张落地都重新问一遍（01 号 spec §3）
-  it("对第 1 张放弃，第 2 张落地照样再开一次窗口", () => {
+  // 2026-08-02 改判：并列整组落地、只开一次窗口，所以放弃 = 整次并列的机会都放掉了
+  it("放弃就没有第二次机会了（逐张模型下这里会再开一个窗口）", () => {
     const r = respond(opened([]), 2, "pass");
-    expect(r.state.pendingWindow?.type).toBe("interrupt");
-    expect(r.state.board!.parallelPending!.remaining).toEqual([]);
+    expect(r.state.pendingWindow).toBeUndefined();
+    expect(r.state.board!.parallelPending).toBeUndefined();
   });
 });
 
@@ -431,8 +446,8 @@ describe("03 glossary：可响应并列的任意一张", () => {
       { playedPile: [card("B", "7")] },
     );
     const opened = play(s, group).state;
-    // 窗口正是在第 4 张落地时开的
-    expect(opened.board!.playedPile[0].id).toBe(group[3].id);
+    // 整组落地后开一次窗口，牌顶是提交顺序的最后一张；配得上组内任意一张即可截
+    expect(opened.board!.playedPile[0].id).toBe(group[5].id);
     const r = respond(opened, 2, "raid", [b2.id]);
     expect(r.rejected).toBeUndefined();
     expect(r.state.board!.playedPile[0].id).toBe(b2.id);
@@ -474,13 +489,14 @@ describe("窗口挂着时的可点性与隐私", () => {
     expect(called.rejected).toBeUndefined();
   });
 
-  it("还没摆的牌是暗信息：快照里搜不到 parallelPending", () => {
+  // 整组已经全在牌河（都发过 cardPlayed），所以 `cards` 本身不再是暗信息；
+  // 中间态照旧不投影——快照里没有 `parallelPending` 这个键
+  it("中间态不进快照：搜不到 parallelPending", () => {
     const { opened } = setup();
-    const remaining = opened.board!.parallelPending!.remaining[0];
+    expect(opened.board!.parallelPending!.cards.length).toBeGreaterThan(0);
     for (const seat of [1, 2, 3]) {
       const snap = JSON.stringify(projectView(opened, seat));
       expect(snap).not.toContain("parallelPending");
-      expect(snap).not.toContain(remaining);
     }
   });
 });
@@ -506,7 +522,7 @@ describe("06-Q56：被打断者摸的 1 张按「他人技能」计", () => {
         skills: [skill, null, "diamond-10", null],
         revealed: [skill !== null, false, true, false],
         drawPile: Array.from({ length: 10 }, () => card("G", "7")),
-        parallelPending: { seat: 0, remaining: [rest.id], follow: { color: "Y", face: "2" } },
+        parallelPending: { seat: 0, cards: [y2] },
       },
       {
         phase: "afterPlay",

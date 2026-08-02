@@ -13,7 +13,7 @@ import { openRaidWindow, raidActors } from "./raid.ts";
 import { playShuffleCard } from "./shuffle-card.ts";
 import type { SkillData } from "../skills/draw-passives.ts";
 import type {
-  ApplyResult, Board, Card, Color, Ctx, EngineEvent, Face, GameState, ParallelPending, ShuffleChoice,
+  ApplyResult, Board, Card, Color, Ctx, EngineEvent, Face, GameState, ShuffleChoice,
 } from "../types.ts";
 
 /** 打完之后下家要跟的目标。`face: null` = 跟牌堆顶那张的牌面（单张出牌一律如此）。 */
@@ -115,73 +115,61 @@ function playParallel(
   // 可观察事实，所以校验的是 cards[0]——4 张/6 张形状里组内并不一致，别的牌接得上不算数。
   if (!isPlayable(cards[0], b.playedPile[0], b.activeColor, b.activeFace))
     return reject(state, "illegal_card");
-  // 2026-07-30 裁定：形状**一次校验**（不成形状整组拒，一张都不摆），然后逐张摆
-  const pending: ParallelPending = {
-    seat: action.seat,
-    remaining: cards.map((c) => c.id),
-    follow,
-    declared: { chosenColor: action.chosenColor },
-  };
-  return placeParallel(state, b, pending, ctx, data);
+  // 形状**一次校验**（不成形状整组拒，一张都不摆），然后整组一次落地
+  return placeParallel(state, b, action.seat, cards, follow, ctx, action.chosenColor, data);
 }
 
 /**
- * 并列逐张摆牌（01 号 spec 的 2026-07-30 裁定）。每摆出一张就问一次「有没有人能劫营截这张」——
- * 没有可截的人就接着摆下一张，所以**绝大多数对局里整个循环在一次 apply 内跑完、version 只 +1**，
- * 结果与原来的原子模型完全一致。
+ * 并列整组落地（04 ♥4 的 2026-08-02 改判，取代原来的逐张模型）。
  *
- * 被截时未摆的牌留在手上（它们从头到尾没离手），中间态挂进 `board.parallelPending`，
- * 窗口 pass/超时后 `raid.ts::settleRaid` 拿它回到这里接着摆。
+ * 三步，顺序就是裁定的顺序：
+ * 1. **整组一次落地**，中途不给任何窗口——摆的过程不再是可观察的中间态
+ * 2. 打空手牌 → **当场获胜**（U5c：收官判在末牌离手那一刻），劫营窗口根本不开。
+ *    这是明知的取舍：并列由此成为不可拦截的收官手段
+ * 3. 否则开**一次**劫营窗口，触发面是**组内任意一张**——劫营者手上有牌与这一组里
+ *    任何一张同色同数即可截。一回合最多截一次并列
+ *
+ * ⚠️ 神化连出（一回合出多张）**不走这条**：那是多轮出牌，仍逐张、每张都可被打断（01-G5）。
+ * 本批未实现；实现时另起一条路径，别把这里改回逐张。
  */
 export function placeParallel(
   state: GameState,
   b: Board,
-  pending: ParallelPending,
+  seat: number,
+  cards: Card[],
+  follow: Follow,
   ctx: Ctx,
+  chosenColor?: Color,
   data: SkillData = SKILL_DATA,
 ): ApplyResult {
-  // 声明这一组时带的定色随中间态一起存（`ParallelPending.declared`）：续摆时要原样透传，
-  // 否则「事件里有没有定色」会取决于对手有没有劫营。
-  const { seat, follow, declared = {} } = pending;
-  const placed: Card[] = [];
-  let remaining = pending.remaining;
-  let board = b;
+  const ids = new Set(cards.map((c) => c.id));
+  const board: Board = {
+    ...b,
+    hands: b.hands.map((h, i) => (i === seat ? h.filter((c) => !ids.has(c.id)) : h)),
+    // `playedPile[0]` 是牌顶：整组按提交顺序压上去，最后一张在最上面
+    playedPile: [...[...cards].reverse(), ...b.playedPile],
+    // 跟牌目标按形状表定（被截的话 settleRaid 会改成劫营那张）
+    activeColor: follow.color,
+    activeFace: follow.face,
+    drawnPlayable: null,
+  };
+  const events: EngineEvent[] = [playedEvent(seat, cards, chosenColor)];
 
-  while (remaining.length > 0) {
-    const card = board.hands[seat].find((c) => c.id === remaining[0]);
-    // 不可达：未摆的牌一直在手上，窗口期间也没有哪个动作能拿走它
-    if (!card) return reject(state, "not_in_hand");
-    remaining = remaining.slice(1);
-    placed.push(card);
-    board = {
-      ...board,
-      hands: board.hands.map((h, i) => (i === seat ? h.filter((c) => c.id !== card.id) : h)),
-      playedPile: [card, ...board.playedPile],
-    };
+  // U2：多张收官直接获胜，且无需喊 UNO；U5「末牌必须数字牌」天然满足（并列全是数字牌）。
+  // 2026-08-02：收官这一步**排在劫营窗口之前**，所以整组打空手牌截不了
+  if (board.hands[seat].length === 0)
+    return { state: commit(state, { ...board, winner: seat }, "finished"), events };
 
-    // 07 号 spec：刚摆的这张落地后给劫营♦10 一次机会。收官那一张不给——手牌摆空即终局，
-    // 游戏已经结束了，没有「打断当前轮」这回事。
-    const won = remaining.length === 0 && board.hands[seat].length === 0;
-    const actors = won ? [] : raidActors(board, seat, card, data);
-    if (actors.length > 0)
-      return openRaidWindow(
-        state, { ...board, parallelPending: { ...pending, remaining } }, seat, actors, card, ctx,
-        [playedEvent(seat, placed, declared.chosenColor)],
-      );
-  }
+  const actors = raidActors(board, seat, cards, data);
+  if (actors.length > 0)
+    return openRaidWindow(
+      state, { ...board, parallelPending: { seat, cards } }, seat, actors, cards, ctx, events,
+    );
 
-  const { parallelPending: _done, ...settled } = board;
-  // 摆完了才按形状定跟牌目标（三形状表）——中途被截的话跟的是劫营那张，不是这里的 follow
-  const finished: Board = { ...settled, activeColor: follow.color, activeFace: follow.face, drawnPlayable: null };
-  const events: EngineEvent[] = [playedEvent(seat, placed, declared.chosenColor)];
-
-  // U2：多张收官直接获胜，且无需喊 UNO；U5「末牌必须数字牌」天然满足（并列全是数字牌）
-  if (finished.hands[seat].length === 0)
-    return { state: commit(state, { ...finished, winner: seat }, "finished"), events };
-  return { state: commit(state, { ...finished, ...passTurn(finished, seat) }, "turnStart"), events };
+  return { state: commit(state, { ...board, ...passTurn(board, ctx.now, seat) }, "turnStart"), events };
 }
 
-/** 逐张模型下 `cardPlayed` 带的是**这一次 apply 里真的摆出去的**那几张（被截则只有前半截）。 */
+/** `cardPlayed` 带的是这一组整个（并列已是原子的，不会再出现「只发前半截」）。 */
 const playedEvent = (seat: number, cards: Card[], chosenColor?: Color): EngineEvent => ({
   type: "cardPlayed",
   public: { seat, cards, chosenColor: chosenColor ?? null },
@@ -261,7 +249,8 @@ function resolvePlay(
     activeFace: follow.face,
     direction: card.face === "rev" ? ((b.direction * -1) as 1 | -1) : b.direction,
     drawnPlayable: null,
-    punish: face && !dice ? extendChain(b.punish, seat, face) : b.punish,
+    // 段色 = follow.color：+2 就是牌本身的色，+4 是打出者定的色（无色牌必带 chosenColor）
+    punish: face && !dice ? extendChain(b.punish, seat, face, follow.color) : b.punish,
     // 洗牌的三选一随牌桌走到 settlePlay（它拿不到 action）。三条结算路径各自清掉它。
     ...(action.shuffleChoice && { shufflePending: { seat, choice: action.shuffleChoice } }),
   };
@@ -269,9 +258,9 @@ function resolvePlay(
 
   // 2026-07-31 裁定：**任何人打出任何一张牌**落地后都给劫营♦10 一次机会（不再限于多打）。
   // 打空手牌那一张不给：要么当场终局，要么走 U5 的代价摸牌，都没有「打断当前轮」可言。
-  const actors = played.hands[seat].length === 0 ? [] : raidActors(played, seat, card, data);
+  const actors = played.hands[seat].length === 0 ? [] : raidActors(played, seat, [card], data);
   if (actors.length > 0)
-    return openRaidWindow(state, { ...played, playPending: { seat, dice } }, seat, actors, card, ctx, events);
+    return openRaidWindow(state, { ...played, playPending: { seat, dice } }, seat, actors, [card], ctx, events);
 
   return settlePlay(state, played, seat, card, dice, ctx, events, data);
 }
@@ -410,7 +399,7 @@ export function settleAfterFace(
   // 「停」跳过下家的回合开始窗口（U3 + 传统 UNO）
   const step = card.face === "skip" ? 2 : 1;
   return {
-    state: commit(state, { ...played, ...passTurn(played, seat, step) }, "turnStart"),
+    state: commit(state, { ...played, ...passTurn(played, ctx.now, seat, step) }, "turnStart"),
     events,
   };
 }

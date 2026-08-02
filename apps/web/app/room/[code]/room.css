@@ -27,7 +27,11 @@
 
 .seats { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
 @media (min-width: 760px) { .seats { grid-template-columns: repeat(4, 1fr); } }
-.seat {
+/* `.seatcard` 而不是 `.seat`：`.seat` 是牌桌那条轮转轨上的座位卡（globals.css），
+   两边同名就会互相污染——轨的 `.seat { width: 168px; flex: none }` 落到这里，
+   格子里的卡就不再撑满 `1fr`，看起来像「间隔忽大忽小」。App Router 客户端导航后
+   两页的 CSS 还同时留在文档里，所以反过来也一样：等候室的 `.seat` 会去撑宽轨上的座位卡。 */
+.seatcard {
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
@@ -37,8 +41,8 @@
   border-radius: var(--radius-panel);
   background: var(--surface-2);
 }
-.seat--self { border-color: var(--brass); }
-.seat--empty {
+.seatcard--self { border-color: var(--brass); }
+.seatcard--empty {
   border-style: dashed;
   border-color: var(--brass-dim);
   background: transparent;
@@ -47,14 +51,14 @@
   text-align: center;
   color: var(--text-secondary);
 }
-.seat .no {
+.seatcard .no {
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.18em;
   color: var(--text-secondary);
 }
-.seat .who { display: flex; align-items: center; gap: var(--sp-2); font-family: var(--font-display); font-size: 18px; }
-.seat .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: auto; }
+.seatcard .who { display: flex; align-items: center; gap: var(--sp-2); font-family: var(--font-display); font-size: 18px; }
+.seatcard .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: auto; }
 
 .summary { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); }
 .summary div { font-size: 14px; }

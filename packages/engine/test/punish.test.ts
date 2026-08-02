@@ -32,7 +32,7 @@ describe("punish stacking (01 §5)", () => {
     expect(w.deadline).toBe("2026-07-28T12:00:30.000Z");
     expect(after.board!.punish).toEqual({
       initiator: 0,
-      segments: [{ seat: 0, face: "+2", draw: 2 }],
+      segments: [{ seat: 0, face: "+2", draw: 2, color: "R" }],
       total: 2,
     });
   });
@@ -50,8 +50,9 @@ describe("punish stacking (01 §5)", () => {
     const p = r.state.board!.punish!;
     expect(p.initiator).toBe(0);
     expect(p.segments).toEqual([
-      { seat: 0, face: "+2", draw: 2 },
-      { seat: 1, face: "+4", draw: 4 },
+      { seat: 0, face: "+2", draw: 2, color: "R" },
+      // +4 那段记的是打出者定的色（这里定了绿）
+      { seat: 1, face: "+4", draw: 4, color: "G" },
     ]);
     expect(p.total).toBe(6);
     expect(r.state.pendingWindow!.actors).toEqual([2]);

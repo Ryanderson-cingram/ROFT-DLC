@@ -26,6 +26,7 @@ export default function RoomPage() {
   const [names, setNames] = useState<Record<string, string>>({});
   const [online, setOnline] = useState<string[]>([]);
   const [copied, setCopied] = useState(false);
+  const [copyHint, setCopyHint] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
@@ -126,9 +127,19 @@ export default function RoomPage() {
     else router.push(`/game/${code}`);
   }
 
+  /**
+   * 剪贴板 API **只在安全上下文里存在**：手机连局域网 IP 调试走的是 http，
+   * `navigator.clipboard` 直接是 undefined，原来那句会抛出去变成未捕获的 rejection。
+   * 复制不了不是错误状态——房间码本来就用 64px 摆在上面，退回「手动复制」即可。
+   */
   async function copyCode() {
-    await navigator.clipboard.writeText(code);
-    setCopied(true);
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+    } catch {
+      setCopyHint("长按上面的房间码手动复制（当前连接非 https，浏览器不给用剪贴板）");
+      return;
+    }
     setTimeout(() => setCopied(false), 2000);
   }
 
@@ -159,7 +170,7 @@ export default function RoomPage() {
           <button className="btn" onClick={copyCode}>
             {copied ? "已复制" : "复制房间码"}
           </button>
-          <p className="hint">把这 6 位发给朋友，他们在大厅输入即可入座。</p>
+          <p className="hint">{copyHint ?? "把这 6 位发给朋友，他们在大厅输入即可入座。"}</p>
         </section>
 
         <section>
@@ -170,7 +181,7 @@ export default function RoomPage() {
               const seat = seats.find((s) => s.seat === i);
               if (!seat)
                 return (
-                  <div className="seat seat--empty" key={i}>
+                  <div className="seatcard seatcard--empty" key={i}>
                     <span className="no">座位 {i + 1}</span>
                     <span>空位</span>
                     {i === seats.length && <small className="hint">再来一人就能凑满四人桌</small>}
@@ -179,7 +190,7 @@ export default function RoomPage() {
               const isOnline = online.includes(seat.user_id);
               const ready = seat.ready || seat.user_id === room.created_by;
               return (
-                <div className={`seat${seat.user_id === me ? " seat--self" : ""}`} key={i}>
+                <div className={`seatcard${seat.user_id === me ? " seatcard--self" : ""}`} key={i}>
                   <span className="no">座位 {i + 1}</span>
                   <span className="who">
                     <span className={`dot${isOnline ? "" : " dot--off"}`} />

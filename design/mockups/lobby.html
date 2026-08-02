@@ -27,34 +27,45 @@
   .me { display: flex; align-items: center; gap: var(--sp-2); font-size: 14px; }
   /* 开场：扇形牌 + 一句话定位 */
   .hero { padding: var(--sp-5) 0 var(--sp-4); text-align: center; }
-  .fan { display: flex; justify-content: center; margin-bottom: var(--sp-4); height: 96px; }
-  .fan .card { margin: 0 -14px; transform-origin: 50% 120%; }
-  .fan .card:nth-child(1) { transform: rotate(-14deg) translateY(6px); }
-  .fan .card:nth-child(2) { transform: rotate(-7deg) translateY(1px); }
-  .fan .card:nth-child(3) { transform: rotate(0deg) translateY(-3px); }
-  .fan .card:nth-child(4) { transform: rotate(7deg) translateY(1px); }
-  .fan .card:nth-child(5) { transform: rotate(14deg) translateY(6px); }
+  /* 全页唯一的画面：五张牌摊在最上面。牌放大一档、叠得更紧，
+     进门第一眼就知道这是张牌桌（--card-w 一改，牌面字号跟着等比走） */
+  .cardfan { display: flex; justify-content: center; margin-bottom: var(--sp-4); height: 104px; }
+  /* 叠 8px 就够：再往里收，中间三张的大字会被邻牌盖掉，扇形就成了一团 */
+  .cardfan .card { --card-w: 62px; --card-h: 93px; margin: 0 -8px; transform-origin: 50% 120%; }
+  .cardfan .card:nth-child(1) { transform: rotate(-14deg) translateY(6px); }
+  .cardfan .card:nth-child(2) { transform: rotate(-7deg) translateY(1px); }
+  .cardfan .card:nth-child(3) { transform: rotate(0deg) translateY(-3px); }
+  .cardfan .card:nth-child(4) { transform: rotate(7deg) translateY(1px); }
+  .cardfan .card:nth-child(5) { transform: rotate(14deg) translateY(6px); }
   .hero h1 { font-size: clamp(28px, 9vw, 40px); line-height: 1.2; }
   .hero p { margin: var(--sp-2) 0 0; color: var(--text-secondary); }
 
   .cols { display: grid; gap: var(--sp-3); }
   @media (min-width: 760px) { .cols { grid-template-columns: 1.4fr 1fr; align-items: start; } }
 
-  /* 规则包选项：整块可点，≥ 56px */
+  /* 规则包选项：整块可点，≥ 56px。选中态是**选牌**的感觉——边亮、底染、微微抬起 */
   .opt {
     display: block;
     min-height: 56px;
     padding: var(--sp-2) var(--sp-3);
-    border: 1px solid #2c3833;
+    border: 1px solid var(--edge);
     border-radius: var(--radius-card);
     background: var(--surface-2);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
     cursor: pointer;
+    transition: border-color 0.16s ease, background 0.16s ease, transform 0.09s var(--ease-tactile);
   }
+  .opt:hover { border-color: var(--piao-dim); }
+  .opt:active { transform: translateY(1px); }
   .opt + .opt { margin-top: var(--sp-2); }
   .opt input { accent-color: var(--brass); margin-right: var(--sp-2); }
   .opt-title { font-family: var(--font-display); font-size: 16px; }
   .opt-note { display: block; margin-left: 24px; font-size: 13px; color: var(--text-secondary); }
-  .opt:has(input:checked) { border-color: var(--brass); background: rgba(211, 172, 90, 0.09); }
+  .opt:has(input:checked) {
+    border-color: var(--piao);
+    background: rgba(99, 210, 195, 0.1);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 6px 18px -14px var(--piao);
+  }
 
   fieldset { margin: 0 0 var(--sp-3); padding: 0; border: 0; }
   legend { padding: 0 0 var(--sp-2); font-size: 13px; color: var(--text-secondary); }
@@ -65,7 +76,7 @@
     justify-content: space-between;
     min-height: 48px;
     padding: 0 var(--sp-3);
-    border: 1px dashed #2c3833;
+    border: 1px dashed var(--edge);
     border-radius: var(--radius-card);
     color: var(--text-secondary);
   }
@@ -85,7 +96,8 @@
     text-align: center;
     text-transform: uppercase;
   }
-  .code-input::placeholder { color: #5c6862; letter-spacing: 0.32em; }
+  .code-input::placeholder { color: #55637a; letter-spacing: 0.32em; }
+  .code-input:focus { border-color: var(--piao); box-shadow: 0 0 0 3px rgba(99, 210, 195, 0.14); outline: none; }
 
   .btn--block { width: 100%; margin-top: var(--sp-3); }
 
@@ -101,8 +113,10 @@
     border-radius: var(--radius-panel);
     color: var(--text-primary);
     text-decoration: none;
+    transition: border-color 0.16s ease, background 0.16s ease;
   }
-  .more:hover { border-color: var(--brass); }
+  .more:hover { border-color: var(--piao-dim); background: var(--surface-2); }
+  .more:hover .arrow { color: var(--piao); }
   .more .arrow { color: var(--brass); font-family: var(--font-mono); }
 </style>
 </head>
@@ -116,7 +130,7 @@
 <main class="wrap">
 
   <section class="hero">
-    <div class="fan" aria-hidden="true">
+    <div class="cardfan" aria-hidden="true">
       <span class="card" data-color="green" data-face="7"></span>
       <span class="card" data-color="yellow" data-face="+2"></span>
       <span class="card" data-color="wild" data-face="+4"></span>

@@ -1,12 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import "./login.css";
 
 export default function LoginPage() {
   const router = useRouter();
+  const nickId = useId();
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -42,7 +43,7 @@ export default function LoginPage() {
 
   return (
     <main className="wrap login">
-      <div className="fan" aria-hidden="true">
+      <div className="cardfan" aria-hidden="true">
         <span className="card" data-color="green" data-face="7" />
         <span className="card" data-color="yellow" data-face="+2" />
         <span className="card" data-color="wild" data-face="+4" />
@@ -52,11 +53,11 @@ export default function LoginPage() {
       <p className="hint">同桌的人靠这个认出你。不用注册，也不用邮箱。</p>
 
       <form className="panel" onSubmit={submit}>
-        <label htmlFor="nickname" className="hint">
+        <label htmlFor={nickId} className="hint">
           昵称（2–24 个字）
         </label>
         <input
-          id="nickname"
+          id={nickId}
           className="name-input"
           type="text"
           maxLength={24}

@@ -46,7 +46,7 @@ function openWindow(
   state: GameState,
   board: Board,
   pending: ShufflePending,
-  w: { type: string; actors: number[]; defaultChoice: string; event: string },
+  w: { type: string; actors: number[]; defaultChoice: string; event: string; hideActors?: boolean },
   ctx: Ctx,
   before: EngineEvent[],
 ): ApplyResult {
@@ -59,7 +59,15 @@ function openWindow(
     state: next,
     events: [
       ...before,
-      { type: w.event, public: { windowId: windowIdOf(next), actors: w.actors, seat: pending.seat, deadline } },
+      {
+        type: w.event,
+        // `hideActors`：洗牌③那一串 actors 就是「谁手上有洗牌牌」，而手牌是私有的——
+        // 放进 public payload 等于当众念出别人的手牌内容（投影侧的遮罩见 index.ts::projectWindow）
+        public: {
+          windowId: windowIdOf(next), seat: pending.seat, deadline,
+          ...(w.hideActors ? {} : { actors: w.actors }),
+        },
+      },
     ],
   };
 }
@@ -102,7 +110,7 @@ export function playShuffleCard(
   if (actors.length > 0)
     return openWindow(
       state, b, { seat },
-      { type: "shuffleCancel", actors, defaultChoice: PASS, event: "shuffleCancelWindowOpened" },
+      { type: "shuffleCancel", actors, defaultChoice: PASS, event: "shuffleCancelWindowOpened", hideActors: true },
       ctx, before,
     );
   return redistribute(state, b, seat, ctx, before, data);
@@ -240,7 +248,7 @@ export function settleShuffleCancel(
   const all = [...events, ...v.events, ...c.events];
 
   // 01-G5：取消者**不进入自己的回合**，从他的下家继续出牌
-  return { state: commit(state, { ...c.board, ...passTurn(c.board, action.seat) }, "turnStart"), events: all };
+  return { state: commit(state, { ...c.board, ...passTurn(c.board, ctx.now, action.seat) }, "turnStart"), events: all };
 }
 
 /**

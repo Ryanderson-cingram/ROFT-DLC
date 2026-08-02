@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { applyAction, legalActions, projectView } from "../../src/index.ts";
 import type { Board, Card, Color, GameState } from "../../src/types.ts";
-import { card, ctx, table } from "../helpers.ts";
+import { card, ctx, ctxAfter, table } from "../helpers.ts";
 
 /** 座位 0 持并列并已亮出；牌顶默认蓝 2。 */
 const par = (hands: Card[][], over: Partial<Board> = {}, state: Partial<GameState> = {}) =>
@@ -180,7 +180,8 @@ describe("并列收官（U2 / U6）", () => {
     const s = par([[...cards, card("R", "9")], [card("R", "1")], [card("R", "1")]]);
     const r = play(s, cards);
     expect(r.state.board!.saidUno[0]).toBe(false);
-    const caught = applyAction(r.state, { type: "catchUno", seat: 1, target: 0 }, ctx());
+    // ctxAfter：交回合后有 1 秒补喊宽限（U7b），当场抓是 uno_grace
+    const caught = applyAction(r.state, { type: "catchUno", seat: 1, target: 0 }, ctxAfter(1_500));
     expect(caught.rejected).toBeUndefined();
     expect(caught.state.board!.hands[0]).toHaveLength(3);
   });

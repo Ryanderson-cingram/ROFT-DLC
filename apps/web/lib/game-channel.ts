@@ -110,5 +110,5 @@ export function useGameChannel(roomId: string | null) {
     [roomId, pull],
   );
 
-  return { snapshot, error, loaded, refresh: pull, send, clearError: () => setError(null) };
+  return { snapshot, error, loaded, send };
 }

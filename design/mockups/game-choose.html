@@ -1,0 +1,753 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>对局 HUD · 轮到我做选择（6 态）· ROFT-DLC</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  /* 本页只放「布局胶水 + 状态差异」，可复用组件一律在 tokens.css。
+     骨架整份抄 game.html，只换状态相关的那几块。
+
+     本页的核心命题：做选择时**绝不能遮住自己的手牌**。遮罩分三级——
+       定色 / 从手牌挑一张 / 多打  → 一点遮罩都不给，中槽自己变形
+       宣言盘 / 洗牌三选一        → .scrim--table + .sheet，只盖牌桌，坞与手牌照亮
+       开局抽 3 选 1              → 此刻本来就没有手牌，才准用全屏 .modal */
+
+  /* 页面是一根竖直的柱：轨贴顶、牌河吃掉剩余高度、底坞贴底（短页面也贴得住） */
+  body { display: flex; flex-direction: column; min-height: 100dvh; }
+
+  /* 设计稿的状态切换器占了顶端，轮转轨往下让 46px；真实产品里轨贴顶 */
+  .dial { top: 46px; }
+  /* 轨是通栏底色，但内容与牌河/底坞同一条 1080 的栏宽 */
+  .dial > * { max-width: 1080px; margin-inline: auto; }
+
+  /* flex: 1 0 auto —— 空间富余时吃掉剩余高度（牌河居中），空间不够时**不压缩**，
+     由页面上下滚动来解决；1 1 0% 会让牌河被底坞裁掉 */
+  .table { flex: 1 0 auto; width: 100%; max-width: 1080px; margin: 0 auto; padding: var(--sp-3) 0 var(--sp-4); display: grid; gap: var(--sp-3); align-content: center; }
+  .table > * { min-width: 0; }
+
+  /* 牌河：三堆同构，一行放得下（375px 起） */
+  .piles { gap: clamp(var(--sp-3), 6vw, var(--sp-5)); }
+  .follow { display: flex; flex-direction: column; align-items: center; gap: 2px; margin-top: 4px; font-size: 11px; }
+  .follow .swatch { width: 34px; height: 4px; border-radius: 2px; }
+
+  /* 底坞：手牌 + 一句人话 + 三固定槽位 */
+  .dockwrap { position: sticky; bottom: 0; }
+  .dockwrap__in { max-width: 1080px; margin: 0 auto; position: relative; }
+  /* 坞左槽技能徽的爻符（tokens 里 .skillbadge 有，这里是 .btn 版） */
+  .dock__slot .sigil { font-family: var(--font-mono); color: var(--piao); }
+  .dock__slot .btn:disabled .sigil,
+  .dock__slot .btn[aria-disabled="true"] .sigil { color: var(--muted); }
+  /* 发牌中的空手牌位（E 态）：撑住与真手牌一样的高度，切状态时坞不跳 */
+  .hand .hint { display: flex; align-items: center; min-height: var(--card-h); }
+  /* hand-meta 右侧那句窄屏会换行，靠右收齐才不像溢出（E 态只有一句，不受影响） */
+  .hand-meta span + span { text-align: right; }
+
+  @media (max-width: 640px) {
+    :root { --card-w: 48px; --card-h: 72px; --dock-h: 248px; }
+    .pile--top .card { --card-w: 58px; --card-h: 87px; }
+    .seat { min-width: 132px; }
+    /* 窄屏三槽会把中文挤成竖排：主操作独占一行在上，技能与退让并排在下。
+       槽位语义与位置照旧固定（主永远在上、技能永远左下、退让永远右下） */
+    .dock__row { grid-template-columns: 1fr 1fr; }
+    .dock__slot--main { grid-column: 1 / -1; order: -1; }
+  }
+
+  /* ---- 状态差异（只有这一段随 body[data-state] 变） ---- */
+  body:not([data-state="d"]) .only-d,
+  body:not([data-state="i"]) .only-i,
+  body:not([data-state="g"]) .only-g,
+  body:not([data-state="j"]) .only-j,
+  body:not([data-state="l"]) .only-l,
+  body:not([data-state="e"]) .only-e,
+  body[data-state="e"] .hide-e { display: none !important; }
+
+  /* E 开局：还没人亮技能，也没人在行动，轨上那枚指针要收起来 */
+  body[data-state="e"] .seat--now { border-color: transparent; background: var(--mo-2); }
+  body[data-state="e"] .seat--now::after { content: none; }
+
+  /* ---- J 宣言盘：一色一行 10 张，窄屏自己收窄 ----
+     min() 让 375px 下 10 张正好塞满一行（20 = sheet 左右内边距，45 = 9 个 5px 间隙），
+     再宽也不超过 34px。全部走 --card-w，所以牌面字号跟着一起缩，不会糊。 */
+  .sheet .picks { gap: 5px; }
+  .sheet .picks .card {
+    /* 一色 10 张要排成一行：视口 - sheet 左右内边距(20) - 9 个 .picks 间隙(9×6) */
+    --card-w: min(34px, calc((100vw - 20px - 54px) / 10));
+    --card-h: calc(var(--card-w) * 1.5);
+  }
+  .sheet .row { margin: var(--sp-3) 0 6px; }
+  .sheet .row:first-child { margin-top: 0; }
+
+  /* ---- L 洗牌三选一：两个大选项按钮里塞两行字 ---- */
+  .sheet .btn--block { flex-direction: column; align-items: flex-start; gap: 2px; min-height: 64px; padding: 10px var(--sp-3); text-align: left; }
+  .sheet .btn--block + .btn--block { margin-top: var(--sp-2); }
+
+  /* ---- E 开局抽 3 选 1：三栏候选 ---- */
+  .choose3 { display: grid; gap: var(--sp-2); margin: var(--sp-3) 0; }
+  @media (min-width: 560px) { .choose3 { grid-template-columns: repeat(3, 1fr); } }
+  .choose3 button {
+    display: flex; flex-direction: column; gap: 6px;
+    min-height: 44px; padding: var(--sp-3);
+    border: 1px solid var(--edge); border-radius: var(--radius-panel);
+    background: var(--sunken); color: var(--yuebai);
+    font: inherit; text-align: left; cursor: pointer;
+    /* 开局抽 3 选 1 是本局第一个决定：三张候选就该像三张摊开的牌，
+       指哪张哪张抬起来，选中那张留在抬起的位置上 */
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    transition: border-color 0.16s ease, background 0.16s ease, transform 0.14s var(--ease-tactile), box-shadow 0.16s ease;
+  }
+  .choose3 button:hover { border-color: var(--piao-dim); transform: translateY(-3px); }
+  .choose3 button:active { transform: translateY(-1px); }
+  .choose3 button[aria-pressed="true"] {
+    border-color: var(--piao); background: rgba(99, 210, 195, 0.1); transform: translateY(-3px);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px rgba(99, 210, 195, 0.3), 0 12px 26px -18px var(--piao);
+  }
+  .choose3 .sg { font-family: var(--font-mono); font-size: 13px; color: var(--piao); }
+  .choose3 .nm { font-family: var(--font-display); font-size: 18px; letter-spacing: 0.04em; }
+
+  /* 选项里的第二行小字（L 的两个玩法 / E 的三个技能共用） */
+  .ds { font-size: 13px; line-height: 1.5; color: var(--qingyan); font-weight: 400; }
+
+  /* ---- 技能详情弹窗（第 6 条反馈）：默认关着，用户主动点技能徽才开 ----
+     它是**信息浮层**，不是流程面板——六个状态谁都能随时点开，也随时关掉，
+     所以它不参与「D/I/G 不许有遮罩」「只有 E 用全屏 modal」这两条判定。 */
+  body:not([data-skill="open"]) .modal--skill,
+  body:not([data-skill="open"]) .modal--skill + .scrim { display: none; }
+
+  /* 技能弹窗的页签 */
+  .tabs { display: flex; gap: var(--sp-2); margin: var(--sp-3) 0 var(--sp-2); border-bottom: var(--line); }
+  .tabs button {
+    min-height: 38px; padding: 0 4px; margin-bottom: -1px;
+    border: 0; border-bottom: 2px solid transparent; background: none;
+    color: var(--qingyan); font: inherit; font-size: 14px; cursor: pointer;
+  }
+  .tabs button[aria-selected="true"] { color: var(--yuebai); border-bottom-color: var(--piao); }
+  .tabpanel[hidden] { display: none; }
+  .sk__head { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+  .sk__sigil { font-family: var(--font-mono); font-size: 15px; color: var(--piao); }
+  .sk__l0 { margin: var(--sp-3) 0 0; font-size: 15px; }
+  .sk__l1 { margin: var(--sp-2) 0 0; font-size: 14px; color: var(--qingyan); }
+  .sk__meta { display: grid; gap: 6px; margin-top: var(--sp-3); padding-top: var(--sp-3); border-top: var(--line); font-size: 13px; }
+  .sk__meta div { display: flex; justify-content: space-between; gap: var(--sp-3); }
+  .sk__meta span:first-child { color: var(--qingyan); }
+  .creed { margin: 0; padding-left: 1.3em; font-size: 14px; }
+  .creed li { margin-bottom: 6px; }
+  .creed + p { margin: var(--sp-3) 0 0; font-size: 13px; color: var(--qingyan); }
+</style>
+</head>
+<body data-state="d" data-turn="you">
+
+<nav class="state-picker" aria-label="设计稿状态切换">
+  <button data-state="d" aria-pressed="true">D 定色</button>
+  <button data-state="i" aria-pressed="false">I 挑一张</button>
+  <button data-state="g" aria-pressed="false">G 并列多打</button>
+  <button data-state="j" aria-pressed="false">J 宣言盘</button>
+  <button data-state="l" aria-pressed="false">L 洗牌三选一</button>
+  <button data-state="e" aria-pressed="false">E 抽 3 选 1</button>
+  <span class="sep"></span>
+  <button data-toggle="drawer" aria-pressed="false">浮层：记录抽屉</button>
+</nav>
+
+<div class="ambience" aria-hidden="true"></div>
+
+<!-- 轮转轨：顺序 / 当前行动者 / 方向 / 每个人的技能徽，全在这一条上 -->
+<nav class="dial" data-dir="cw" aria-label="出牌顺序">
+  <ol class="dial__track">
+    <li class="seat seat--you seat--now seat--lin">
+      <span class="seat__top"><span class="seat__name">凛</span><span class="seat__you">你</span></span>
+      <span class="seat__hand hide-e">手牌 <b>7</b></span>
+      <span class="seat__hand only-e">手牌 <b>7</b></span>
+      <button class="skillbadge only-d" data-skill-open><span class="sigil">♠1</span><span class="nm">恒心</span></button>
+      <button class="skillbadge only-l" data-skill-open><span class="sigil">♠1</span><span class="nm">恒心</span></button>
+      <button class="skillbadge only-i" data-skill-open><span class="sigil">♣3</span><span class="nm">司夜</span></button>
+      <button class="skillbadge only-g" data-skill-open><span class="sigil">♥4</span><span class="nm">并列</span></button>
+      <button class="skillbadge only-j" data-skill-open><span class="sigil">♦3</span><span class="nm">影歌</span></button>
+      <button class="skillbadge skillbadge--hidden only-e" data-skill-open><span class="sigil">?</span><span class="nm">未亮出</span></button>
+      <span class="seat__tags hide-e"><span class="badge" data-tone="ok">已亮出</span></span>
+      <span class="seat__tags only-e"><span class="badge">选择中</span></span>
+    </li>
+    <li class="dial__chev" aria-hidden="true"></li>
+    <li class="seat">
+      <span class="seat__top"><span class="seat__name">阿柴</span></span>
+      <span class="seat__hand hide-e">手牌 <b>2</b></span>
+      <span class="seat__hand only-e">手牌 <b>7</b></span>
+      <button class="skillbadge hide-e" data-skill-open><span class="sigil">♦10</span><span class="nm">劫营</span></button>
+      <button class="skillbadge skillbadge--hidden only-e" data-skill-open><span class="sigil">?</span><span class="nm">未亮出</span></button>
+      <span class="seat__tags hide-e"><span class="badge" data-tone="ok">已喊 UNO</span></span>
+      <span class="seat__tags only-e"><span class="badge" data-tone="ok">已选好</span></span>
+    </li>
+    <li class="dial__chev" aria-hidden="true"></li>
+    <li class="seat seat--sealed">
+      <span class="seat__top"><span class="seat__name">小满</span></span>
+      <span class="seat__hand hide-e">手牌 <b>4</b></span>
+      <span class="seat__hand only-e">手牌 <b>7</b></span>
+      <button class="skillbadge skillbadge--hidden" data-skill-open><span class="sigil">?</span><span class="nm">未亮出</span></button>
+      <span class="seat__tags hide-e"><span class="badge" data-tone="bad">封印</span></span>
+      <span class="seat__tags only-e"><span class="badge">选择中</span></span>
+    </li>
+    <li class="dial__chev" aria-hidden="true"></li>
+    <li class="seat">
+      <span class="seat__top"><span class="seat__name">老白</span></span>
+      <span class="seat__hand hide-e">手牌 <b>11</b></span>
+      <span class="seat__hand only-e">手牌 <b>7</b></span>
+      <button class="skillbadge hide-e" data-skill-open><span class="sigil">♦2</span><span class="nm">血棘</span></button>
+      <button class="skillbadge skillbadge--hidden only-e" data-skill-open><span class="sigil">?</span><span class="nm">未亮出</span></button>
+      <span class="seat__tags hide-e"><span class="badge">神化 <span class="pips"><i class="pip"></i><i class="pip"></i></span></span></span>
+      <span class="seat__tags only-e"><span class="badge" data-tone="ok">已选好</span></span>
+    </li>
+  </ol>
+  <div class="dial__scale" aria-hidden="true"></div>
+  <div class="dial__dir"><b>↻</b> 顺时针</div>
+  <p class="ticker">
+    <span class="ticker__tag">最近</span>
+    <b class="hide-e">凛</b>
+    <span class="only-d">打出 +4，正在定色</span>
+    <span class="only-i">发动 司夜：盲抽了阿柴 1 张</span>
+    <span class="only-g">发动 并列：正在点选组合</span>
+    <span class="only-j">发动 影歌：正在指定一张牌</span>
+    <span class="only-l">打出 洗牌，正在选玩法</span>
+    <b class="only-e">牌桌</b><span class="only-e">发下 3 张技能，全员选择中</span>
+  </p>
+</nav>
+
+<main class="table">
+
+  <!-- 牌河：三堆同构。摸牌堆**不给**展开（暗信息），只有厚度与张数 -->
+  <section class="field">
+  <span class="plate" aria-hidden="true"></span>
+  <div class="piles" aria-label="牌河">
+    <div class="pile" style="--depth:6" aria-label="摸牌堆 38 张">
+      <span class="pile__stack">
+        <span class="card" data-color="back"></span>
+        <span class="pile__count">38</span>
+      </span>
+      <span class="pile__label">摸牌堆</span>
+    </div>
+
+    <button class="pile pile--top" style="--depth:5" data-fan>
+      <span class="pile__stack">
+        <span class="card" data-color="red" data-face="7"></span>
+        <span class="pile__count">12</span>
+      </span>
+      <span class="pile__label">出牌堆 · <b>红 7</b></span>
+      <span class="follow"><i class="swatch" style="background:var(--card-red)"></i>跟色 红 · 跟数 7</span>
+      <span class="fan" role="group" aria-label="出牌堆最近 6 张">
+        <span class="card" data-color="green" data-face="转"></span>
+        <span class="card" data-color="green" data-face="4"></span>
+        <span class="card" data-color="blue" data-face="4"></span>
+        <span class="card" data-color="blue" data-face="停"></span>
+        <span class="card" data-color="wild" data-face="变色"></span>
+        <span class="card" data-color="red" data-face="7"></span>
+        <span class="fan__more" aria-label="查看全部"></span>
+      </span>
+    </button>
+
+    <button class="pile" style="--depth:3" data-fan>
+      <span class="pile__stack">
+        <span class="card" data-color="blue" data-face="5"></span>
+        <span class="pile__count">3</span>
+      </span>
+      <span class="pile__label">弃牌堆</span>
+      <span class="fan" role="group" aria-label="弃牌堆全部 3 张">
+        <span class="card" data-color="green" data-face="2"></span>
+        <span class="card" data-color="yellow" data-face="9"></span>
+        <span class="card" data-color="blue" data-face="5"></span>
+        <span class="fan__more" aria-label="查看全部"></span>
+      </span>
+    </button>
+  </div>
+  </section>
+
+</main>
+
+<!-- 底坞：手牌 + 一句人话 + 三固定槽位（左=技能 中=主操作 右=退让与结束） -->
+<div class="dockwrap">
+  <div class="dockwrap__in">
+    <button class="uno hide-e">UNO!</button>
+
+    <!-- ---- 手牌区：六态各一套，其余全是同一副 7 张 ----
+         恒定排序（spec §3.3）：红 → 蓝 → 黄 → 绿，组内数字 0–9 升序，
+         本色功能牌（停 → 转 → +2）垫在该色末尾，无色牌（变色 → +4 → 洗牌 → 毒）排在最后。
+         **排序只在展示层**：引擎发来的手牌顺序不变，这里只是每次都按同一把尺子摆，
+         让「我的红牌在最左」成为肌肉记忆。选中态一律由 .card--picked 表达，
+         不靠位置——多选时选中的牌不会被重排到一起（见 G 态）。 -->
+    <div class="hand-meta only-d">
+      <span>你的手牌 <b>7</b></span>
+      <span>定色时手牌完全可见——要看着手牌决定定哪个色</span>
+    </div>
+    <div class="hand only-d">
+      <button class="card card--dim" data-color="red" data-face="3"></button>
+      <button class="card card--dim" data-color="red" data-face="7"></button>
+      <button class="card card--dim" data-color="blue" data-face="7"></button>
+      <button class="card card--dim" data-color="yellow" data-face="+2"></button>
+      <button class="card card--dim" data-color="green" data-face="0"></button>
+      <button class="card card--dim" data-color="wild" data-face="变色"></button>
+      <button class="card card--picked" data-color="wild" data-face="+4"></button>
+    </div>
+
+    <div class="hand-meta only-i">
+      <span>你的手牌 <b>7</b></span>
+      <span>洗牌②的摸一弃一、恒心♠1 的弃 1 代价，也是这一套</span>
+    </div>
+    <div class="hand only-i">
+      <button class="card card--legal" data-color="red" data-face="3"></button>
+      <button class="card card--legal" data-color="red" data-face="7"></button>
+      <button class="card card--legal" data-color="blue" data-face="7"></button>
+      <button class="card card--legal" data-color="yellow" data-face="+2"></button>
+      <button class="card card--picked" data-color="green" data-face="0"></button>
+      <button class="card card--legal" data-color="wild" data-face="变色"></button>
+      <button class="card card--legal" data-color="wild" data-face="+4"></button>
+    </div>
+
+    <div class="hand-meta only-g">
+      <span>你的手牌 <b>7</b></span>
+      <span>已选 <b>4</b> 张 · 选中的牌不聚拢，位置照恒定排序不动</span>
+    </div>
+    <div class="hand only-g">
+      <button class="card card--dim" data-color="red" data-face="3"></button>
+      <button class="card card--picked" data-color="red" data-face="7"></button>
+      <button class="card card--picked" data-color="blue" data-face="7"></button>
+      <button class="card card--picked" data-color="yellow" data-face="7"></button>
+      <button class="card card--dim" data-color="green" data-face="0"></button>
+      <button class="card card--picked" data-color="green" data-face="7"></button>
+      <button class="card card--dim" data-color="wild" data-face="变色"></button>
+    </div>
+
+    <div class="hand-meta only-j">
+      <span>你的手牌 <b>7</b></span>
+      <span>与手牌无关</span>
+    </div>
+    <div class="hand only-j">
+      <button class="card" data-color="red" data-face="3"></button>
+      <button class="card" data-color="red" data-face="7"></button>
+      <button class="card" data-color="blue" data-face="7"></button>
+      <button class="card" data-color="yellow" data-face="+2"></button>
+      <button class="card" data-color="green" data-face="0"></button>
+      <button class="card" data-color="wild" data-face="变色"></button>
+      <button class="card" data-color="wild" data-face="+4"></button>
+    </div>
+
+    <div class="hand-meta only-l">
+      <span>你的手牌 <b>7</b></span>
+      <span>面板只盖牌桌，不挡手牌</span>
+    </div>
+    <div class="hand only-l">
+      <button class="card card--dim" data-color="red" data-face="3"></button>
+      <button class="card card--dim" data-color="red" data-face="7"></button>
+      <button class="card card--dim" data-color="blue" data-face="7"></button>
+      <button class="card card--dim" data-color="yellow" data-face="+2"></button>
+      <button class="card card--dim" data-color="green" data-face="0"></button>
+      <button class="card card--dim" data-color="wild" data-face="+4"></button>
+      <button class="card card--picked" data-color="wild" data-face="洗牌"></button>
+    </div>
+
+    <!-- 引擎是**先发牌后抽技能**（actions/start-game.ts:39-55：openDraft 在 hands 建好之后才调），
+         所以抽 3 选 1 的时候每人手上已经有 7 张了，不是「发牌中」的空态。 -->
+    <div class="hand-meta only-e">
+      <span>你的手牌 <b>7</b></span>
+      <span>先选技能，选完就开打</span>
+    </div>
+    <div class="hand only-e">
+      <span class="card card--dim" data-color="red" data-face="3"></span>
+      <span class="card card--dim" data-color="red" data-face="7"></span>
+      <span class="card card--dim" data-color="blue" data-face="7"></span>
+      <span class="card card--dim" data-color="yellow" data-face="+2"></span>
+      <span class="card card--dim" data-color="green" data-face="0"></span>
+      <span class="card card--dim" data-color="wild" data-face="变色"></span>
+      <span class="card card--dim" data-color="wild" data-face="+4"></span>
+    </div>
+
+    <!-- ---- 一句人话 ---- -->
+    <p class="dock__say only-d">你打出了 +4：选一个颜色，下家要按这个颜色接牌</p>
+    <p class="dock__say only-i">盲抽完了：从手牌里挑 1 张还给阿柴（只有你和他知道是哪张，别人只看得到「换了 1 张」）</p>
+    <p class="dock__say only-g">多打：点选 2 张同色同数 / 4 张同数 / 6 张同色</p>
+    <p class="dock__say only-j">影歌：当众指定一张牌，其他人从你的下家起依次比对</p>
+    <p class="dock__say only-l">你打出了洗牌：先在上面选一种玩法，再定色</p>
+    <p class="dock__say only-e">开局：从 3 张技能里挑 1 张带上桌</p>
+
+    <!-- ---- 三固定槽位：左=技能 中=推进 右=退让与结束，六态位置不变 ---- -->
+    <div class="dock__row">
+
+      <div class="dock__slot">
+        <!-- 不能发动的状态用 aria-disabled（tokens 里与 disabled 同一套灰）：
+             槽位照旧读作「不可发动」，但技能徽本身永远点得开详情——第 6 条反馈 -->
+        <button class="btn only-d" aria-disabled="true" data-skill-open><span class="sigil">♠1</span> 恒心</button>
+        <button class="btn only-i" data-skill-open><span class="sigil">♣3</span> 司夜 <i class="dot"></i></button>
+        <button class="btn only-g" aria-disabled="true" data-skill-open><span class="sigil">♥4</span> 并列</button>
+        <button class="btn only-j" data-skill-open><span class="sigil">♦3</span> 影歌 <i class="dot"></i></button>
+        <button class="btn only-l" aria-disabled="true" data-skill-open><span class="sigil">♠1</span> 恒心</button>
+        <button class="btn only-e" aria-disabled="true" data-skill-open><span class="sigil">?</span> 未选定</button>
+        <span class="dock__note only-d">出牌阶段不能发动</span>
+        <span class="dock__note only-i"><span class="marks"><span class="marks__cap">盗</span><span class="marks__n">2</span><span class="marks__spent">· 已花 1</span></span></span>
+        <span class="dock__note only-g">并列是被动的：点牌就是在用它</span>
+        <span class="dock__note only-j"><span class="marks"><span class="marks__cap">魂</span><span class="marks__n">3</span><span class="marks__cap">/6</span><span class="marks__spent">· 已花 2</span></span></span>
+        <span class="dock__note only-l">出牌阶段不能发动</span>
+        <span class="dock__note only-e">选完才有技能</span>
+      </div>
+
+      <div class="dock__slot dock__slot--main">
+        <!-- D：主槽整个换成四个大色块，一点遮罩都不出 -->
+        <!-- data-color 与文字同源：颜色不许靠位置（nth-child）决定，否则改一次色序
+             就会出现写着「红」的蓝底按钮 -->
+        <div class="colors only-d" role="group" aria-label="定色">
+          <button data-color="R">红</button>
+          <button data-color="B">蓝</button>
+          <button data-color="Y">黄</button>
+          <button data-color="G">绿</button>
+        </div>
+        <button class="btn btn--primary only-i">把 绿0 还给阿柴</button>
+        <button class="btn btn--primary only-g">打出 4 张</button>
+        <button class="btn btn--primary only-j">指定 红5</button>
+        <button class="btn btn--primary only-l" disabled>选完接着定色</button>
+        <button class="btn btn--primary only-e" disabled>在上面的弹窗里选</button>
+        <span class="dock__note only-d">点色块即出牌</span>
+        <span class="dock__note only-i">还回去的这张只有你和阿柴知道</span>
+        <span class="dock__note only-g">合不合形状由服务端判；4 张同数打出后由你定色</span>
+        <span class="dock__note only-j">你手里有没有 红5 都可以指定</span>
+        <span class="dock__note only-l">两个选择都要接着定色，一起提交</span>
+      </div>
+
+      <div class="dock__slot">
+        <button class="btn btn--ghost only-d">取消这一手</button>
+        <button class="btn btn--ghost only-i">重新挑</button>
+        <button class="btn btn--ghost only-g">取消多打</button>
+        <button class="btn btn--ghost only-j">取消</button>
+        <button class="btn btn--ghost only-l">先不打这张</button>
+        <button class="btn btn--ghost only-e" disabled>不能跳过</button>
+        <span class="dock__note only-d">+4 收回手牌，重新挑一张</span>
+        <span class="dock__note only-i">刚抽到的那张先留着</span>
+        <span class="dock__note only-g">退回单张出牌</span>
+        <span class="dock__note only-j">魂不扣，回到出牌</span>
+        <span class="dock__note only-l">洗牌牌收回手牌</span>
+        <span class="dock__note only-e">整局只有这一次抽</span>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ============ J 影歌①宣言盘：唯一需要「盘」的选择 ============
+     .scrim--table 只盖到 var(--dock-h) 为止，.sheet 从底坞**上方**升起，
+     手牌与三槽位在它下面完整露出 -->
+<section class="sheet only-j" role="dialog" aria-modal="false" aria-labelledby="dial-title">
+  <div class="sheet__in">
+    <p class="eyebrow">影歌 ① · 宣言</p>
+    <h2 id="dial-title">当众指定一张牌</h2>
+    <p class="lead">
+      从你的下家起依次比对：亮出<b>同色同数</b>不摸牌 · 亮出<b>同色</b>或<b>同数</b>摸 1 张 · 不亮摸 3 张。
+      与牌顶无关，你手里有没有这张牌也无关。
+    </p>
+
+    <p class="row hint"><i class="swatch" style="background:var(--card-red)"></i> 红</p>
+    <div class="picks" role="group" aria-label="红 0 到 9">
+      <button class="card" data-color="red" data-face="0"></button>
+      <button class="card" data-color="red" data-face="1"></button>
+      <button class="card" data-color="red" data-face="2"></button>
+      <button class="card" data-color="red" data-face="3"></button>
+      <button class="card" data-color="red" data-face="4"></button>
+      <button class="card card--picked" data-color="red" data-face="5"></button>
+      <button class="card" data-color="red" data-face="6"></button>
+      <button class="card" data-color="red" data-face="7"></button>
+      <button class="card" data-color="red" data-face="8"></button>
+      <button class="card" data-color="red" data-face="9"></button>
+    </div>
+
+    <p class="row hint"><i class="swatch" style="background:var(--card-blue)"></i> 蓝</p>
+    <div class="picks" role="group" aria-label="蓝 0 到 9">
+      <button class="card" data-color="blue" data-face="0"></button>
+      <button class="card" data-color="blue" data-face="1"></button>
+      <button class="card" data-color="blue" data-face="2"></button>
+      <button class="card" data-color="blue" data-face="3"></button>
+      <button class="card" data-color="blue" data-face="4"></button>
+      <button class="card" data-color="blue" data-face="5"></button>
+      <button class="card" data-color="blue" data-face="6"></button>
+      <button class="card" data-color="blue" data-face="7"></button>
+      <button class="card" data-color="blue" data-face="8"></button>
+      <button class="card" data-color="blue" data-face="9"></button>
+    </div>
+
+    <p class="row hint"><i class="swatch" style="background:var(--card-yellow)"></i> 黄</p>
+    <div class="picks" role="group" aria-label="黄 0 到 9">
+      <button class="card" data-color="yellow" data-face="0"></button>
+      <button class="card" data-color="yellow" data-face="1"></button>
+      <button class="card" data-color="yellow" data-face="2"></button>
+      <button class="card" data-color="yellow" data-face="3"></button>
+      <button class="card" data-color="yellow" data-face="4"></button>
+      <button class="card" data-color="yellow" data-face="5"></button>
+      <button class="card" data-color="yellow" data-face="6"></button>
+      <button class="card" data-color="yellow" data-face="7"></button>
+      <button class="card" data-color="yellow" data-face="8"></button>
+      <button class="card" data-color="yellow" data-face="9"></button>
+    </div>
+
+    <p class="row hint"><i class="swatch" style="background:var(--card-green)"></i> 绿</p>
+    <div class="picks" role="group" aria-label="绿 0 到 9">
+      <button class="card" data-color="green" data-face="0"></button>
+      <button class="card" data-color="green" data-face="1"></button>
+      <button class="card" data-color="green" data-face="2"></button>
+      <button class="card" data-color="green" data-face="3"></button>
+      <button class="card" data-color="green" data-face="4"></button>
+      <button class="card" data-color="green" data-face="5"></button>
+      <button class="card" data-color="green" data-face="6"></button>
+      <button class="card" data-color="green" data-face="7"></button>
+      <button class="card" data-color="green" data-face="8"></button>
+      <button class="card" data-color="green" data-face="9"></button>
+    </div>
+
+    <p class="hint">选好了在下面的坞里按「指定 红5」——决定与提交永远在同一条坞上。</p>
+  </div>
+</section>
+<div class="scrim scrim--table only-j" aria-hidden="true"></div>
+
+<!-- ============ L 洗牌三选一：同样只盖牌桌 ============ -->
+<section class="sheet only-l" role="dialog" aria-modal="false" aria-labelledby="shuffle-title">
+  <div class="sheet__in">
+    <p class="eyebrow">洗牌牌 · 三选一</p>
+    <h2 id="shuffle-title">选一种玩法，然后定色</h2>
+    <p class="lead">这张牌是「三选一并决定颜色」。两个选择都要接着定色，选完在坞里一起提交。</p>
+
+    <button class="btn btn--block">
+      <span>① 洗牌</span>
+      <span class="ds">全体手牌合并打乱，从你的下家起逐张轮流发回。手上有洗牌牌的人可以打出③取消它。</span>
+    </button>
+    <button class="btn btn--block">
+      <span>② 摸一弃一</span>
+      <span class="ds">先摸 1 张，再从手牌挑 1 张弃进弃牌堆——挑那一步就是「从手牌里挑一张」那套交互。</span>
+    </button>
+
+    <p class="hint" style="margin-top:var(--sp-3)">③ 取消：只能在别人打出①时响应，不能主动打，所以这里不列。</p>
+  </div>
+</section>
+<div class="scrim scrim--table only-l" aria-hidden="true"></div>
+
+<!-- ============ E 开局抽 3 选 1：此刻本来就没有手牌，唯一准用全屏遮罩的场合 ============ -->
+<div class="modal only-e" role="dialog" aria-modal="true" aria-labelledby="draft-title">
+  <div class="modal__box">
+    <div class="row">
+      <p class="eyebrow">开局 · 抽 3 选 1</p>
+      <span class="hint" style="margin-left:auto">其他玩家选择中 2/4</span>
+    </div>
+    <h2 id="draft-title">挑一个技能带上桌</h2>
+    <p class="lead hint">整局只有这一个技能，亮出来才生效。</p>
+
+    <div class="choose3" role="group" aria-label="三张候选技能">
+      <button aria-pressed="true">
+        <span class="sg">♥3</span>
+        <span class="nm">精英</span>
+        <span class="ds">数字牌可当作大 1 点打出（只剩 1 张手牌时失效）。</span>
+      </button>
+      <button aria-pressed="false">
+        <span class="sg">♦J</span>
+        <span class="nm">远星</span>
+        <span class="ds">上家 +2/+4 时弃代价牌并摸 2，视为跟着叠牌。</span>
+      </button>
+      <button aria-pressed="false">
+        <span class="sg">♣3</span>
+        <span class="nm">司夜</span>
+        <span class="ds">打出变色牌后掷骰获「盗」；花盗换手牌。</span>
+      </button>
+    </div>
+
+    <button class="btn btn--primary btn--block ring" style="--p:70">
+      确认：精英
+      <span class="ring__secs">14</span>
+    </button>
+  </div>
+</div>
+<div class="scrim only-e" aria-hidden="true"></div>
+
+<!-- ============ 技能详情弹窗（第 6 条反馈）============
+     轨上四张座位卡的技能徽、坞左槽的技能徽，点的都是它：详情随时看得到，
+     又不占主页面一寸位置。默认关闭，Esc 或点遮罩关掉。
+     文案随 body[data-state] 走（D/L=恒心 I=司夜 G=并列 J=影歌 E=精英），
+     数据表在页尾脚本里——五份技能写成五段 HTML 太长，改一处要改五处 -->
+<div class="modal modal--skill" role="dialog" aria-modal="true" aria-labelledby="sk-title">
+  <div class="modal__box">
+    <p class="eyebrow">技能</p>
+    <div class="sk__head">
+      <span class="sk__sigil" id="sk-sigil">♠1</span>
+      <h2 id="sk-title">恒心</h2>
+      <span class="badge" id="sk-kind">主动</span>
+      <span class="badge" data-tone="ok" id="sk-shown">已亮出</span>
+      <button class="btn btn--ghost" style="margin-left:auto;min-height:36px" data-toggle="skill">关闭</button>
+    </div>
+
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" aria-controls="tab-sk">技能</button>
+      <button role="tab" aria-selected="false" aria-controls="tab-creed">四句总则</button>
+    </div>
+
+    <div class="tabpanel" id="tab-sk" role="tabpanel">
+      <p class="sk__l0" id="sk-l0"></p>
+      <p class="sk__l1" id="sk-l1"></p>
+      <div class="sk__meta" id="sk-meta"></div>
+      <button class="btn btn--primary btn--block" id="sk-act" style="margin-top:var(--sp-3)"></button>
+    </div>
+
+    <div class="tabpanel" id="tab-creed" role="tabpanel" hidden>
+      <ol class="creed">
+        <li>回合开始用技能，然后出牌。</li>
+        <li>被 +2/+4 时先叠或不叠；叠的时候只算你自己那张的加成。</li>
+        <li>一人一个技能；亮出来才会生效。</li>
+        <li>神化 = 多几轮出牌；并列 = 一轮里多张。</li>
+      </ol>
+      <p>最后一张牌必须是数字牌才算赢。功能牌（+2 / 停 / 转 / 变色 / +4 / 毒 / 洗牌）打完手牌时要再摸 1 张，牌照常生效，但你没赢。</p>
+    </div>
+  </div>
+</div>
+<div class="scrim" data-toggle="skill" aria-hidden="true"></div>
+
+<!-- 记录：右缘把手 + offcanvas + 遮罩，桌面与手机同一套。
+     开关由 body[data-drawer="open"] 驱动，遮罩点一下就关 -->
+<button class="drawer__handle" data-toggle="drawer" aria-expanded="false" aria-controls="log">记录</button>
+<div class="drawer-scrim" data-toggle="drawer" aria-hidden="true"></div>
+<aside class="drawer" id="log" aria-label="行动记录">
+  <div class="drawer__head">
+    <h2>行动记录</h2>
+    <span class="hint">最新在上 · 只含公开信息</span>
+    <button class="drawer__close" data-toggle="drawer" aria-label="关闭记录">×</button>
+  </div>
+  <ol class="log">
+    <li data-kind="skill"><span class="who">凛</span><span class="what">发动 司夜：盲抽阿柴 1 张，换回 1 张</span></li>
+    <li><span class="who">老白</span><span class="what">打出 红7</span></li>
+    <li data-kind="skill"><span class="who">老白</span><span class="what">发动 血棘：掷骰 2，小满摸 2 张</span></li>
+    <li data-kind="skill"><span class="who">小满</span><span class="what">被老白封印了技能</span></li>
+    <li data-kind="uno"><span class="who">阿柴</span><span class="what">喊了 UNO！</span></li>
+    <li><span class="who">阿柴</span><span class="what">打出 绿转</span></li>
+    <li data-kind="punish"><span class="who">凛</span><span class="what">吃下惩罚 6 张</span></li>
+    <li data-kind="system"><span class="who">牌桌</span><span class="what">全员选完技能，开打</span></li>
+  </ol>
+</aside>
+
+<script>
+  const body = document.body;
+  const dock = document.querySelector('.dockwrap');
+  // E 是「还没发牌」，其余五态都是你在做选择
+  const TURN = { d: 'you', i: 'you', g: 'you', j: 'you', l: 'you', e: 'idle' };
+
+  // --dock-h 是遮罩与升起面板的唯一依据。坞的真实高度随状态与断点变
+  // （文案换行、窄屏两行槽位），所以量一次真值写回去——比在 CSS 里猜数字准。
+  const syncDockH = () => body.style.setProperty('--dock-h', dock.offsetHeight + 'px');
+
+  // 技能详情：五份技能一张表，弹窗按当前状态填（D 与 L 共用恒心）。
+  // ponytail: 数据是本文件里手写的常量，才敢用 innerHTML 拼 meta 行
+  const SKILLS = {
+    d: { sigil: '♠1', nm: '恒心', kind: '主动', shown: '已亮出', tone: 'ok',
+         l0: '弃一张牌，摸一张牌',
+         l1: '回合开始阶段用一次：从手牌里丢一张进弃牌堆，再从牌堆摸一张。手牌数不变，专治「一手牌全打不出去」。',
+         meta: [['本回合主动', '0 / 1', 'num'], ['标记', '此技能没有标记', 'muted'], ['状态', '出牌阶段，不能发动', 'muted']],
+         act: '发动：弃 1 张，摸 1 张', off: true },
+    i: { sigil: '♣3', nm: '司夜', kind: '主动', shown: '已亮出', tone: 'ok',
+         l0: '打出变色牌后掷骰获「盗」；花盗换手牌',
+         l1: '花 1 盗：盲抽对手 1 张，再从自己手牌挑 1 张还给他。两张牌只有你和他知道，别人只看得到「换了 1 张」。',
+         meta: [['盗', '2', 'num'], ['本局已花', '1', 'num'], ['状态', '换牌中——等你挑一张', 'muted']],
+         act: '再花 1 盗：换一次', off: false },
+    g: { sigil: '♥4', nm: '并列', kind: '被动', shown: '已亮出', tone: 'ok',
+         l0: '一次打出多张：2 张同色同数 / 4 张同数 / 6 张同色',
+         l1: '不用发动，在手牌里点选就是在用它。神化 = 多几轮出牌；并列 = 一轮里多张。4 张同数打出后由你定色。',
+         meta: [['类型', '被动，无需发动', 'muted'], ['标记', '此技能没有标记', 'muted'], ['状态', '已点选 4 张', 'num']],
+         act: '被动技能，无需发动', off: true },
+    j: { sigil: '♦3', nm: '影歌', kind: '主动', shown: '已亮出', tone: 'ok',
+         l0: '① 当众指定一张「色 + 数」',
+         l1: '其他人从你的下家起依次比对：亮同色同数不摸牌 · 亮同色或同数摸 1 张 · 不亮摸 3 张。你手里有没有这张牌都可以指定，和牌顶也没关系。',
+         meta: [['魂', '3 / 6', 'num'], ['本局已花', '2', 'num'], ['状态', '宣言中', 'muted']],
+         act: '花 2 魂：指定一张牌', off: false },
+    e: { sigil: '♥3', nm: '精英', kind: '被动', shown: '未亮出', tone: '',
+         l0: '数字牌可当作大 1 点打出',
+         l1: '只剩 1 张手牌时失效。开局三选一里的候选，确认之后才带上桌，亮出来才生效。',
+         meta: [['类型', '被动，无需发动', 'muted'], ['标记', '此技能没有标记', 'muted'], ['状态', '候选中，尚未亮出', 'muted']],
+         act: '在上面的抽 3 选 1 里确认', off: true },
+  };
+  SKILLS.l = SKILLS.d;
+
+  function fillSkill() {
+    const s = SKILLS[body.dataset.state];
+    document.getElementById('sk-sigil').textContent = s.sigil;
+    document.getElementById('sk-title').textContent = s.nm;
+    document.getElementById('sk-kind').textContent = s.kind;
+    const shown = document.getElementById('sk-shown');
+    shown.textContent = s.shown;
+    if (s.tone) shown.setAttribute('data-tone', s.tone); else shown.removeAttribute('data-tone');
+    document.getElementById('sk-l0').textContent = s.l0;
+    document.getElementById('sk-l1').textContent = s.l1;
+    document.getElementById('sk-meta').innerHTML =
+      s.meta.map(([k, v, c]) => `<div><span>${k}</span><span class="${c}">${v}</span></div>`).join('');
+    const act = document.getElementById('sk-act');
+    act.textContent = s.act;
+    act.disabled = s.off;
+  }
+
+  function toggleSkill(force) {
+    const on = force ?? body.dataset.skill !== 'open';
+    if (on) fillSkill();
+    body.dataset.skill = on ? 'open' : 'closed';
+  }
+
+  // 抽屉与它的遮罩同由 body[data-drawer] 驱动，只有一处真相
+  function toggleDrawer(force) {
+    const on = force ?? body.dataset.drawer !== 'open';
+    body.dataset.drawer = on ? 'open' : 'closed';
+    document.querySelector('.drawer__handle').setAttribute('aria-expanded', String(on));
+    document.querySelector('.state-picker [data-toggle="drawer"]').setAttribute('aria-pressed', String(on));
+  }
+
+  // 一个委托监听器管全部：状态切换 / 抽屉 / 触屏点堆 / 手牌与盘的点选
+  document.addEventListener('click', e => {
+    const state = e.target.closest('.state-picker [data-state]');
+    if (state) {
+      const s = state.dataset.state;
+      body.dataset.state = s;
+      body.dataset.turn = TURN[s];
+      document.querySelectorAll('.state-picker [data-state]')
+        .forEach(x => x.setAttribute('aria-pressed', String(x === state)));
+      syncDockH();
+      // 状态切换器压在弹窗之上，开着弹窗也能切态——那就把详情换成新状态的技能
+      if (body.dataset.skill === 'open') fillSkill();
+      // 窄屏轨是横滚的：切完把当前行动者带回视口
+      document.querySelector('.seat--lin').scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+      return;
+    }
+    if (e.target.closest('[data-toggle="drawer"]')) return toggleDrawer();
+    if (e.target.closest('[data-toggle="skill"]')) return toggleSkill(false);
+    if (e.target.closest('[data-skill-open]')) return toggleSkill(true);
+
+    const pile = e.target.closest('.pile[data-fan]');
+    if (pile) return pile.toggleAttribute('data-open');
+
+    // 手牌 / 宣言盘：点选就是选中，同一套 .card--picked，没有任何弹窗
+    const card = e.target.closest('.hand .card, .picks .card');
+    if (card) {
+      const single = !card.closest('.hand.only-g');   // 只有并列多打是多选
+      // 宣言盘四色分成四组 .picks，清选中要跨整张 sheet
+      const scope = card.closest('.sheet, .hand');
+      if (single) scope.querySelectorAll('.card--picked').forEach(x => x.classList.remove('card--picked'));
+      card.classList.toggle('card--picked');
+      return;
+    }
+    const pick3 = e.target.closest('.choose3 button');
+    if (pick3) document.querySelectorAll('.choose3 button')
+      .forEach(x => x.setAttribute('aria-pressed', String(x === pick3)));
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (body.dataset.skill === 'open') toggleSkill(false);
+    else if (body.dataset.drawer === 'open') toggleDrawer(false);
+  });
+
+  // 技能弹窗页签
+  document.querySelector('.tabs').addEventListener('click', e => {
+    const t = e.target.closest('[role="tab"]'); if (!t) return;
+    document.querySelectorAll('.tabs [role="tab"]').forEach(x => {
+      x.setAttribute('aria-selected', String(x === t));
+      document.getElementById(x.getAttribute('aria-controls')).hidden = x !== t;
+    });
+  });
+
+  addEventListener('resize', syncDockH);
+  syncDockH();
+</script>
+
+</body>
+</html>

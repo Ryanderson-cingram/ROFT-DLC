@@ -83,20 +83,20 @@ export function drawCard(state: GameState, seat: number, ctx: Ctx): ApplyResult 
   if (playable) return { state: commit(state, { ...withCard, drawnPlayable: drawn[0] }, "play"), events };
   // 摸到的牌打不出去 → 回合直接结束，不必再点一次
   return {
-    state: commit(state, { ...withCard, drawnPlayable: null, ...passTurn(withCard, seat) }, "turnStart"),
+    state: commit(state, { ...withCard, drawnPlayable: null, ...passTurn(withCard, ctx.now, seat) }, "turnStart"),
     events,
   };
 }
 
 /** U1：摸到可打的牌但选择不打 → 结束回合。没摸过牌不能空过。 */
-export function endTurn(state: GameState, seat: number): ApplyResult {
+export function endTurn(state: GameState, seat: number, ctx: Ctx): ApplyResult {
   const b = state.board;
   if (!b) return reject(state, "not_started");
   if (state.pendingWindow) return reject(state, "pending_window");
   if (seat !== b.currentSeat) return reject(state, "not_your_turn");
   if (!b.drawnPlayable) return reject(state, "must_draw_first");
   return {
-    state: commit(state, { ...b, drawnPlayable: null, ...passTurn(b, seat) }, "turnStart"),
+    state: commit(state, { ...b, drawnPlayable: null, ...passTurn(b, ctx.now, seat) }, "turnStart"),
     events: [{ type: "turnEnded", public: { seat } }],
   };
 }

@@ -1,6 +1,6 @@
 import { sealedTargetOf } from "./actions/bloodthorn.ts";
 import { punishDiceFor, TAKEOVER_CHOICES } from "./actions/dice.ts";
-import { drawCard, endTurn } from "./actions/draw.ts";
+import { drawCard, drawCards, drawEvents, endTurn, giveTo } from "./actions/draw.ts";
 import { stealSwap, swapActions } from "./actions/nightlord.ts";
 import { callUno, catchable, catchUno } from "./actions/uno.ts";
 import { playCards } from "./actions/play-cards.ts";
@@ -27,6 +27,34 @@ export { isPlayable } from "./legal.ts";
 export { skills as loadedSkills } from "./skills/registry.ts";
 
 const COLORS: Color[] = ["R", "G", "B", "Y"];
+
+/**
+ * 标记上限表（标记名 → 上限），来自各技能定义的 `mark_cap`（04 围栏块 / 02 §6）。
+ * **没有上限的标记不在表里**（司夜的「盗」）——缺席即无上限，UI 别把缺席读成 0。
+ *
+ * 整表投影不是泄露：技能定义本来就是公开的百科数据（`loadedSkills` 已经整份导出给客户端），
+ * 而且上限与「谁持有哪个技能」无关。
+ *
+ * 惰性 + 记忆化，不在模块顶层读 `byId`：registry → handlers → actions → draw-passives → registry
+ * 是一个环，顶层读会拿到还没初始化完的 registry（同 `draw-passives.ts::SKILL_DATA` 的说明）。
+ */
+let marksCapCache: Readonly<Record<string, number>> | undefined;
+const marksCap = () =>
+  (marksCapCache ??= Object.fromEntries(
+    [...SKILL_DATA.byId.values()].flatMap((d) => (d.effects ?? []).flatMap((e) => Object.entries(e.mark_cap ?? {}))),
+  ));
+/**
+ * 反应窗口的投影。**`shuffleCancel` 的 `actors` 是暗信息**：那一串正是「谁手上有洗牌牌」，
+ * 而手牌是私有的——整份投出去等于当众念出别人的手牌内容。只留「有没有你」这一位，
+ * 够 UI 判断该不该给你按钮，其余人一个都不给（事件那边同样不发，见
+ * `shuffle-card.ts::openWindow` 的 `hideActors`）。
+ *
+ * 其余窗口原样投：它们的 actors 都由**公开事实**决定（该谁响应惩罚、该谁还牌、该谁弃牌），
+ * 本来就是全场看得见的，藏起来反而写不出「等谁」那句话。
+ */
+const projectWindow = (w: GameState["pendingWindow"], seat: number): GameState["pendingWindow"] =>
+  w?.type === "shuffleCancel" ? { ...w, actors: w.actors.filter((a) => a === seat) } : w;
+
 /** 牌 id 列表：必须是数组且每项是字符串，否则后面的 `.map` / `.find` 会炸。 */
 const cardIdList = (v: unknown) => Array.isArray(v) && v.every((x) => typeof x === "string");
 /** 座位号：整数才算数。`< 0 || >= n` 放行小数与 NaN（NaN 的比较恒为 false）。 */
@@ -84,10 +112,47 @@ function settleStalemate(r: ApplyResult): ApplyResult {
   };
 }
 
+/** U6：交回合时喊过却不是 1 张 → 罚摸 2 张（规则摸牌，非惩罚 P1）。 */
+const MISCALL_DRAW = 2;
+
+/**
+ * U6 交回合结算（2026-08-02 改判）：**本回合喊过、但交回合那一刻手牌不是 1 张 → 罚摸 2**。
+ *
+ * 「作废」那一半在 `passTurn` 里（它把 `saidUno` 按「手牌恰 1」重算）；补罚这一半留在这里，
+ * 因为 `passTurn` 返回的是 Board 的一个切片——摸牌要 rng、要发事件，它两样都做不了。
+ * 放在 `applyAction` 的出口（同 `settleStalemate`）：所有动作都从这里出去，绕不开。
+ *
+ * 判据是「**离场的那个座位**」= 动作之前的 `currentSeat`，而不是 `passTurn` 的 `from`：
+ * 劫营打断时 `from` 是打断者（他不进回合），真正结束回合的是被打断的那个人。
+ *
+ * 与 `syncUno` 的分工：`syncUno` 管**回合外**的作废（手牌一离开 1 张即清），那是自然失效、
+ * 不该罚；这里只认「你自己的回合结束了」这一个时点。
+ */
+function settleUnoCall(before: GameState, r: ApplyResult, ctx: Ctx): ApplyResult {
+  const b0 = before.board;
+  const b1 = r.state.board;
+  if (r.rejected || !b0 || !b1) return r;
+  const seat = b0.currentSeat;
+  // 回合没交出去就还没到结算时点（回合内手牌怎么波动都不算数）
+  if (b1.currentSeat === seat) return r;
+  if (!b0.saidUno[seat] || b1.hands[seat].length === 1) return r;
+
+  const { board, drawn, reshuffledOrder } = drawCards(b1, { kind: "rule", base: MISCALL_DRAW, seat }, ctx.rng);
+  // 罚不到就算了——这里不能像 callUno 那样整条拒收（回合已经交出去了，回滚等于卡死牌桌）。
+  // 牌堆枯竭本来就会走 U8 的平局收场。
+  if (drawn.length === 0) return r;
+  return {
+    ...r,
+    state: { ...r.state, board: { ...board, hands: giveTo(board, seat, drawn) } },
+    events: [...r.events, { type: "unoMiscalled", public: { seat } }, ...drawEvents(seat, drawn, reshuffledOrder)],
+  };
+}
+
 export function applyAction(state: GameState, action: Action, ctx: Ctx): ApplyResult {
   const bad = action && typeof action === "object" ? malformed(state, action) : "unknown_action";
   if (bad) return { state, events: [], rejected: { reason: bad } };
-  return settleStalemate(dispatch(state, action, ctx));
+  // 顺序要紧：罚摸可能把牌堆抽干，平局判定得看**罚完之后**的牌堆
+  return settleStalemate(settleUnoCall(state, dispatch(state, action, ctx), ctx));
 }
 
 function dispatch(state: GameState, action: Action, ctx: Ctx): ApplyResult {
@@ -99,7 +164,7 @@ function dispatch(state: GameState, action: Action, ctx: Ctx): ApplyResult {
     case "drawCard":
       return drawCard(state, action.seat, ctx);
     case "endTurn":
-      return endTurn(state, action.seat);
+      return endTurn(state, action.seat, ctx);
     case "respond":
       return respond(state, action, ctx);
     case "claimTimeout":
@@ -268,6 +333,10 @@ export function legalActions(state: GameState, seat: number): Action[] {
 /** 视角投影：只有 `seat` 自己的手牌进快照，其余玩家降级为公开计数。 */
 export function projectView(state: GameState, seat: number): ClientSnapshot {
   const b = state.board;
+  const dice = state.pendingDice;
+  const sh = b?.soulHarvest;
+  const sw = b?.swap;
+  const sp = b?.shufflePending;
   return {
     version: state.version,
     phase: state.phase,
@@ -283,9 +352,17 @@ export function projectView(state: GameState, seat: number): ClientSnapshot {
       revealed: b?.revealed[i] ?? false,
       // 03 §5：标记是公开计数，别人的也看得到（魂攒到几个是明面上的博弈信息）
       marks: b?.marks[i] ?? {},
-      // 03 §4：状态是公开的（血棘的封印有公开事件，UI 要画「被封印」徽记）。
-      // `sealedBy`（谁封的我）不进快照：那是解除条件的内部记账，公开的是「被封着」这件事
+      // 花费同样有公开事件（marksSpent），所以「已花几个」与余额同级公开
+      marksSpent: b?.marksSpent?.[i] ?? {},
+      // 上限见快照顶层的 marksCap（它是定义的函数，与座位无关，所以不逐人重复）
+      // 03 §4：状态是公开的（血棘的封印有公开事件，UI 要画「被封印」徽记）
       statuses: b?.statuses[i] ?? [],
+      // V7：发动有公开事件（skillActivated），所以「本回合用掉主动没有」是公开信息
+      activatedThisTurn: b?.activatedThisTurn[i] ?? false,
+      // 01-P14「被谁封的」。2026-08-02 改判为**可投影**：`sealed` 事件的 public payload
+      // 一直带 `by`，行动记录早就在渲染「被老白封印了技能」，快照瞒着它只是让 UI 写不出
+      // 解封条件。压制层读的真相仍是上面的 statuses，这里只服务文案。
+      sealedBy: b?.sealedBy?.[i] ?? null,
       // ponytail: 神化是下一个计划（G1）的事，本轮恒为 0
       ascensions: 0,
     })),
@@ -301,17 +378,33 @@ export function projectView(state: GameState, seat: number): ClientSnapshot {
       : false,
     // 02 §5：弃牌堆全公开
     discardPile: b?.discardPile ?? [],
+    // 出牌堆整条也全公开（每张都被所有人亲眼见过）。方向照牌桌原样给：`[0]` 是牌顶，
+    // 与 discardPile 相反——引擎不替 UI 调顺序，要正序的自己 reverse
+    playedPile: b?.playedPile ?? [],
+    // 标记上限（标记名 → 上限），从技能定义读。没有上限的标记不在表里，缺席 ≠ 上限 0
+    marksCap: marksCap(),
     drawPileCount: b?.drawPile.length ?? 0,
     drawnPlayable: b?.drawnPlayable ?? null,
     punish: b?.punish,
-    pendingWindow: state.pendingWindow,
-    // 骰子当众掷：点数公开。续跑指令（resume）是引擎内部的事，不进快照。
-    dice: state.pendingDice && {
-      seat: state.pendingDice.seat,
-      reason: state.pendingDice.reason,
-      values: state.pendingDice.values,
+    pendingWindow: projectWindow(state.pendingWindow, seat),
+    // 骰子当众掷：点数公开。续跑指令（resume）是引擎内部的事，**整个**不进快照——
+    // 只从里面挑出血棘①的受害者，因为 UI 要写「谁摸这些牌」。
+    dice: dice && {
+      seat: dice.seat,
+      reason: dice.reason,
+      values: dice.values,
+      target: dice.resume.kind === "bloodthorn" ? dice.resume.target : undefined,
     },
+    // 攒魂窗口：宣言当众、已摸张数公开（见 SoulHarvest 的注释）。queue/effectKey 是内部记账
+    soulHarvest: sh && { seat: sh.seat, declared: sh.declared, drawn: sh.drawn },
+    // 司夜②：只有「谁跟谁换」是公开的。`cardId` 是暗信息，绝不投影
+    swap: sw && { seat: sw.seat, target: sw.target },
+    // 洗牌牌：打的是①还是②公开（卡面选择当众）。`drawnId` 是暗信息，不投影
+    shufflePending: sp && { seat: sp.seat, choice: sp.choice },
     windowId: windowIdOf(state),
+    // U7b：谁在补喊宽限里、到什么时候。公开（抓不抓得着本来就是全场同步的信息），
+    // UI 拿它把抓按钮压到点再画；引擎侧 `catchUno` 另有一道 `uno_grace` 的硬拒
+    unoGrace: b?.unoGrace,
     winner: b?.winner,
     // 只带自己的候选——别人抽到什么和选了什么都是暗信息
     draftOptions: b?.draftOptions?.[seat],

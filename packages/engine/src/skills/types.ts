@@ -51,6 +51,13 @@ export interface SkillEffect {
    * 键为 §7 的层名（`L2` / `L5`…）或 `discard` / `draws` / `marks` / `dice` / `card_value` / `max`。
    */
   values?: Record<string, number> | null;
+  /**
+   * 标记上限，键就是 03 §5 的标记名（`{ 魂: 6 }`）。这是「标记名 ↔ 上限」的**唯一**机读落点：
+   * `values.max` 认不出自己管的是哪个标记（精英♥3 的 `max: 9` 管的是牌面点数），
+   * 少了它引擎只能把标记名写死在 handler 里。**没有上限的标记不写**（司夜的「盗」）——
+   * 缺席 = 无上限，写 0 会被读成「上限是 0」。
+   */
+  mark_cap?: Record<string, number> | null;
   /** 摸牌修正只作用于哪类摸牌事件；缺席 = 一切摸牌 */
   applies_to?: DrawEventKind[];
   targeting?: 'self' | 'single' | 'all_others' | 'global' | null;

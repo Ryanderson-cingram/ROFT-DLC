@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CREED, CREED_FOOTNOTE, SKILLS, SUITS } from "@/lib/skills";
+import { CREED, CREED_FOOTNOTE, SUITS, allSkills } from "@/lib/skills";
 import "./encyclopedia.css";
 
 // 纯静态：没有 "use client"，展开靠原生 <details>，所以这条路由零客户端 JS。
@@ -44,7 +44,7 @@ export default function EncyclopediaPage() {
         </nav>
 
         {SUITS.map((suit) => {
-          const skills = SKILLS.filter((s) => s.suit === suit.id);
+          const skills = allSkills().filter((s) => s.suit === suit.id);
           return (
             <section className="suit" id={suit.id} key={suit.id}>
               <h2>

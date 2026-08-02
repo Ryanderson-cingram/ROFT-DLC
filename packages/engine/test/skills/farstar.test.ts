@@ -49,7 +49,7 @@ describe("远星：尾段是 +2（弃同色停/转）", () => {
     expect(r.rejected).toBeUndefined();
     expect(r.state.board!.punish).toEqual({
       initiator: 0,
-      segments: [{ seat: 0, face: "+2", draw: 2 }, { seat: 1, face: "+2", draw: 2 }],
+      segments: [{ seat: 0, face: "+2", draw: 2, color: "R" }, { seat: 1, face: "+2", draw: 2, color: "R" }],
       total: 4,
     });
     expect(r.state.pendingWindow!.actors).toEqual([2]);
@@ -105,7 +105,7 @@ describe("远星：尾段是 +4（弃 +2，任意色）", () => {
     expect(s.board!.activeColor).toBe("Y");
     const r = farstar(s, 1, b2.id);
     expect(r.state.board!.activeColor).toBe("B");
-    expect(r.state.board!.punish!.segments[1]).toEqual({ seat: 1, face: "+4", draw: 4 });
+    expect(r.state.board!.punish!.segments[1]).toEqual({ seat: 1, face: "+4", draw: 4, color: "B" });
     expect(r.state.board!.punish!.total).toBe(8);
   });
 

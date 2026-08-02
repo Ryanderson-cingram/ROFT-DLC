@@ -1,5 +1,5 @@
 .login { max-width: 480px; padding-top: var(--sp-5); text-align: center; }
-.login .fan { display: flex; justify-content: center; height: 96px; margin-bottom: var(--sp-4); }
+.login .cardfan { display: flex; justify-content: center; height: 96px; margin-bottom: var(--sp-4); }
 .login .fan .card { margin: 0 -14px; transform-origin: 50% 120%; }
 .login .fan .card:nth-child(1) { transform: rotate(-10deg) translateY(4px); }
 .login .fan .card:nth-child(3) { transform: rotate(10deg) translateY(4px); }
@@ -20,4 +20,5 @@
 }
 .name-input::placeholder { color: #5c6862; }
 
-.btn--block { width: 100%; margin-top: var(--sp-3); }
+/* `.btn--block`（width:100%）本身已上提到 globals.css；这里只留本页的间距。 */
+form > .btn--block { margin-top: var(--sp-3); }

@@ -33,34 +33,41 @@
 
   .seats { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
   @media (min-width: 760px) { .seats { grid-template-columns: repeat(4, 1fr); } }
-  .seat {
+  .seatcard {
     display: flex;
     flex-direction: column;
     gap: var(--sp-2);
     min-height: 108px;
     padding: var(--sp-3);
-    border: 1px solid #2c3833;
+    border: 1px solid var(--edge);
     border-radius: var(--radius-panel);
     background: var(--surface-2);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
-  .seat--self { border-color: var(--brass); }
-  .seat--empty {
+  /* 自己那张座位卡：和对局里的「当前行动者」用同一套亮法，两个页面认得出是同一件事 */
+  .seatcard--self {
+    border-color: var(--piao);
+    background: rgba(99, 210, 195, 0.09);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 8px 22px -16px var(--piao);
+  }
+  .seatcard--empty {
     border-style: dashed;
-    border-color: var(--brass-dim);
-    background: transparent;
+    border-color: var(--edge);
+    background: rgba(11, 17, 25, 0.5);
+    box-shadow: none;
     align-items: center;
     justify-content: center;
     text-align: center;
     color: var(--text-secondary);
   }
-  .seat .no {
+  .seatcard .no {
     font-family: var(--font-mono);
     font-size: 11px;
     letter-spacing: 0.18em;
     color: var(--text-secondary);
   }
-  .seat .who { display: flex; align-items: center; gap: var(--sp-2); font-family: var(--font-display); font-size: 18px; }
-  .seat .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: auto; }
+  .seatcard .who { display: flex; align-items: center; gap: var(--sp-2); font-family: var(--font-display); font-size: 18px; }
+  .seatcard .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: auto; }
 
   .summary { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); }
   .summary div { font-size: 14px; }
@@ -72,9 +79,14 @@
     inset: auto 0 0;
     padding: var(--sp-3);
     border-top: var(--line);
-    background: rgba(13, 20, 17, 0.94);
+    background: rgba(15, 22, 32, 0.94);
     backdrop-filter: blur(8px);
+    box-shadow: 0 -14px 34px -22px rgba(3, 7, 13, 0.95);
   }
+  /* 视角切换：房主与非房主两块行动条只出现一块。
+     缺了这一条，两块会同时堆在底部，底栏高出一倍还把座位卡压掉半排 */
+  body:not([data-state="host"]) .only-host,
+  body:not([data-state="guest"]) .only-guest { display: none; }
   .actionbar .inner { max-width: 960px; margin: 0 auto; }
   .actionbar .btn { width: 100%; }
   .actionbar .hint { text-align: center; margin: var(--sp-2) 0 0; }
@@ -107,7 +119,7 @@
     <hr class="rail">
     <div class="seats">
 
-      <div class="seat seat--self">
+      <div class="seatcard seatcard--self">
         <span class="no">座位 1</span>
         <span class="who"><span class="dot"></span>凛</span>
         <span class="tags">
@@ -116,13 +128,13 @@
         </span>
       </div>
 
-      <div class="seat">
+      <div class="seatcard">
         <span class="no">座位 2</span>
         <span class="who"><span class="dot"></span>阿柴</span>
         <span class="tags"><span class="badge" data-tone="ok">已准备</span></span>
       </div>
 
-      <div class="seat">
+      <div class="seatcard">
         <span class="no">座位 3</span>
         <span class="who"><span class="dot dot--off"></span>小满</span>
         <span class="tags">
@@ -131,7 +143,7 @@
         </span>
       </div>
 
-      <div class="seat seat--empty">
+      <div class="seatcard seatcard--empty">
         <span class="no">座位 4</span>
         <span>空位</span>
         <small class="hint">再来一人就能凑满四人桌</small>

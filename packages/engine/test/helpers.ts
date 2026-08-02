@@ -6,7 +6,15 @@ export const lcg = (seed: number) => () => {
   return seed / 2147483648;
 };
 
-export const ctx = (rng = lcg(1), now = "2026-07-28T12:00:00.000Z"): Ctx => ({ rng, now });
+export const NOW = "2026-07-28T12:00:00.000Z";
+export const ctx = (rng = lcg(1), now = NOW): Ctx => ({ rng, now });
+
+/**
+ * `NOW` 之后 `ms` 毫秒的 ctx。抓漏喊的测试要用它跨过 U7b 那 1 秒补喊宽限——
+ * 所有动作默认都在同一个 `NOW`，不推时间的话交回合后立刻抓一律 `uno_grace`。
+ */
+export const ctxAfter = (ms: number, rng = lcg(1)): Ctx =>
+  ctx(rng, new Date(Date.parse(NOW) + ms).toISOString());
 
 /**
  * 掷出指定点数的 rng（01-R1 的三面骰：`Math.floor(rng() * 3)`）。

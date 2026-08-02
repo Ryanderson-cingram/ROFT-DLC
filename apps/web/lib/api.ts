@@ -94,9 +94,11 @@ const SAYINGS: Record<string, string> = {
 
   // —— UNO（U6/U7）——
   // 「喊不了」这条拒因没有了：U6 改判后引擎不拦资格，按下即受理，手牌不是 1 张就虚喊罚摸 2 张
-  // （`unoMiscalled` 是**事件**，不是拒因——人话在 log-panel.tsx）。
+  // （`unoMiscalled` 是**事件**，不是拒因——人话在 lib/room-log.ts）。
   already_said: "你已经喊过 UNO 了。",
   not_catchable: "抓不了：对方不是 1 张、已经喊过，或者还在他自己的回合里（宽限期）。",
+  // U7b：交回合后那 1 秒是给他补喊的（防秒抓）。正常不会看到这句——按钮那时压根没画出来
+  uno_grace: "还太早：他刚交出回合，有 1 秒补喊时间。",
 
   // —— 技能 ——
   no_skill: "你还没有技能。",

@@ -26,8 +26,6 @@ import type {
 } from "../types.ts";
 
 const HARVEST_WINDOW_MS = 30_000;
-/** 03 §5 的标记名。影歌攒的是「魂」。 */
-const SOUL = "魂";
 const COLORS: Color[] = ["R", "G", "B", "Y"];
 
 /** 三选一。`draw3` 是「亮不出或不愿亮」，也是超时的默认。 */
@@ -51,8 +49,19 @@ const withWindow = (state: GameState, h: SoulHarvest, now: string): GameState =>
 });
 
 /**
+ * 可以被宣言的牌面：四色 × **1–9**（04 2026-08-02 裁定）。
+ *
+ * 0 每色 2 张、1–9 每色 3 张（05 §3 的构成表），宣言 0 时别人亮得出同数的概率只有其余牌面的
+ * 三分之二，攒魂期望更高——它是**严格占优**的一手，留着等于让其余 36 个选项形同虚设。
+ *
+ * 只管宣言：0 照旧是数字牌，U5 的「只有数字牌能打完获胜」不受影响——所以是在这里多判一条，
+ * **不是**去改 `isNumberCard`（那条被收官判定共用）。
+ */
+const isDeclarable = (d: SoulHarvest["declared"]) => isNumberCard(d) && d.face !== "0";
+
+/**
  * 发动①：校验宣言并开窗口。响应顺序 = 自发动者下家起按 direction 轮一圈（不含发动者）。
- * 宣言限数字牌（04：功能牌无「数」可同），**不校验发动者手里有没有**——他本来就可以空口指定。
+ * **不校验发动者手里有没有**——他本来就可以空口指定。
  */
 export function openHarvest(
   state: GameState,
@@ -63,7 +72,7 @@ export function openHarvest(
   ctx: Ctx,
 ): ApplyResult {
   if (!declared) return reject(state, "declaration_required");
-  if (!COLORS.includes(declared.color) || !isNumberCard(declared)) return reject(state, "bad_declaration");
+  if (!COLORS.includes(declared.color) || !isDeclarable(declared)) return reject(state, "bad_declaration");
 
   const queue = b.hands.map((_, i) => nextSeat(b, seat, i + 1)).slice(0, b.hands.length - 1);
   const harvest: SoulHarvest = { seat, declared, queue, drawn: 0, effectKey };
@@ -125,15 +134,18 @@ export function settleHarvest(
     return { state: withWindow(commit(state, { ...board, soulHarvest: next }), next, ctx.now), events };
 
   const { soulHarvest: _done, ...cleared } = board;
-  // 上限（S15「至多六张」）由 gainMarks 的 cap 承担，同样从定义读
-  const ended = gainMarks(cleared, h.seat, SOUL, next.drawn, p.counts.max);
+  // 攒的**是哪个标记、上限多少**都从定义的 `mark_cap` 读（04 ♦3 = `{ 魂: 6 }`），
+  // 本文件不写「魂」这两个字——03 §5 的标记名是开放集合，写死就是第二份真相。
+  // 一条效果只攒一个标记（首批十技能如此），所以取首项；定义没标就一个都不给。
+  const [mark, cap] = Object.entries(p.markCap)[0] ?? ["", undefined];
+  const ended = mark ? gainMarks(cleared, h.seat, mark, next.drawn, cap) : cleared;
   return {
     state: commit(state, ended, state.pendingWindow!.resume),
     events: [
       ...events,
       {
         type: "soulHarvestEnded",
-        public: { seat: h.seat, gained: next.drawn, souls: markCount(ended, h.seat, SOUL) },
+        public: { seat: h.seat, gained: next.drawn, souls: markCount(ended, h.seat, mark) },
       },
     ],
   };

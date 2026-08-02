@@ -47,6 +47,9 @@ const EFFECT_KEYS = new Set([
   'window',
   'cost',
   'values',
+  // 标记名 ↔ 上限的绑定（03 §5 的标记 + 04 的上限）。`values.max` 认不出自己管的是哪个标记
+  // （精英♥3 的 max 管的是牌面点数），所以上限单独一个键，键名就是标记名。
+  'mark_cap',
   'applies_to',
   'targeting',
   'once',
@@ -155,14 +158,16 @@ function parseValue(v: string, at: string): Scalar | string[] | Record<string, n
     const inner = t.slice(1, -1).trim();
     return inner === '' ? [] : inner.split(',').map((s) => s.trim());
   }
-  // 行内映射只用于 `values`（02 §6）：键是白名单里的名字，值只能是整数
+  // 行内映射用于 `values`（02 §6）与 `mark_cap`：值只能是整数。
+  // 键不限 ASCII——`mark_cap` 的键就是标记名，而 03 §5 的标记名是中文且是开放集合。
+  // 键合不合法各自校验：`values` 查 §6 白名单，`mark_cap` 不查（标记名是开放字符串）。
   if (t.startsWith('{')) {
     if (!t.endsWith('}')) throw new Error(`${at}: 行内映射未闭合「${t}」`);
     const out: Record<string, number> = {};
     const inner = t.slice(1, -1).trim();
     if (inner === '') return out;
     for (const pair of inner.split(',')) {
-      const m = /^([A-Za-z_0-9]+):[ ]*(-?\d+)$/.exec(pair.trim());
+      const m = /^([^\s:,{}]+):[ ]*(-?\d+)$/.exec(pair.trim());
       if (!m) throw new Error(`${at}: 行内映射项只能是「键: 整数」，收到「${pair.trim()}」`);
       if (m[1] in out) throw new Error(`${at}: 行内映射键「${m[1]}」重复`);
       out[m[1]] = Number(m[2]);
@@ -243,12 +248,26 @@ function checkValues(raw: Record<string, unknown>, at: string, structured: boole
   }
 }
 
+/**
+ * `mark_cap: { 标记名: 上限 }`——03 §5 的标记名是**开放集合**（§5 自己写着「不完全列表」），
+ * 所以键不查白名单，只守两件事：写成行内映射，且上限 ≥ 1。
+ * **没有上限的标记不写这个字段**（司夜的「盗」）：缺席 = 无上限，写 0 会被读成「上限是 0」。
+ */
+function checkMarkCap(v: unknown, at: string) {
+  if (v === undefined || v === null) return;
+  if (typeof v !== 'object' || Array.isArray(v)) throw new Error(`${at}: mark_cap 必须写成行内映射 { 标记名: 上限 }`);
+  for (const [k, n] of Object.entries(v as Record<string, number>)) {
+    if (n < 1) throw new Error(`${at}: mark_cap「${k}」= ${n}；无上限就别写这个键，别写 0`);
+  }
+}
+
 export function toEffect(raw: Record<string, unknown>, at: string, structured: boolean): SkillEffect {
   if (typeof raw.key !== 'string' || raw.key === '') {
     throw new Error(`${at}: 每条子效果都要有非空的 key（02-methodology §6）`);
   }
   for (const f of ['kind', 'window', 'targeting', 'once', 'duration']) checkEnum(f, raw[f], at);
   checkValues(raw, at, structured);
+  checkMarkCap(raw.mark_cap, at);
   for (const [f, allowed] of [
     ['modifies', MODIFIES],
     ['layer', LAYERS],

@@ -85,6 +85,16 @@ describe('数值槽 values（02-methodology §1/§6）', () => {
   it('值只能是整数，写成自然语言就红', () => {
     expect(() => fence('    values: { discard: 一张 }')).toThrow(/键: 整数/);
   });
+
+  // 「标记名 ↔ 上限」的绑定。键是中文（03 §5 的标记名是开放集合），所以不查白名单——
+  // 但「无上限」必须靠**缺席**表达，写 0 会被下游读成「上限是 0」。
+  it('mark_cap 的键是标记名，原样透传', () => {
+    expect(fence('    mark_cap: { 魂: 6 }')[0].mark_cap).toEqual({ 魂: 6 });
+  });
+
+  it('无上限的标记不许写成 0，只能不写这个键', () => {
+    expect(() => fence('    mark_cap: { 盗: 0 }')).toThrow(/别写 0/);
+  });
 });
 
 describe('摸牌层级（02-methodology §7）', () => {

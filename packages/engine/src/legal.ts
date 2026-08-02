@@ -24,6 +24,13 @@ export const syncUno = (board: Board): Board => ({
 export const MAX_RESHUFFLES = 2;
 
 /**
+ * U7b（2026-08-02）：交回合之后，**刚交出回合的那个座位**有这么久的补喊宽限，抓不得。
+ * 没有它，「忘喊可补、补喊与抓先到先得」在实战里兑现不了——抓的人可以把光标压在按钮上
+ * 等着，被抓者还要先看到自己回合结束。调大这一个常量就能放宽。
+ */
+export const UNO_GRACE_MS = 1_000;
+
+/**
  * U8 平局条件：洗满 2 次之后摸牌堆再度见底，且还没有人获胜。
  * 判的是**牌堆状态**而不是「没人能动了」——所以它是确定性的：同一个牌桌永远给同一个答案。
  */
@@ -79,10 +86,14 @@ export const nextSeat = (b: Board, from = b.currentSeat, step = 1) => {
  */
 export const passTurn = (
   b: Board,
+  now: string,
   from = b.currentSeat,
   step = 1,
-): Pick<Board, "currentSeat" | "activatedThisTurn" | "saidUno"> => ({
+): Pick<Board, "currentSeat" | "activatedThisTurn" | "saidUno" | "unoGrace"> => ({
   currentSeat: nextSeat(b, from, step),
   activatedThisTurn: b.activatedThisTurn.map(() => false),
   saidUno: b.saidUno.map((v, i) => v && b.hands[i].length === 1),
+  // U7b：交回合后给离场者 1 秒补喊。无条件开——他此刻是不是持 1 张无所谓，
+  // `catchable` 本来就还要看手牌数，这里只负责「谁、到什么时候之前抓不得」。
+  unoGrace: { seat: from, until: new Date(Date.parse(now) + UNO_GRACE_MS).toISOString() },
 });

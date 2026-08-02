@@ -114,7 +114,7 @@ Q&A：只能指定一名玩家的技能为**单体技能**。
 
 **位置**：★ / 神条目放在该条目要点之后；花色技能放在该花色表格后的「结构化标注」小节。围栏块靠块内的 `id` 与条目配对，位置只影响可读性。
 
-**字段**：只用 §1 的字段名，逐字沿用。技能级 `id`（必填）/ `category` / `reveal_window` / `force_reveal_ok` / `force_activate_ok` / `sealable` / `upgrade_to` / `notes` / `effects[]`；子效果级 `key` / `kind` / `window` / `cost` / `values` / `applies_to` / `targeting` / `once` / `stacks_with_turn_limit` / `suppression_exempt` / `priority` / `modifies` / `duration` / `layer`。**一个技能的每条子效果都要有自己的 `key`**（`1` / `2` / `3` / `passive` / `on_reveal`，与 04 散文里的 ①②③ 对应）。
+**字段**：只用 §1 的字段名，逐字沿用。技能级 `id`（必填）/ `category` / `reveal_window` / `force_reveal_ok` / `force_activate_ok` / `sealable` / `upgrade_to` / `notes` / `effects[]`；子效果级 `key` / `kind` / `window` / `cost` / `values` / `mark_cap` / `applies_to` / `targeting` / `once` / `stacks_with_turn_limit` / `suppression_exempt` / `priority` / `modifies` / `duration` / `layer`。**一个技能的每条子效果都要有自己的 `key`**（`1` / `2` / `3` / `passive` / `on_reveal`，与 04 散文里的 ①②③ 对应）。
 
 **完整度**：只有当条目的**全部**子效果都标注完时才写 `structured: true`。
 
@@ -130,6 +130,7 @@ Q&A：只能指定一名玩家的技能为**单体技能**。
 | `targeting` | `self` / `single` / `all_others` / `global` | 见 §4 |
 | `modifies` | `draw_count` / `draw_procedure` / `punish_amount` / `card_value` / `color_rule` / `play_legality` / `turn_flow` / `dice` | 「改摸数、改惩罚、改颜色规则等标签」 |
 | `values` | 行内映射 `{ 键: 数字 }`，键取自：§7 的层名 `L0`–`L6`，或 `discard` / `draws` / `draws_partial` / `marks` / `marks_wild` / `dice` / `card_value` / `max` | 数值槽 |
+| `mark_cap` | 行内映射 `{ 标记名: 上限 }`，键是 [03 §5](./03-glossary.md) 的标记名（中文，如 `{ 魂: 6 }`） | 标记上限 |
 | `applies_to` | `punish` / `skill` / `rule`（行内数组） | 摸牌事件类型 |
 
 约定（只是标注约定，不新增裁定）：
@@ -139,6 +140,8 @@ Q&A：只能指定一名玩家的技能为**单体技能**。
 - 键是白名单，**新增一个键要先加到上表**：拼错键名静默变成「这个数没标」，是最难查的漂移
 - 一条效果里有两档摸牌数时，第二档用 `draws_partial`（影歌①：「同色或同数」摸 1 = `draws_partial`，「不亮」摸 3 = `draws`）
 - 同理，一条效果里有两档标记数时，第二档用 `marks_wild`（司夜③：末牌为功能牌的门槛 3 = `marks`，为**无色牌**的门槛 5 = `marks_wild`）
+- **标记上限走 `mark_cap`，不走 `values.max`**（2026-08-02）。两者分工是死的：`mark_cap` 管**标记**的上限、键就是标记名（影歌①「魂至多 6」= `mark_cap: { 魂: 6 }`），`values.max` 管**数值**的上限（精英♥3「当作大 1 点，最大 9」= `values.max: 9`）。`values` 的键是 ASCII 白名单，装不下中文标记名，所以 `max` 单独一个数根本答不出「管的是哪个标记」——绑定丢了，引擎就只能把标记名写死在代码里。同一条上限**不要两处都写**：那正是这条约定要消灭的双源
+- `mark_cap` 的键是**开放集合**（03 §5 自己写着标记是「不完全列表」），所以不设白名单。但**没有上限的标记不写这个键**（司夜的「盗」）：缺席 = 无上限，写 `0` 会被读成「上限是 0」，生成器直接拒
 
 - `layer` 可写多层，如恩惠 `[L2, L5]`——L2 做 −2、L5 兜自带的「至少 1」（§7 两层都点名了恩惠）
 - **摸牌类效果必须带 `layer`**：`modifies` 含 `draw_count`（L0–L5 改数字）或 `draw_procedure`（L6 只改执行方式）时 `layer` 必填；反过来 `layer` 不得出现在其他效果上。技能**自己造成**的摸牌（恒心摸 1、远星的代价摸 2、劫营让对方摸 1）不是「改摸牌数」，不带 `layer`

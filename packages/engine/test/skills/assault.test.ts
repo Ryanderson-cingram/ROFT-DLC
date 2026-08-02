@@ -39,7 +39,7 @@ describe("强袭① 掷骰定倍率", () => {
     expect(rolled.state.board!.punish).toBeUndefined();
 
     const settled = respond(rolled.state, 0, "pass").state;
-    expect(settled.board!.punish!.segments).toEqual([{ seat: 0, face: "+2", draw: 4 }]);
+    expect(settled.board!.punish!.segments).toEqual([{ seat: 0, face: "+2", draw: 4, color: "R" }]);
     expect(settled.board!.punish!.total).toBe(4);
   });
 
@@ -52,7 +52,7 @@ describe("强袭① 掷骰定倍率", () => {
 
   it("掷 0：贡献就是 0，链照样成立", () => {
     const settled = respond(assaulted(0).state, 0, "pass").state;
-    expect(settled.board!.punish!.segments).toEqual([{ seat: 0, face: "+2", draw: 0 }]);
+    expect(settled.board!.punish!.segments).toEqual([{ seat: 0, face: "+2", draw: 0, color: "R" }]);
     expect(settled.board!.punish!.total).toBe(0);
     expect(settled.pendingWindow!.type).toBe("punishStack");
   });
@@ -96,7 +96,7 @@ describe("强袭① 掷骰定倍率", () => {
     const s = seated();
     const r = play(s, 0, s.board!.hands[0][0].id);
     expect(r.events.some((e) => e.type === "diceRolled")).toBe(false);
-    expect(r.state.board!.punish!.segments).toEqual([{ seat: 0, face: "+2", draw: 2 }]);
+    expect(r.state.board!.punish!.segments).toEqual([{ seat: 0, face: "+2", draw: 2, color: "R" }]);
     expect(r.state.pendingWindow!.type).toBe("punishStack");
   });
 
@@ -126,8 +126,8 @@ describe("强袭① 掷骰定倍率", () => {
     expect(rolled.state.pendingWindow!.type).toBe("diceTakeover");
     const settled = respond(rolled.state, 1, "pass").state;
     expect(settled.board!.punish!.segments).toEqual([
-      { seat: 0, face: "+2", draw: 2 },
-      { seat: 1, face: "+4", draw: 8 },
+      { seat: 0, face: "+2", draw: 2, color: "R" },
+      { seat: 1, face: "+4", draw: 8, color: "G" },
     ]);
   });
 });

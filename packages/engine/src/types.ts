@@ -52,6 +52,12 @@ export interface Board {
   currentSeat: number;
   direction: 1 | -1;
   saidUno: boolean[];
+  /**
+   * U7b：刚交出回合的那个座位在 `until` 之前抓不得（补喊宽限）。
+   * 由 `passTurn` 每次换手时重写，所以永远只有**一个**座位在宽限里。
+   * 缺席 = 还没轮转过（开局第一个回合）。
+   */
+  unoGrace?: { seat: number; until: string };
   /** S2 一人一技能：持有的技能 id，未持有为 null。持有 ≠ 亮出。 */
   skills: (string | null)[];
   /** V3/V4：亮出后被动才生效、主动才可发动。未亮出的技能对局面毫无影响。 */
@@ -66,6 +72,12 @@ export interface Board {
    * 做成通用表而不是每技能一个计数器，是因为「颠可当作异/盗/魂/形」本身就要求它们同构。
    */
   marks: Record<string, number>[];
+  /**
+   * 同 `marks` 的形状，但记的是**累计花掉多少**（只增不减）。缺席 = 谁都还没花过（老局读作 `{}`）。
+   * `marks` 只剩余额，答不出 UI 要的「魂 3/6 · 已花 2」；两处同进同出，见
+   * `skills/primitives/marks.ts::spendMarks`（用替代标记顶替时按**实际扣掉的那个标记名**记账）。
+   */
+  marksSpent?: Record<string, number>[];
   /**
    * `once: "once"` 的子效果用掉没有（01-S15 影歌①「整局一次」）。按座位存 effectKey 集合。
    * 缺席 = 谁都还没用过。S18c「重新获得技能则次数重置」到时候清这个座位的表即可。
@@ -135,26 +147,18 @@ export interface PendingSwap {
   cardId: string;
 }
 /**
- * 并列♥4「先声明、逐张摆」的中间态（01 号 spec 的 2026-07-30 裁定）。
- * 只有被劫营♦10 的 `interrupt` 窗口打断时才存在——场上没有可截的劫营者时整组在一次
- * apply 内摆完，这个字段从头到尾不出现。
+ * 并列♥4 的中间态（04 ♥4 的 2026-08-02 改判：**整组原子落地，落地后只截一次**）。
+ * 只有整组落地之后确实有人截得动、劫营♦10 的 `interrupt` 窗口挂起来时才存在。
  *
- * 挂在牌桌上而不是窗口上：`remaining` 是**还在手上**的牌（未摆的不离手），属暗信息，
- * 而 `PendingWindow` 整个进快照——写进去就等于把并列者剩下要摆什么当众念出来了（同 `PendingSwap`）。
+ * 逐张模型（2026-07-30–08-01）下这里存的是「还没摆的牌」，是暗信息；现在整组已经全在
+ * 牌河了，`cards` 是**公开**的（每张都发过 `cardPlayed`），留着只为两件事：
+ * 判劫营牌配不配得上组内任意一张，以及窗口 pass 后知道该收尾谁的回合。
  */
 export interface ParallelPending {
   /** 打并列的那个人 */
   seat: number;
-  /** 已声明但还没摆的牌 id，按提交顺序；这些牌仍在 `hands[seat]` 里 */
-  remaining: string[];
-  /** 全部摆完之后的跟牌目标（三形状表算好的）。被截则作废，跟牌目标改由劫营那张定。 */
-  follow: { color: Color | null; face: Face | null };
-  /**
-   * 声明整组时带的定色，续摆要原样透传：它要跟着续摆的 `cardPlayed` 一起发，
-   * 否则事件流与牌桌对不上、重放走样。
-   * （`sayUno` 曾经也在这里搬运。2026-08-01 二次澄清后「与出牌同时喊」这一档整个不存在了，已删。）
-   */
-  declared?: { chosenColor?: Color };
+  /** 这一组**已经落地**的牌，按提交顺序。劫营配的是它们中的任意一张 */
+  cards: Card[];
 }
 /**
  * 洗牌牌卡面三选一里能从 `playCards` 打出的两个（05 §2b）。
@@ -210,7 +214,18 @@ export type ResumeSpec =
   /** 血棘①：`seat` 掷骰放血，`target`（被他封印的那个人）摸等量。 */
   | { kind: "bloodthorn"; seat: number; target: number };
 /** P6：每段贡献在打出进链时结算，只作用于自己那一张，所以逐段存。 */
-export interface PunishSegment { seat: number; face: "+2" | "+4"; draw: number }
+export interface PunishSegment {
+  seat: number;
+  face: "+2" | "+4";
+  draw: number;
+  /**
+   * 这一段在牌桌上呈现的颜色（+2 = 牌本身的色；+4 = 打出者定的色；远星♦J「视为」的那段 =
+   * 所弃代价牌的色，04 ♦J）。**不能让 UI 从 `playedPile` 回推**：远星的「视为打出」一张牌都
+   * 不进牌河（见 `actions/punish.ts::settleFarstar` 的 06-Q55 注释），链里会有一段在牌河上
+   * 找不到对应的牌。缺席 = 本字段落地之前存下来的老链。
+   */
+  color?: Color | null;
+}
 export interface PunishChain { initiator: number; segments: PunishSegment[]; total: number }
 export interface GameState {
   version: number;
@@ -316,8 +331,21 @@ export interface SnapshotPlayer {
   revealed: boolean;
   /** 03 §5 的计数标记（魂/盗/…）。获得与花费都有公开事件，所以计数本身是公开信息。 */
   marks: Record<string, number>;
+  /** 本局累计花掉的标记（同 `marks` 的公开性——`marksSpent` 事件是公开的）。没花过是 `{}`。 */
+  marksSpent: Record<string, number>;
   /** 03 §4 的状态（封印/五彩/…）。赋予与解除都有公开事件，所以状态本身是公开信息。 */
   statuses: string[];
+  /**
+   * V7：本回合发动过主动没有。发动本身有公开事件（`skillActivated`），所以是公开信息；
+   * UI 的技能弹窗拿它写「本回合主动 0/1」。
+   */
+  activatedThisTurn: boolean;
+  /**
+   * 01-P14：被**谁**的血棘封印了（null = 没被封）。压制层读的真相仍是 `statuses` 里的「封印」，
+   * 这里只为解封条件的文案服务。不是泄露：`sealed` 事件的 public payload 一直带 `by`，
+   * 行动记录早就在渲染「被老白封印了技能」。
+   */
+  sealedBy: number | null;
   ascensions: number;
 }
 /** 发给单个座位的视角快照；客户端只渲染它，永远不自己判规则。 */
@@ -344,13 +372,53 @@ export interface ClientSnapshot {
   canPlayMultiple: boolean;
   /** 弃牌堆全公开（02 §5），完整给：旧在前、新在后。 */
   discardPile: Card[];
+  /**
+   * 出牌堆，`[0]` 是**牌顶**——新→旧，与 `discardPile` 的旧→新**方向相反**。
+   * 引擎按牌桌的真实顺序给，要正序显示的自己 `reverse()`，别指望两个堆同向。
+   *
+   * 无泄露：每一张都被所有人亲眼见过（都是 `cardPlayed` 的 public payload）。
+   * 注意它不是整局历史：摸牌堆见底洗回时被砍到只剩顶张（`actions/draw.ts`），
+   * 所以实际是「上次重洗以来」。要整局历史去 `room_events` 拼，别为此再造一条链。
+   */
+  playedPile: Card[];
+  /**
+   * 标记上限：标记名 → 上限，来自技能定义的 `mark_cap`（04 围栏块）。UI 的「魂 3/6」用它。
+   * **无上限的标记不出现在这张表里**（司夜的「盗」）——缺席 = 无上限，别把它当成 0。
+   * 不逐人给：上限是定义的函数，与座位、与谁持有哪个技能都无关。无泄露：定义是公开百科数据。
+   */
+  marksCap: Record<string, number>;
   drawPileCount: number;
   drawnPlayable?: Card | null;
   punish?: PunishChain;
   pendingWindow?: PendingWindow;
-  /** 挂起的掷骰：骰子当众掷，点数全公开。`resume` 不进快照——那是引擎的续跑指令。 */
-  dice?: { seat: number; reason: string; values: number[] };
+  /**
+   * 挂起的掷骰：骰子当众掷，点数全公开。`resume` **整个不进快照**——那是引擎的续跑指令。
+   * `target` 是从 `resume` 里单挑出来的那一个字段（血棘①放血的受害者，同样是公开的：
+   * 谁被封印本来就有公开事件），UI 要写「老白掷出 2 · 小满摸 2 张」少不了它。
+   */
+  dice?: { seat: number; reason: string; values: number[]; target?: number };
+  /**
+   * 影歌①的攒魂窗口。`types.ts::SoulHarvest` 自己写着「里面没有暗信息：宣言当众、
+   * 队列与已摸张数都是公开的」——`queue` 与 `effectKey` 是引擎内部记账，UI 用不上，不投。
+   */
+  soulHarvest?: { seat: number; declared: { color: Color; face: Face }; drawn: number };
+  /**
+   * 司夜②的还牌窗口。**`cardId` 绝不投影**——盲抽到哪张只有当事双方知道（走 private 事件），
+   * 写进快照等于当众念出来（见 `PendingSwap` 的注释）。
+   */
+  swap?: { seat: number; target: number };
+  /**
+   * 洗牌牌结算到一半：打出的是①还是②。**`drawnId` 不投影**——选项②刚摸那张是暗信息
+   * （见 `ShufflePending` 的注释）。
+   */
+  shufflePending?: { seat: number; choice?: ShuffleChoice };
   windowId?: string;
+  /**
+   * U7b 补喊宽限：`seat` 在 `until`（ISO）之前抓不得。
+   * UI 靠它把抓按钮延到点再画——**这不是让客户端判合法性**：引擎的 `catchUno` 另有一道
+   * `uno_grace` 硬拒，这里只是让按钮别在没用的那一秒里晃。同 `pendingWindow.deadline` 的分工。
+   */
+  unoGrace?: { seat: number; until: string };
   /** `phase === "finished"` 且这里缺席 = 平局，UI 要按「无赢家」写文案（U8）。 */
   winner?: number;
   /** `dealing` 阶段自己的候选技能 id——只有自己的，别人的候选不进快照。 */
