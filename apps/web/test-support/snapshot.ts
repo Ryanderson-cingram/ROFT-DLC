@@ -1,10 +1,9 @@
 import type { Card, ClientSnapshot } from "@roft/engine";
 
 /**
- * 设计稿 game.html 的五个状态，改写成受 `ClientSnapshot` 驱动的数据。
- * 页面已经接上真快照（Task 5），这份 fixture 留着当**契约的编译期验证**：
- * `pnpm --filter web typecheck` 过了，就说明契约装得下 HUD 要画的全部东西。
-
+ * 测试用的一份基准快照（原 `fixtures/snapshot.ts`；P4 起只有测试消费它，所以整体
+ * 搬进 `test-support/`）。设计稿 game.html 的 A 态，改写成受 `ClientSnapshot` 驱动的数据。
+ *
  * 类型标注是重点：它是引擎契约的编译期验证，fixture 编译不过就说明契约有洞。
  * 人物与张数照搬设计稿（凛 7 张、阿柴 2 张已喊 UNO、小满 4 张、老白 11 张神化 2）。
  *
@@ -37,10 +36,11 @@ export const FIXTURE_NAMES: Record<string, string> = {
 
 /** `skillId` 是**引擎 id**（`spade-1`…），不是中文名——快照里就是这个，抄中文名等于假数据。 */
 export const PLAYERS: ClientSnapshot["players"] = [
-  { seat: 0, userId: "u-lin", handCount: 7, saidUno: false, skillId: "spade-1", revealed: true, marks: {}, statuses: [], ascensions: 0 },
-  { seat: 1, userId: "u-chai", handCount: 2, saidUno: true, skillId: "diamond-10", revealed: true, marks: {}, statuses: [], ascensions: 0 },
-  { seat: 2, userId: "u-man", handCount: 4, saidUno: false, skillId: null, revealed: false, marks: {}, statuses: ["封印"], ascensions: 0 },
-  { seat: 3, userId: "u-bai", handCount: 11, saidUno: false, skillId: "diamond-2", revealed: true, marks: {}, statuses: [], ascensions: 2 },
+  { seat: 0, userId: "u-lin", handCount: 7, saidUno: false, skillId: "spade-1", revealed: true, marks: {}, marksSpent: {}, statuses: [], activatedThisTurn: false, sealedBy: null, ascensions: 0 },
+  { seat: 1, userId: "u-chai", handCount: 2, saidUno: true, skillId: "diamond-10", revealed: true, marks: {}, marksSpent: {}, statuses: [], activatedThisTurn: false, sealedBy: null, ascensions: 0 },
+  // 小满被老白（座位 3）的血棘封印着——`sealedBy` 与 `statuses` 里的「封印」同进同出
+  { seat: 2, userId: "u-man", handCount: 4, saidUno: false, skillId: null, revealed: false, marks: {}, marksSpent: {}, statuses: ["封印"], activatedThisTurn: false, sealedBy: 3, ascensions: 0 },
+  { seat: 3, userId: "u-bai", handCount: 11, saidUno: false, skillId: "diamond-2", revealed: true, marks: {}, marksSpent: {}, statuses: [], activatedThisTurn: true, sealedBy: null, ascensions: 2 },
 ];
 
 const BASE = {
@@ -51,6 +51,10 @@ const BASE = {
   direction: 1,
   activeColor: "R",
   playedTop: TOP,
+  // `[0]` 是牌顶，与 discardPile 的方向相反（引擎原样给，正序显示的自己 reverse）
+  playedPile: [TOP, c("R4#p1", "R", "4"), c("B4#p2", "B", "4"), c("B9#p3", "B", "9")],
+  // 标记上限从技能定义来（影歌的魂 6）。没上限的标记不在表里——盗缺席就是「无上限」
+  marksCap: { 魂: 6 },
   followFace: TOP.face,
   // 凛持恒心，不是并列——入口按钮不该露出来（引擎算好给 UI，客户端不判技能）
   canPlayMultiple: false,
@@ -61,8 +65,8 @@ const BASE = {
   disabledReasons: {},
 } satisfies Partial<ClientSnapshot>;
 
-/** A · 我的回合：可打的牌来自 legalActions，无色牌任何时候都能打。 */
-export const fixtureA: ClientSnapshot = {
+/** 基准态 · 我的回合：可打的牌来自 legalActions，无色牌任何时候都能打。 */
+const fixtureA: ClientSnapshot = {
   ...BASE,
   phase: "turnStart",
   currentSeat: 0,
@@ -75,88 +79,6 @@ export const fixtureA: ClientSnapshot = {
     { type: "drawCard", seat: 0 },
   ],
 };
-
-/**
- * B · 惩罚叠链：阿柴 +2 → 老白 +4，累计 6 张，轮到你决定叠还是吃。
- * 契约里这是两步——先 respond{stack}，下一个快照才让你打那张 +4。
- */
-export const fixtureB: ClientSnapshot = {
-  ...BASE,
-  version: 13,
-  phase: "afterPlay",
-  currentSeat: 3,
-  punish: {
-    initiator: 1,
-    segments: [
-      { seat: 1, face: "+2", draw: 2 },
-      { seat: 3, face: "+4", draw: 4 },
-    ],
-    total: 6,
-  },
-  pendingWindow: {
-    type: "punishStack",
-    actors: [0],
-    deadline: new Date(Date.now() + 12_000).toISOString(),
-    defaultChoice: "accept",
-    resume: "play",
-  },
-  windowId: "w13:punishStack",
-  legalActions: [
-    { type: "respond", seat: 0, windowId: "w13:punishStack", choice: "stack" },
-    { type: "respond", seat: 0, windowId: "w13:punishStack", choice: "accept" },
-  ],
-};
-
-/**
- * C · 反应窗口：小满打出蓝 7，你手里也有蓝 7，可以劫营打断。
- * 引擎本轮只实现 punishStack 一种窗口，interrupt 是给 UI 用的示例——
- * HUD 对窗口是通用的：横幅文案与按钮都从 pendingWindow + legalActions 来。
- */
-export const fixtureC: ClientSnapshot = {
-  ...BASE,
-  version: 14,
-  phase: "afterPlay",
-  currentSeat: 2,
-  playedTop: c("B7#0", "B", "7"),
-  activeColor: "B",
-  pendingWindow: {
-    type: "interrupt",
-    actors: [0],
-    deadline: new Date(Date.now() + 8_000).toISOString(),
-    defaultChoice: "pass",
-    resume: "play",
-  },
-  windowId: "w14:interrupt",
-  legalActions: [
-    // 窗口类型叫 interrupt，choice 却是 "raid"（`actions/raid.ts::RAID`）——别混
-    { type: "respond", seat: 0, windowId: "w14:interrupt", choice: "raid", cardIds: [B7.id] },
-    { type: "respond", seat: 0, windowId: "w14:interrupt", choice: "pass" },
-  ],
-};
-
-/** D · 选颜色：定色是提交前的客户端模态（chosenColor 随 playCards 走），不发请求。 */
-export const fixtureD: ClientSnapshot = fixtureA;
-/** 页面用它决定 ?fixture=d 一进来就把定色模态打开在哪张牌上。 */
-export const fixtureDWild = W4;
-
-/**
- * E · 开局抽技能：契约里没有 draft 的表达（没有 draft 动作，快照也不带候选），
- * 所以只有 phase=dealing 是真数据，三个候选是本地静态 UI —— 本轮范围内就是静态的。
- */
-export const fixtureE: ClientSnapshot = {
-  ...BASE,
-  phase: "dealing",
-  currentSeat: null,
-  yourHand: [],
-  players: PLAYERS.map((p) => ({ ...p, skillId: null, handCount: 7, ascensions: 0 })),
-  playedTop: null,
-  activeColor: null,
-  legalActions: [],
-  disabledReasons: {},
-};
-
-export const FIXTURES = { a: fixtureA, b: fixtureB, c: fixtureC, d: fixtureD, e: fixtureE };
-export type FixtureKey = keyof typeof FIXTURES;
 
 /** 每一层都可选（`makeSnapshot({ pendingWindow: { type: "interrupt" } })`）。数组整体替换，不逐项合。 */
 type DeepPartial<T> = T extends readonly unknown[] | Date

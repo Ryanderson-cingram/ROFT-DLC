@@ -20,7 +20,7 @@
 .me { display: flex; align-items: center; gap: var(--sp-2); font-size: 14px; }
 /* 开场：扇形牌 + 一句话定位 */
 .hero { padding: var(--sp-5) 0 var(--sp-4); text-align: center; }
-.fan { display: flex; justify-content: center; margin-bottom: var(--sp-4); height: 96px; }
+.cardfan { display: flex; justify-content: center; margin-bottom: var(--sp-4); height: 96px; }
 .fan .card { margin: 0 -14px; transform-origin: 50% 120%; }
 .fan .card:nth-child(1) { transform: rotate(-14deg) translateY(6px); }
 .fan .card:nth-child(2) { transform: rotate(-7deg) translateY(1px); }
@@ -48,9 +48,6 @@
 .opt-title { font-family: var(--font-display); font-size: 16px; }
 .opt-note { display: block; margin-left: 24px; font-size: 13px; color: var(--text-secondary); }
 .opt:has(input:checked) { border-color: var(--brass); background: rgba(211, 172, 90, 0.09); }
-/* 禁用的规则包：看得见但点不动，好过悄悄消失——玩家知道它存在，只是还没做完 */
-.opt--disabled { cursor: not-allowed; opacity: 0.55; }
-.opt--disabled input { cursor: not-allowed; }
 
 fieldset { margin: 0 0 var(--sp-3); padding: 0; border: 0; }
 legend { padding: 0 0 var(--sp-2); font-size: 13px; color: var(--text-secondary); }
@@ -83,7 +80,8 @@ legend { padding: 0 0 var(--sp-2); font-size: 13px; color: var(--text-secondary)
 }
 .code-input::placeholder { color: #5c6862; letter-spacing: 0.32em; }
 
-.btn--block { width: 100%; margin-top: var(--sp-3); }
+/* `.btn--block`（width:100%）本身已上提到 globals.css；这里只留本页的间距。 */
+.panel > .btn--block { margin-top: var(--sp-3); }
 
 .more {
   display: flex;

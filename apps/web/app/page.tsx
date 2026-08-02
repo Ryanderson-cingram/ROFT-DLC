@@ -31,7 +31,7 @@ export default async function LobbyPage() {
 
       <main className="wrap">
         <section className="hero">
-          <div className="fan" aria-hidden="true">
+          <div className="cardfan" aria-hidden="true">
             <span className="card" data-color="green" data-face="7" />
             <span className="card" data-color="yellow" data-face="+2" />
             <span className="card" data-color="wild" data-face="+4" />

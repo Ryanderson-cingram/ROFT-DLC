@@ -1,78 +1,101 @@
 /* 源：design/mockups/tokens.css（设计稿只读，改视觉先改那边再同步过来）。
-   已剔除「设计稿状态切换器」一节——真实产品里视角由身份和快照决定。 */
+   与设计稿的三处差异，各有理由：
+   1. 已剔除「设计稿状态切换器」一节——真实产品里视角由身份和快照决定；
+   2. 已剔除 spec §8 里**在新设计稿中也没有用到**的两条死规则：
+      `.badge[data-tone="magic"]` 及其 ::before、`.badge .count`；
+      （`.sr-only` 原也在这一列，P5 的倒计时播报用上了它，按 tokens.css 原样收回来）
+   3. §8 清单里的其余几条（`.num` / `.muted` / `.row` / `.pip--empty` /
+      `.badge[data-tone="bad"]`）在新设计稿里都有了新用处，原样保留；
+   4. 弹窗页签与技能详情那一段（`.tabs` / `.sk__*` / `.creed`）从 game-status.html 的
+      页内 <style> 上提到这里——四份设计稿各复制一遍，真实产品里它是一个共享组件；
+   5. `dialog.modal` 与 `.modal::backdrop` 是设计稿没有的：那边 `.modal` 是普通 div，
+      真实产品用原生 <dialog>，得压掉 UA 默认样式并把压暗层画在 ::backdrop 上；
+   6. 已剔除 `.dock__note`（槽下面那行「为什么灰」）——2026-08-02 定的：三个槽各挂一行，
+      坞底糊成三段小字，说的又跟手牌旁那句状态文字重复。设计稿四份 HTML 里还画着它，
+      样式因此留在 tokens.css，只是真实产品不渲染。理由本身没删（`Slot.reason` 还在，
+      技能弹窗仍在用）。 */
 
 /* ============================================================
-   ROFT-DLC 设计令牌 · design direction
+   ROFT-DLC 设计令牌 · design direction「玄夜式盘」
    ------------------------------------------------------------
-   主题「夜牌桌 · 庙火」：一张深墨玉色毡桌，中央一圈灯池（径向渐变）
-   把注意力压在牌与手牌区；UI 底色全部去饱和，**只有牌面五色是画面里
-   唯一饱和的东西**——牌永远最跳。
-   结构色用黄铜（brass）：发丝分隔线、阶段刻度、技能卡压印边框，
-   对应「诸神/铭牌」的题材，而不是常见的亮绿/朱红单点缀。
-   字体三职：宋体系=神名与规则（庄重）、无衬线=界面口语文案、
-   等宽数字=一切机器量（房间码、张数、倒计时、牌面数字，压印感）。
-   签名元素：黄铜刻度轨（.rail / 阶段条）+ 灯池。
+   牌桌 = 一张摊平的六壬式盘：外圈天盘是轮转轨（刻度·指针·方向），
+   内圈地盘是三堆牌河。签名元素就是那条轨——顺序、当前行动者、
+   每个人的技能徽全挂在上面（它同时是第 1/2/6 条反馈的答案）。
+   色：界面几乎不带色相（玄/墨/月白三档灰蓝），只留两个语义色——
+   缥青 = 正向（当前行动者、可打、你的回合），朱砂 = 危险与紧迫。
+   于是牌面五色是画面里唯一饱和的东西，牌永远最跳。
+   字：楷体只给神名与弹窗标题（手刻感，≥18px 才用）；界面口语用无衬线；
+   一切机器量（张数/秒数/累计）用等宽并**放大成主角**。
+   其余一切保持安静：无渐变按钮、无阴影堆叠、面板只有 1px 发丝线。
    ============================================================ */
 
 :root {
-  /* 牌面五色：body = 牌身，ink = 牌身上深色字（对骨白 ≥ 7:1） */
-  --card-red: #d62f2f;
-  --card-red-ink: #8e1a1a;
-  --card-blue: #1e6fd9;
-  --card-blue-ink: #16407f;
-  --card-yellow: #efb01c;
-  --card-yellow-ink: #7a4e06;
-  --card-green: #2e9e4f;
-  --card-green-ink: #145a2c;
-  /* 万能牌拼色：a→b 两端，配合 conic 四色轮 */
-  --card-wild-a: #7b5cd6;
-  --card-wild-b: #2b1a4d;
+  /* ---- 底与面（无色相灰蓝三档；2026-08-01 整体提亮一档） ---- */
+  --xuan: #0f1620;          /* 桌面底色 */
+  --mo: #18212d;            /* 面板 */
+  --mo-2: #24303f;          /* 面板内凸起（座位卡、按钮） */
+  --sunken: #0b1119;        /* 凹槽（牌堆槽、输入框） */
+  --edge: #364554;          /* 1px 发丝线 */
 
-  /* 桌面与容器 */
-  --bg-table: #0d1411;        /* 毡面基色 */
-  --bg-lamp: #1b2a24;         /* 中央灯池 */
-  --surface: #16201c;         /* 面板 */
-  --surface-2: #1f2c26;       /* 面板内凸起（座位卡、技能卡） */
-  --surface-sunken: #0a100d;  /* 凹槽（牌堆、输入框） */
+  /* ---- 字（提亮底色后重新验过，对 --mo 均 ≥ 4.5:1） ---- */
+  --yuebai: #e9eef6;        /* 正文，对 #18212d ≈ 13.9:1 */
+  --qingyan: #9aa9bd;       /* 次级，≈ 6.6:1 */
+  --muted: #8391a4;         /* 辅助行，≈ 5.0:1 */
 
-  /* 黄铜：结构线与强调 */
-  --brass: #d3ac5a;
-  --brass-dim: #6f5a2c;
-  --brass-glow: rgba(211, 172, 90, 0.22);
+  /* ---- 两个语义色 ---- */
+  --piao: #63d2c3;          /* 缥青：当前行动者 / 可打 / 你的回合 */
+  --piao-dim: #2f6d66;
+  --piao-glow: rgba(99, 210, 195, 0.2);
+  --zhu: #e2513c;           /* 朱砂：惩罚 / 倒计时告急 / 封印 */
+  --zhu-dim: #8a3327;
+  --zhu-soft: rgba(226, 81, 60, 0.14);
+  --ok: #63d2c3;
+  --warn: #e0a33c;
 
-  /* 文字（对 --surface 均 ≥ 4.5:1） */
-  --text-primary: #f2ede1;    /* 骨白，对 #16201c ≈ 13.9:1 */
-  --text-secondary: #a8b3ac;  /* 对 #16201c ≈ 6.6:1 */
-  --text-muted: #7d8a83;      /* 仅用于 ≥16px 的辅助行，对 #16201c ≈ 4.6:1 */
-  --text-on-brass: #16140c;
+  /* ---- 牌面五色（新底色上重新校准）+ 骨白 ---- */
+  --gu: #f4f0e6;
+  --card-red: #e23b3b;    --card-red-ink: #8c1616;
+  --card-blue: #3184f0;   --card-blue-ink: #143a78;
+  --card-yellow: #f0b429; --card-yellow-ink: #764a04;
+  --card-green: #31b15a;  --card-green-ink: #10502a;
+  --card-wild-a: #7b5cd6; --card-wild-b: #241a3d;
 
-  /* 语义 */
-  --danger: #c93a2b;        /* 填充用：白字于其上 5.1:1 */
-  --danger-text: #f0897a;   /* 深色底上的危险文字 */
-  --ok: #4bbf7a;
-  --warn: #e8a33d;
-
-  /* 间距 / 圆角 / 层级 */
-  --sp-1: 4px;
-  --sp-2: 8px;
-  --sp-3: 16px;
-  --sp-4: 24px;
-  --sp-5: 32px;
-  --radius-card: 8px;
-  --radius-panel: 14px;
+  /* ---- 间距 / 圆角 ---- */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 16px; --sp-4: 24px; --sp-5: 32px;
+  --radius-card: 6px;
+  --radius-panel: 10px;
   --radius-pill: 999px;
 
-  /* 字体三职 */
-  --font-display: "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", Georgia, serif;
+  /* ---- 字体三职 ---- */
+  --font-display: "Kaiti SC", "STKaiti", "KaiTi", "Kaiti TC", "Noto Serif CJK SC", serif;
   --font-body: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Menlo", "Cascadia Mono", monospace;
 
-  /* 牌面尺寸（改这一处，所有牌等比缩放） */
-  --card-w: 54px;
-  --card-h: 81px;
+  /* ---- 牌面尺寸（改这一处，所有牌等比缩放） ---- */
+  --card-w: 52px;
+  --card-h: 78px;
 
-  --line: 1px solid rgba(211, 172, 90, 0.22);
-  --shadow-lift: 0 6px 18px rgba(0, 0, 0, 0.45);
+  /* ---- 底坞高度：不遮手牌的遮罩/升起面板都靠它定位 ---- */
+  --dock-h: 190px;
+
+  --line: 1px solid var(--edge);
+  --shadow-lift: 0 8px 24px rgba(0, 0, 0, 0.55);
+
+  /* ---- 旧稿变量别名（lobby/room/encyclopedia 三页还在用，重画前不破相） ---- */
+  --bg-table: var(--xuan);
+  --bg-lamp: #131b26;
+  --surface: var(--mo);
+  --surface-2: var(--mo-2);
+  --surface-sunken: var(--sunken);
+  --brass: var(--piao);
+  --brass-dim: var(--piao-dim);
+  --brass-glow: var(--piao-glow);
+  --text-primary: var(--yuebai);
+  --text-secondary: var(--qingyan);
+  --text-muted: var(--muted);
+  --text-on-brass: #052722;
+  --danger: var(--zhu);
+  --danger-text: #f4907f;
 }
 
 /* ---------- 基础排版 ---------- */
@@ -85,61 +108,45 @@ body {
   font-family: var(--font-body);
   font-size: 15px;
   line-height: 1.6;
-  color: var(--text-primary);
-  background:
-    radial-gradient(ellipse 120% 70% at 50% 38%, var(--bg-lamp) 0%, transparent 62%),
-    var(--bg-table);
-  background-attachment: fixed;
+  color: var(--yuebai);
+  /* 灯池换成自上而下的单向天光：视线从轮转轨往牌河走 */
+  background: linear-gradient(180deg, #1e2a3a 0%, var(--xuan) 48%) fixed, var(--xuan);
   -webkit-text-size-adjust: 100%;
 }
 
 h1, h2, h3 {
+  margin: 0;
   font-family: var(--font-display);
   font-weight: 600;
-  letter-spacing: 0.02em;
-  margin: 0;
+  letter-spacing: 0.06em;
 }
 
-/* 一切「机器量」用等宽 + 定宽数字 */
-.num, .code, .count {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-}
+/* 一切「机器量」等宽 + 定宽数字；.num--lead 是被放大成主角的那一档 */
+.num, .code, .count { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.num--lead { font-size: 22px; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
 
-a { color: var(--brass); }
+a { color: var(--piao); }
 
-:focus-visible {
-  outline: 2px solid var(--brass);
-  outline-offset: 2px;
-}
-
-/* ---------- 签名元素：黄铜刻度轨 ---------- */
-
-.rail {
-  height: 1px;
-  border: 0;
-  margin: var(--sp-3) 0;
-  background:
-    repeating-linear-gradient(90deg, var(--brass-dim) 0 6px, transparent 6px 14px);
-  opacity: 0.7;
-}
-
-/* ---------- 面板 ---------- */
-
-.panel {
-  background: var(--surface);
-  border: var(--line);
-  border-radius: var(--radius-panel);
-  padding: var(--sp-3);
-}
+:focus-visible { outline: 2px solid var(--piao); outline-offset: 2px; }
 
 .eyebrow {
+  margin: 0;
   font-family: var(--font-mono);
   font-size: 11px;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: var(--brass);
+  color: var(--piao);
 }
+
+.panel { background: var(--mo); border: var(--line); border-radius: var(--radius-panel); padding: var(--sp-3); }
+.hint { font-size: 13px; color: var(--qingyan); }
+.muted { color: var(--qingyan); }
+.row { display: flex; align-items: center; gap: var(--sp-2); }
+.stack { display: flex; flex-direction: column; gap: var(--sp-3); }
+.wrap { width: 100%; max-width: 960px; margin: 0 auto; padding: var(--sp-3); }
+/* 只念不看：倒计时进入最后 10 秒的那一句播报（spec §7.3）住在这里 */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.rail { height: 1px; border: 0; margin: var(--sp-3) 0; background: repeating-linear-gradient(90deg, var(--edge) 0 6px, transparent 6px 14px); }
 
 /* ---------- 按钮（可点击目标 ≥ 44px） ---------- */
 
@@ -149,47 +156,39 @@ a { color: var(--brass); }
   justify-content: center;
   gap: var(--sp-2);
   min-height: 44px;
-  padding: 0 var(--sp-4);
-  border: 1px solid var(--brass-dim);
-  border-radius: var(--radius-pill);
-  background: var(--surface-2);
-  color: var(--text-primary);
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-panel);
+  background: var(--mo-2);
+  color: var(--yuebai);
   font: inherit;
   font-size: 15px;
   cursor: pointer;
 }
-
-.btn:hover { border-color: var(--brass); }
-
-.btn--primary {
-  background: linear-gradient(180deg, var(--brass) 0%, #b8913f 100%);
-  border-color: var(--brass);
-  color: var(--text-on-brass);
-  font-weight: 600;
-}
-
-.btn--danger {
-  background: var(--danger);
-  border-color: var(--danger);
-  color: #fff;
-  font-weight: 600;
-}
-
+.btn:hover { border-color: var(--piao-dim); }
+.btn--primary { background: var(--piao); border-color: var(--piao); color: #05201c; font-weight: 700; }
+.btn--primary:hover { background: #79ded0; }
+.btn--danger { background: transparent; border-color: var(--zhu); color: #f4907f; font-weight: 600; }
+.btn--danger:hover { background: var(--zhu-soft); }
 .btn--ghost { background: transparent; }
-
-.btn:disabled,
-.btn[aria-disabled="true"] {
-  background: var(--surface);
-  border-color: #303c36;
-  color: var(--text-muted);
-  cursor: not-allowed;
+/* 轮到你（或你是某个窗口的行动者）时，坞里**能点的**按钮一律亮起来。
+   没有语义色的 `.btn` 底色是 --mo-2、置灰的是透明 + --edge，两者只差一层边框——
+   扫一眼分不出「该我了」还是「不关我事」。退让那一档（.btn--ghost）照旧安静：
+   它本来就不该跟主操作抢眼睛。 */
+body[data-turn="you"] .dock__row .btn:not(:disabled):not(.btn--ghost):not(.btn--primary):not(.btn--danger),
+body[data-turn="alert"] .dock__row .btn:not(:disabled):not(.btn--ghost):not(.btn--primary):not(.btn--danger) {
+  border-color: var(--piao);
+  background: rgba(99, 210, 195, 0.16);
+  color: var(--yuebai);
+}
+.btn--block { width: 100%; }
+.btn:disabled, .btn[aria-disabled="true"] {
+  background: transparent; border-color: #1c242f; color: var(--muted); cursor: not-allowed;
 }
 
 /* ---------- .card 牌面 ----------
-   用法：<span class="card" data-color="red" data-face="3"></span>
-   data-color: red|blue|yellow|green|wild|back
-   data-face : 0–9 / +2 / 停 / 转 / 变色 / +4 / 洗牌 / 毒
-   ::before = 左上角小字，::after = 中央大字（衬在骨白椭圆上）      */
+   <span class="card" data-color="red" data-face="3">
+   data-color: red|blue|yellow|green|wild|back ／ data-face: 0–9 / +2 / 停 / 转 / 变色 / +4 / 洗牌 / 毒 */
 
 .card {
   --c: var(--card-red);
@@ -200,155 +199,724 @@ a { color: var(--brass); }
   width: var(--card-w);
   height: var(--card-h);
   border-radius: var(--radius-card);
-  background:
-    radial-gradient(ellipse 40% 31% at 50% 52%, #f6f1e6 0 99%, transparent 100%),
-    var(--c);
-  box-shadow: inset 0 0 0 2px #f6f1e6, var(--shadow-lift);
+  background: radial-gradient(ellipse 42% 32% at 50% 52%, var(--gu) 0 99%, transparent 100%), var(--c);
+  box-shadow: inset 0 0 0 1.5px var(--gu), inset 0 0 0 3px var(--c), 0 2px 6px rgba(0, 0, 0, 0.5);
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   vertical-align: bottom;
 }
-
-/* 角标做成真实牌的「骨白索引块」：深色字压骨白，各色均 ≥ 6:1 */
 .card::before {
   content: attr(data-face);
-  position: absolute;
-  top: 3px;
-  left: 4px;
-  padding: 0 3px;
-  border-radius: 3px;
-  background: #f6f1e6;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.4;
+  position: absolute; top: 3px; left: 4px;
+  padding: 0 3px; border-radius: 2px;
+  background: var(--gu);
+  font-size: 11px; font-weight: 700; line-height: 1.4;
   color: var(--ci);
 }
-
 .card::after {
   content: attr(data-face);
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  font-size: calc(var(--card-w) * 0.46);
-  font-weight: 700;
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  font-size: calc(var(--card-w) * 0.46); font-weight: 700;
   color: var(--ci);
 }
-
-/* 多字牌面（停/转/变色/洗牌/毒）缩字号 */
-.card[data-face="变色"]::after,
-.card[data-face="洗牌"]::after { font-size: calc(var(--card-w) * 0.26); }
-
+.card[data-face="变色"]::after, .card[data-face="洗牌"]::after { font-size: calc(var(--card-w) * 0.25); }
 .card[data-color="blue"]   { --c: var(--card-blue);   --ci: var(--card-blue-ink); }
 .card[data-color="yellow"] { --c: var(--card-yellow); --ci: var(--card-yellow-ink); }
 .card[data-color="green"]  { --c: var(--card-green);  --ci: var(--card-green-ink); }
-
 .card[data-color="wild"] {
   background:
-    radial-gradient(ellipse 40% 31% at 50% 52%, #f6f1e6 0 99%, transparent 100%),
-    conic-gradient(var(--card-red) 0 25%, var(--card-blue) 0 50%,
-                   var(--card-yellow) 0 75%, var(--card-green) 0);
-  --ci: #2b1a4d;
+    radial-gradient(ellipse 42% 32% at 50% 52%, var(--gu) 0 99%, transparent 100%),
+    conic-gradient(var(--card-red) 0 25%, var(--card-blue) 0 50%, var(--card-yellow) 0 75%, var(--card-green) 0);
+  --c: var(--card-wild-b); --ci: #2b1a4d;
 }
-
+/* 牌背：式盘的刻度纹，与桌面同族 */
 .card[data-color="back"] {
   background:
-    repeating-linear-gradient(45deg, var(--card-wild-b) 0 6px, var(--card-wild-a) 6px 12px);
+    repeating-linear-gradient(45deg, transparent 0 5px, rgba(99, 210, 195, 0.13) 5px 6px),
+    linear-gradient(180deg, #1d2836, #131b26);
+  box-shadow: inset 0 0 0 1.5px var(--piao-dim), 0 2px 6px rgba(0, 0, 0, 0.5);
 }
-
 .card[data-color="back"]::before { content: none; }
-.card[data-color="back"]::after { content: "?"; color: #f6f1e6; }
+.card[data-color="back"]::after { content: "☰"; color: var(--piao-dim); font-size: calc(var(--card-w) * 0.34); }
 
-/* 可打出（legalActions）/ 选中 / 不可打 */
-.card--legal {
-  box-shadow: inset 0 0 0 2px #f6f1e6, 0 0 0 2px var(--brass), 0 0 16px var(--brass-glow);
-  transform: translateY(-6px);
-}
-
-.card--dim { filter: saturate(0.35) brightness(0.6); }
-
-.card--pulse { animation: pulse 1.4s ease-in-out infinite; }
-
+.card--legal { box-shadow: inset 0 0 0 1.5px var(--gu), 0 0 0 2px var(--piao), 0 0 18px var(--piao-glow); transform: translateY(-8px); }
+.card--dim { filter: saturate(0.3) brightness(0.55); }
+.card--picked { box-shadow: inset 0 0 0 1.5px var(--gu), 0 0 0 3px var(--yuebai); transform: translateY(-14px); }
+.card--pulse { animation: pulse 1.6s ease-in-out infinite; }
 @keyframes pulse {
-  0%, 100% { box-shadow: inset 0 0 0 2px #f6f1e6, 0 0 0 2px var(--brass), 0 0 6px var(--brass-glow); }
-  50%      { box-shadow: inset 0 0 0 2px #f6f1e6, 0 0 0 3px var(--brass), 0 0 22px var(--brass); }
+  0%, 100% { box-shadow: inset 0 0 0 1.5px var(--gu), 0 0 0 2px var(--piao), 0 0 6px var(--piao-glow); }
+  50%      { box-shadow: inset 0 0 0 1.5px var(--gu), 0 0 0 3px var(--piao), 0 0 26px var(--piao); }
 }
+button.card { padding: 0; border: 0; font: inherit; cursor: pointer; }
 
-@media (prefers-reduced-motion: reduce) {
-  * { animation: none !important; transition: none !important; }
+/* ---------- 轮转轨（签名元素） ----------
+   <nav class="dial" data-dir="cw"> ol.dial__track > li.seat / li.dial__chev  */
+
+.dial {
+  position: sticky; top: 0; z-index: 70;
+  border-bottom: var(--line);
+  background: rgba(9, 12, 17, 0.92);
+  backdrop-filter: blur(8px);
 }
+.dial__track {
+  display: flex; align-items: stretch; gap: var(--sp-1);
+  margin: 0;
+  /* 下内边距装得下 .seat--now::after 那枚轨下指针（bottom:-11px）——
+     溢出裁切发生在 padding box，指针落在 padding 里就不会被 overflow-y:hidden 切掉 */
+  padding: var(--sp-2) var(--sp-3) 13px;
+  list-style: none;
+  /* 只许左右滑。CSS 规范：一个轴非 visible 时，另一个轴的 visible 会被计算成 auto，
+     所以光写 overflow-x:auto 会连纵向一起放开 —— 必须把 y 显式关掉 */
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.dial__track::-webkit-scrollbar { display: none; }
+/* 刻度：轨底的一排细齿，式盘的度数 */
+.dial__scale {
+  height: 7px; margin: 0 var(--sp-3);
+  background: repeating-linear-gradient(90deg, var(--edge) 0 1px, transparent 1px 9px);
+}
+/* 方向雪佛龙。轨下原来还有一条「↻ 顺时针」，一整行只说一个词——撤了之后
+   方向全靠这几枚箭头，所以放大一档并给足对比（缥青实色，不再是那个暗掉的 #4a9b91）。
+   方向的文本替代进了 `.dial` 的 aria-label。 */
+.dial__chev {
+  flex: none; align-self: center;
+  padding: 0 1px;
+  font-family: var(--font-mono); font-size: 26px; font-weight: 700; color: var(--piao);
+  letter-spacing: -4px; line-height: 1;
+}
+.dial__chev::after { content: "›››"; }
+.dial[data-dir="ccw"] .dial__chev { transform: scaleX(-1); }
 
-/* ---------- .badge 状态徽章 ----------
-   <span class="badge" data-tone="magic">五彩</span>
-   tone: neutral(默认) | magic 五彩/领域 | warn 恋战 | bad 心盲/同命 | ok UNO */
+/* 手机与桌面是**同一套排版**（只有字号在窄屏收一档，见文件末尾的断点）：
+   第一行 名字+你+UNO | 手牌数（推到右缘），第二行技能徽，第三行状态/标记。 */
+/* 宽度是**定死的**，不是 min-width：`.seat` 在横滚的 flex 轨里是 `flex:none`，
+   min-width 只给下限、实际宽度按 max-content 走——于是发个技能多一枚标记、名字长一点，
+   卡就自己变宽，整条轨跟着重排。定宽之后名字与技能名溢出改用省略号。 */
+.seat {
+  flex: none; position: relative;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center; gap: 4px 8px;
+  width: 168px; padding: var(--sp-2) 10px 8px;
+  border: 1px solid transparent; border-radius: var(--radius-panel);
+  background: var(--mo);
+}
+.seat__top { grid-column: 1; min-width: 0; display: flex; align-items: baseline; gap: 6px; }
+.seat__name {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--font-display); font-size: 16px; letter-spacing: 0.04em;
+}
+.seat__you {
+  padding: 0 5px; border: 1px solid var(--piao-dim); border-radius: 3px;
+  font-family: var(--font-mono); font-size: 10px; color: var(--piao);
+}
+/* 已喊 UNO 的记号：跟名字同一行的一枚小徽，不占标记行 */
+.seat__uno { flex: none; padding: 0 6px; font-size: 10px; letter-spacing: 0.06em; }
+.seat__hand { grid-column: 2; justify-self: end; display: flex; align-items: baseline; gap: 4px; color: var(--qingyan); font-size: 12px; }
+.seat__hand b { font-family: var(--font-mono); font-size: 19px; font-weight: 700; color: var(--yuebai); }
+.seat .skillbadge { grid-column: 1 / -1; min-width: 0; }
+.seat__tags { grid-column: 1 / -1; }
+/* 标记行的高度是**常驻**的：空着也占这么高，来了标记也不长高——否则第一枚标记一出现
+   就把整条轨顶高，页面跟着能上下滑（第 N 条 UI 反馈）。装不下时这一行自己横滑。 */
+.seat__tags {
+  display: flex; flex-wrap: nowrap; gap: 4px; min-height: 22px; align-items: center;
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain;
+}
+.seat__tags::-webkit-scrollbar { display: none; }
+.seat__tags > * { flex: none; }
+/* 当前行动者：缥青边 + 轨上一枚实心指针 */
+.seat--now { border-color: var(--piao); background: rgba(99, 210, 195, 0.07); }
+.seat--now::after {
+  content: ""; position: absolute; left: 50%; bottom: -11px;
+  width: 9px; height: 9px; margin-left: -4.5px;
+  background: var(--piao); border-radius: 2px; transform: rotate(45deg);
+}
+.seat--you { background: var(--mo-2); }
+.seat--sealed { filter: grayscale(0.6); }
+.seat--out { opacity: 0.55; }
+
+/* 最近一条跑马灯 */
+.ticker {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: 6px var(--sp-3);
+  border-top: var(--line);
+  font-size: 13px; color: var(--qingyan);
+}
+.ticker b { font-family: var(--font-display); color: var(--yuebai); font-weight: 400; }
+.ticker__tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.16em; color: var(--muted); }
+
+/* ---------- 技能徽（自己的在坞左，别人的在座位卡；一律可点开弹窗） ---------- */
+
+.skillbadge {
+  display: inline-flex; align-items: center; gap: 5px;
+  min-height: 26px; padding: 2px 9px;
+  border: 1px solid var(--edge); border-radius: var(--radius-pill);
+  background: var(--sunken);
+  color: var(--yuebai); font: inherit; font-size: 12px;
+  cursor: pointer; text-align: left;
+}
+.skillbadge:hover { border-color: var(--piao-dim); }
+.skillbadge .sigil { font-family: var(--font-mono); color: var(--piao); }
+/* 定宽的座位卡里技能名要能收：溢出省略号，别把卡撑宽 */
+.skillbadge .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-display); letter-spacing: 0.04em; }
+.skillbadge--hidden { border-style: dashed; color: var(--qingyan); }
+.skillbadge--hidden .sigil { color: var(--muted); }
+.skillbadge--sealed { border-color: var(--zhu-dim); color: var(--danger-text); }
+.skillbadge--sealed .sigil { color: var(--zhu); }
+.skillbadge::after { content: "▸"; font-size: 9px; color: var(--muted); }
+
+/* ---------- 徽章 / 标记 / 神化点 ---------- */
 
 .badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 9px;
-  border: 1px solid var(--brass-dim);
-  border-radius: var(--radius-pill);
-  background: rgba(211, 172, 90, 0.08);
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--text-primary);
-  white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 1px 8px;
+  border: 1px solid var(--edge); border-radius: var(--radius-pill);
+  background: var(--sunken);
+  font-size: 11px; line-height: 1.6; color: var(--yuebai); white-space: nowrap;
 }
-
-.badge::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--brass);
-}
-
-.badge[data-tone="magic"] { border-color: #6b4fa8; background: rgba(123, 92, 214, 0.14); }
-.badge[data-tone="magic"]::before { background: var(--card-wild-a); }
-.badge[data-tone="warn"] { border-color: #8a6220; background: rgba(232, 163, 61, 0.14); }
+.badge::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--muted); }
+.badge[data-tone="ok"] { border-color: var(--piao-dim); }
+.badge[data-tone="ok"]::before { background: var(--piao); }
+.badge[data-tone="warn"] { border-color: #7a5a1c; }
 .badge[data-tone="warn"]::before { background: var(--warn); }
-.badge[data-tone="bad"] { border-color: #8a3527; background: rgba(224, 83, 63, 0.14); }
-.badge[data-tone="bad"]::before { background: var(--danger); }
-.badge[data-tone="ok"] { border-color: #2c6f4a; background: rgba(75, 191, 122, 0.14); }
-.badge[data-tone="ok"]::before { background: var(--ok); }
-/* 计数徽章：魂×3、盗×1 —— 数字走等宽 */
-.badge .count { font-weight: 700; }
+.badge[data-tone="bad"] { border-color: var(--zhu-dim); color: var(--danger-text); }
+.badge[data-tone="bad"]::before { background: var(--zhu); }
 
-/* ---------- .pip 神化点 ---------- */
+/* 标记：当前 / 上限 + 已用（03 §5 公开计数） */
+.marks { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; }
+.marks__n { font-family: var(--font-mono); font-weight: 700; color: var(--yuebai); }
+.marks__cap { font-family: var(--font-mono); color: var(--muted); }
+.marks__spent { color: var(--qingyan); }
 
 .pips { display: inline-flex; gap: 3px; vertical-align: middle; }
+.pip { width: 7px; height: 7px; border-radius: 50%; background: var(--piao); box-shadow: 0 0 6px var(--piao-glow); }
+.pip--empty { background: transparent; border: 1px solid var(--piao-dim); box-shadow: none; }
+.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--piao); }
+.dot--off { background: #46525f; }
 
-.pip {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--brass);
-  box-shadow: 0 0 6px var(--brass-glow);
+/* ---------- 牌堆（三堆同构：厚度 + 张数 + 顶牌） ----------
+   <button class="pile" style="--depth:5"> .pile__stack > .card ／ .pile__count ／ .pile__label */
+
+.piles { display: flex; align-items: flex-start; justify-content: center; gap: var(--sp-4); padding: var(--sp-4) var(--sp-3); }
+.pile {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer;
+}
+.pile__stack { position: relative; display: inline-block; }
+/* 堆的切口：厚度随张数，封顶 6 层 */
+.pile__stack::after {
+  content: ""; position: absolute; left: 2px; right: 2px; top: 100%;
+  height: calc(var(--depth, 1) * 2px);
+  border-radius: 0 0 3px 3px;
+  background: repeating-linear-gradient(180deg, var(--edge) 0 1px, var(--sunken) 1px 2px);
+}
+.pile__count {
+  position: absolute; top: -7px; right: -9px;
+  min-width: 24px; padding: 1px 6px;
+  border: 1px solid var(--edge); border-radius: var(--radius-pill);
+  background: var(--xuan);
+  font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--yuebai);
+}
+.pile__label { margin-top: 6px; font-size: 12px; color: var(--qingyan); }
+.pile__label b { color: var(--yuebai); font-weight: 400; }
+.pile--empty .pile__stack {
+  width: var(--card-w); height: var(--card-h);
+  border: 1px dashed var(--edge); border-radius: var(--radius-card);
+}
+.pile--empty .pile__stack::after { content: none; }
+/* 放大的只有**堆顶那一张**，不含展开的扇形：`.pile--top .card` 不限定在 `.pile__stack` 里
+   的话，出牌堆的扇形会跟着一起放大，跟弃牌堆的扇形一大一小（而且窄屏直接糊满半屏）。 */
+.pile--top .pile__stack .card { --card-w: 66px; --card-h: 99px; }
+
+/* 扇形展开：桌面 hover / 触屏点击（[data-open]）都从堆的上方浮出 */
+.fan {
+  position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
+  display: none; align-items: flex-end; gap: 3px;
+  padding: 10px; border: var(--line); border-radius: var(--radius-panel);
+  background: rgba(6, 8, 12, 0.97); box-shadow: var(--shadow-lift);
+  white-space: nowrap; z-index: 60;
+}
+/* 展开只有两条路：桌面 hover / 显式 [data-open]（点击）。
+   触屏上 :hover 与 :focus-within 点一下就**粘住不放**，扇形会变成一条常驻的挡视线的横条——
+   所以 hover 那支关进 (hover: hover)，只有真有指针设备的机器才吃。 */
+.pile[data-open] .fan { display: flex; }
+@media (hover: hover) {
+  .pile:hover .fan, .pile:focus-within .fan { display: flex; }
+}
+.fan .card { --card-w: 36px; --card-h: 54px; }
+.fan .card:nth-child(odd) { transform: rotate(-3deg); }
+.fan .card:nth-child(even) { transform: rotate(3deg); }
+/* 「全部 N 张 →」太占地方：张数堆上的徽记已经写了，这里只留一个放大图标 */
+.fan__more {
+  align-self: center; display: grid; place-items: center;
+  width: 30px; height: 30px; margin-left: 4px;
+  border: 1px solid var(--edge); border-radius: var(--radius-panel);
+  font-size: 0; color: var(--piao); cursor: pointer;
+}
+.fan__more::after { content: "⤢"; font-size: 14px; }
+
+/* ---------- 惩罚叠链 ---------- */
+
+.chain {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2);
+  margin: 0 var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--zhu-dim); border-radius: var(--radius-panel);
+  background: var(--zhu-soft);
+}
+.chain .seg { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+.chain .seg b { font-family: var(--font-mono); font-size: 17px; }
+.chain .arrow { color: var(--muted); font-family: var(--font-mono); }
+.chain .total {
+  margin-left: auto; padding: 1px 10px; border-radius: var(--radius-pill);
+  background: var(--zhu); color: #fff; font-family: var(--font-mono); font-weight: 700;
+}
+.swatch { width: 11px; height: 11px; border-radius: 2px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45); }
+
+/* ---------- 底坞：手牌 + 一句人话 + 三固定槽位 ---------- */
+
+/* 操作区域本身就是最强的状态提示：坞顶一条状态色的线 + 坞内底色 + 呼吸
+   （比全屏氛围可靠得多——眼睛本来就盯在这里） */
+.dockwrap {
+  position: sticky; bottom: 0; z-index: 75;
+  border-top: 2px solid var(--edge);
+  background: linear-gradient(180deg, rgba(15, 22, 32, 0.9), var(--xuan) 34%);
+  backdrop-filter: blur(8px);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+body[data-turn="you"] .dockwrap {
+  border-top-color: var(--piao);
+  background: linear-gradient(180deg, rgba(99, 210, 195, 0.17), var(--xuan) 44%);
+  animation: dock-you 3s ease-in-out infinite;
+}
+body[data-turn="alert"] .dockwrap {
+  border-top-color: var(--zhu);
+  background: linear-gradient(180deg, rgba(226, 81, 60, 0.19), var(--xuan) 44%);
+  animation: dock-alert 1.6s ease-in-out infinite;
+}
+body[data-turn="idle"] .dockwrap { background: linear-gradient(180deg, rgba(11, 17, 25, 0.92), var(--xuan) 34%); }
+/* 不是你的回合：手牌整体退到背景里，一眼就知道现在不该动手 */
+body[data-turn="idle"] .hand { filter: saturate(0.65) brightness(0.8); }
+@keyframes dock-you {
+  0%, 100% { box-shadow: 0 -6px 22px -10px var(--piao-glow); }
+  50%      { box-shadow: 0 -16px 44px -8px var(--piao); }
+}
+@keyframes dock-alert {
+  0%, 100% { box-shadow: 0 -6px 22px -10px rgba(226, 81, 60, 0.3); }
+  50%      { box-shadow: 0 -16px 44px -8px var(--zhu); }
+}
+/* 右侧留出 UNO 定点的位置，提示文字不会被压在它下面 */
+.hand-meta { display: flex; justify-content: space-between; align-items: baseline; gap: var(--sp-2); padding: 6px 124px 0 var(--sp-3); font-size: 12px; color: var(--qingyan); }
+.hand-meta b { font-family: var(--font-mono); font-size: 17px; color: var(--yuebai); }
+.hand { display: flex; gap: 6px; padding: 12px var(--sp-3) 8px; overflow-x: auto; scrollbar-width: thin; }
+.dock__say {
+  display: flex; align-items: center; gap: 8px;
+  margin: 0; padding: 0 var(--sp-3) 6px;
+  font-size: 13px; color: var(--yuebai);
+}
+.dock__say::before { content: "▸"; color: var(--piao); }
+.dock__say--alert { color: #f4907f; }
+.dock__say--alert::before { color: var(--zhu); }
+.dock__row {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: var(--sp-2);
+  padding: 0 var(--sp-3) var(--sp-3);
+}
+.dock__slot { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.dock__slot .btn { width: 100%; }
+.dock__slot--main .btn { min-height: 52px; font-size: 16px; }
+/* 定色：主槽直接换成四个色块，完全不遮手牌 */
+.colors { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.colors button {
+  min-height: 52px; border: 0; border-radius: var(--radius-panel);
+  font-family: var(--font-display); font-size: 17px; font-weight: 700; color: #fff; cursor: pointer;
+}
+/* 底色由 `data-color`（引擎的 Color 码）驱动，**不用 nth-child**：spec §2 bug 3——
+   位置绑死颜色、文字来自 `lib/cards.ts` 的数组，改一次数组顺序就会出现写着「红」的蓝底按钮。
+   这是设计稿 tokens.css 与本文件唯一一处有意的分歧（设计稿是静态的，没有这个失配面）。 */
+.colors button[data-color="R"] { background: var(--card-red); }
+.colors button[data-color="B"] { background: var(--card-blue); }
+.colors button[data-color="Y"] { background: var(--card-yellow); color: var(--card-yellow-ink); }
+.colors button[data-color="G"] { background: var(--card-green); }
+
+/* 主按钮外圈的倒计时环：计时贴着决策点，不再占顶栏 */
+.ring { position: relative; }
+.ring::before {
+  content: ""; position: absolute; inset: -4px; border-radius: 14px;
+  background: conic-gradient(var(--piao) calc(var(--p, 100) * 1%), rgba(255, 255, 255, 0.06) 0);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  padding: 3px;
+}
+.ring[data-urgent]::before { background: conic-gradient(var(--zhu) calc(var(--p, 100) * 1%), rgba(255, 255, 255, 0.06) 0); }
+.ring__secs {
+  position: absolute; top: -9px; right: -6px;
+  padding: 0 6px; border-radius: var(--radius-pill);
+  background: var(--xuan); border: 1px solid var(--edge);
+  font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--piao);
+}
+.ring[data-urgent] .ring__secs { color: var(--zhu); border-color: var(--zhu-dim); }
+
+/* UNO 定点：坞右上角。抓漏喊贴在它左边——两者是同一件事的正反面，
+   只在引擎给了 catchUno 的那一帧出现（wrap-reverse：多目标时往上叠，坞不移位） */
+/* 这个 z-index 只在 `.dockwrap` 内部有效：`.dockwrap` 既有 z-index 又有 backdrop-filter，
+   它是一个**栈上下文**，里面的层级封在 75 这一档里，再大的数也翻不出去。
+   所以「读条压住 UNO」不能在这里解决，得让 `.tickline` 落到 75 以下（见那条规则）。 */
+.unobar {
+  position: absolute; right: var(--sp-3); top: -22px; z-index: 2;
+  display: flex; align-items: center; justify-content: flex-end;
+  flex-wrap: wrap-reverse; gap: 6px;
+  max-width: calc(100% - var(--sp-3) * 2);
+}
+.unobar .btn { font-size: 12px; }
+/* 三态 */
+.uno {
+  min-height: 40px; padding: 0 16px;
+  border: 1px solid var(--warn); border-radius: var(--radius-pill);
+  background: var(--xuan); color: var(--warn);
+  font: inherit; font-size: 13px; font-weight: 700; letter-spacing: 0.1em; cursor: pointer;
+}
+.uno[data-state="said"] { border-color: var(--piao-dim); color: var(--piao); cursor: default; }
+
+/* ---------- 倒计时读条：贴在**操作区域顶边**（坞的上沿），不占任何布局空间 ----------
+   `--dock-h` 由每页的 syncDockH() 写成坞的真实高度，所以这条线严丝合缝压在坞顶。 */
+.tickline {
+  /* z-index 要**低于** `.dockwrap` 的 75：读条贴在坞的上沿，跟坞体一格都不重叠，
+     唯一压到的是从坞里探出头的 `.unobar`（UNO 那一排在坞顶上方 22px）。
+     压在坞下面之后 UNO 就露出来了；`.unobar` 自己那个 z-index 封在坞的栈上下文里，
+     调它是没用的（见 `.unobar`）。 */
+  position: fixed; bottom: var(--dock-h); left: 0; z-index: 74;
+  height: 3px; width: var(--w, 0%);
+  background: var(--piao);
+  box-shadow: 0 0 10px var(--piao-glow);
+  transition: width 0.25s linear;
+}
+.tickline[data-urgent] { background: var(--zhu); box-shadow: 0 0 10px var(--zhu); }
+
+/* ---------- 全屏氛围：三档（第 2 条） ----------
+   底光从手牌那一侧升起（该你动手的地方），不是四边匀亮的边框光 */
+/* z-index:-1 = 压在全部内容之下、画布之上（body 的底色已提升到画布） */
+.ambience { position: fixed; inset: 0; z-index: -1; pointer-events: none; }
+body[data-turn="you"] .ambience {
+  background: radial-gradient(130% 70% at 50% 108%, rgba(99, 210, 195, 0.3), transparent 64%);
+  box-shadow: inset 0 0 190px rgba(99, 210, 195, 0.22);
+  animation: breathe 3s ease-in-out infinite;
+}
+body[data-turn="alert"] .ambience {
+  background: radial-gradient(130% 70% at 50% 108%, rgba(226, 81, 60, 0.34), transparent 64%);
+  box-shadow: inset 0 0 190px rgba(226, 81, 60, 0.26);
+  animation: breathe 1.6s ease-in-out infinite;
+}
+body[data-turn="idle"] .ambience { box-shadow: inset 0 0 200px rgba(0, 0, 0, 0.6); }
+@keyframes breathe { 0%, 100% { opacity: 0.42; } 50% { opacity: 1; } }
+
+/* ---------- 地盘：牌河背后那圈式盘刻度（签名母题，纯装饰） ---------- */
+.field { position: relative; display: grid; place-items: center; }
+.plate {
+  position: absolute; z-index: -1; pointer-events: none;
+  width: min(520px, 84vw); aspect-ratio: 1;
+  border: 1px dashed var(--edge); border-radius: 50%;
+  opacity: 0.85;
+}
+.plate::before {
+  content: ""; position: absolute; inset: 16%;
+  border: 1px solid var(--edge); border-radius: 50%;
+}
+.plate::after {
+  content: ""; position: absolute; inset: 0; border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, var(--edge) 0 0.5deg, transparent 0.5deg 7.5deg);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 9px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 9px));
 }
 
-.pip--empty { background: transparent; border: 1px solid var(--brass-dim); }
+/* ---------- 遮罩与面板 ----------
+   .scrim--table 只盖牌桌区，底坞（手牌）永远亮着——第 4 条 */
+.scrim { position: fixed; inset: 0; z-index: 90; background: rgba(4, 6, 9, 0.82); backdrop-filter: blur(3px); }
+.scrim--table { bottom: var(--dock-h); }
+/* 竖柱：眉标/标题/关闭 与 lead 固定，只有 `.sheet__body` 滚。
+   面板整体滚的话，内容一长（宣言盘 36 张牌）收场的出口就滚出视野了。 */
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: var(--dock-h); z-index: 92;
+  max-height: calc(100vh - var(--dock-h) - 24px);
+  display: flex; overflow: hidden;
+  padding: var(--sp-3) var(--sp-3) var(--sp-4);
+  border-top: 1px solid var(--piao-dim);
+  border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+  background: var(--mo);
+  box-shadow: var(--shadow-lift);
+}
+.sheet__in { flex: 1; min-height: 0; max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; }
+.sheet__head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-3); }
+.sheet__close {
+  flex: none; min-width: 34px; min-height: 34px;
+  border: var(--line); border-radius: var(--radius-panel);
+  background: transparent; color: var(--qingyan);
+  font: inherit; font-size: 20px; line-height: 1; cursor: pointer;
+}
+.sheet__close:hover { border-color: var(--piao-dim); color: var(--piao); }
+.sheet__body { min-height: 0; overflow-y: auto; }
+.sheet h2 { font-size: 19px; margin: 4px 0 0; }
+.sheet .lead { margin: 6px 0 var(--sp-3); color: var(--qingyan); font-size: 13px; }
+/* 居中弹窗：只给「此刻不需要看手牌」的场合（抽 3 选 1、技能详情、堆的完整列表） */
+.modal { position: fixed; inset: 0; z-index: 96; display: grid; place-items: center; padding: var(--sp-3); }
+/* 真实产品里 `.modal` 是原生 <dialog>（focus trap / Esc / 背景 inert 全是浏览器白送的），
+   所以要把 UA 默认的白底、边框、居中外边距与尺寸上限一起压掉——设计稿是普通 div，没有这一条。 */
+dialog.modal { margin: 0; width: 100%; height: 100%; max-width: none; max-height: none; padding: var(--sp-3); border: 0; background: transparent; color: inherit; overflow: visible; }
+/* ::backdrop 就是那层压暗，与 .scrim 同一组数值（模态 dialog 在顶层，兄弟 div 盖不住它） */
+.modal::backdrop { background: rgba(4, 6, 9, 0.82); backdrop-filter: blur(3px); }
+.modal__box {
+  width: 100%; max-width: 560px; max-height: 86vh; overflow-y: auto;
+  padding: var(--sp-4) var(--sp-3);
+  border: var(--line); border-radius: var(--radius-panel);
+  background: var(--mo); box-shadow: var(--shadow-lift);
+}
+.modal__box h2 { font-size: 21px; margin: 4px 0 0; }
 
-/* ---------- 在线点 ---------- */
+/* 从手牌里挑一张 / 从盘里挑一张：候选牌网格 */
+.picks { display: flex; flex-wrap: wrap; gap: 6px; }
+.picks .card { cursor: pointer; }
 
-.dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--ok);
+/* ---------- 弹窗页签与技能详情（design/mockups/game-status.html） ----------
+   放 globals 不放 game.css：设计稿里它们写在每页的 <style> 只是因为四份稿各自复制了一遍；
+   真实产品里技能弹窗与牌堆弹窗是**共享组件**，样式属于组件层。 */
+
+.tabs { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: var(--sp-3) 0 var(--sp-2); border-bottom: var(--line); }
+.tabs button {
+  min-height: 38px; padding: 0 4px; margin-bottom: -1px;
+  border: 0; border-bottom: 2px solid transparent; background: none;
+  color: var(--qingyan); font: inherit; font-size: 14px; cursor: pointer;
+}
+.tabs button[aria-selected="true"], .tabs button[aria-pressed="true"] { color: var(--yuebai); border-bottom-color: var(--piao); }
+.tabpanel[hidden] { display: none; }
+
+/* 弹窗顶栏：眉标 + 关闭（技能名与徽章下沉到每一份内容里，因为三份各不相同） */
+.sk__bar { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.sk__head { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.sk__sigil { font-family: var(--font-mono); font-size: 15px; color: var(--piao); }
+.sk__l0 { margin: var(--sp-3) 0 0; font-size: 15px; }
+.sk__l1 { margin: var(--sp-2) 0 0; font-size: 14px; color: var(--qingyan); }
+.sk__l2 { display: flex; gap: 6px; margin: var(--sp-3) 0 0; font-size: 13px; color: var(--danger-text); }
+.sk__l2::before { content: "✕"; }
+.sk__meta { display: grid; gap: 6px; margin-top: var(--sp-3); padding-top: var(--sp-3); border-top: var(--line); font-size: 13px; }
+.sk__meta div { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-3); }
+.sk__meta span:first-child { flex: none; color: var(--qingyan); }
+/* 发动按钮组：有几个目标就几个按钮，不做下拉 */
+.sk__acts { display: grid; gap: var(--sp-2); margin-top: var(--sp-3); }
+.creed { margin: 0; padding-left: 1.3em; font-size: 14px; }
+.creed li { margin-bottom: 6px; }
+.creed + p { margin: var(--sp-3) 0 0; font-size: 13px; color: var(--qingyan); }
+
+/* 坞左槽的技能徽：徽还是徽，但坞里的点击目标要够 44px */
+.dock__slot .skillbadge { min-height: 44px; justify-content: center; border-radius: var(--radius-panel); }
+.skillbadge:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* 牌堆完整列表：小牌横向换行，「牌顶」贴在最后一张右边 */
+.modal--pile .picks { margin-top: var(--sp-2); }
+.modal--pile .picks .card { --card-w: 42px; --card-h: 63px; }
+.modal--pile .picks .badge { align-self: flex-end; }
+.modal--pile h2 { margin-top: var(--sp-2); }
+.modal--pile .hint { margin: var(--sp-3) 0 0; }
+
+/* 一局收场：居中一句话 + 一个出口。烟花铺在盒子里、盖不住字（z-index 分层） */
+.modal--over .modal__box { position: relative; overflow: hidden; max-width: 420px; }
+.over { position: relative; z-index: 1; display: grid; gap: var(--sp-2); justify-items: center; text-align: center; padding: var(--sp-3) 0 var(--sp-2); }
+.over h2 { margin: 0; font-size: 30px; }
+.over .hint { margin: 0 0 var(--sp-3); }
+.over .btn { text-decoration: none; }
+/* 两个出口叠放：主操作在上、回大厅在下 */
+.over .btn + .btn { margin-top: var(--sp-2); }
+/* 烟花：三轮 × 八条射线，角度与延迟由 <Fireworks> 写成内联的 --x / --y / --d / --c */
+.fw { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.fw i {
+  position: absolute; left: 50%; top: 38%;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--c); box-shadow: 0 0 8px var(--c);
+  animation: burst 1.6s ease-out var(--d) infinite backwards;
+}
+@keyframes burst {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+  10%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) scale(0.25); }
 }
 
-.dot--off { background: #5b665f; }
+/* ---------- 记录抽屉（offcanvas，两端同一套） ---------- */
 
-/* ---------- 通用小工具 ---------- */
+.drawer__handle {
+  position: fixed; right: 0; top: 42%; z-index: 78;
+  min-height: 88px; padding: var(--sp-2) 5px;
+  border: var(--line); border-right: 0; border-radius: var(--radius-panel) 0 0 var(--radius-panel);
+  background: var(--mo); color: var(--qingyan);
+  font: inherit; font-size: 12px; letter-spacing: 0.2em;
+  writing-mode: vertical-rl; cursor: pointer;
+}
+.drawer__handle:hover { color: var(--piao); border-color: var(--piao-dim); }
+/* 抽屉的遮罩：被挡住的那半屏压暗，点它即关（与 .drawer 同由 body[data-drawer] 驱动） */
+.drawer-scrim {
+  position: fixed; inset: 0; z-index: 93;
+  background: rgba(4, 6, 9, 0.62);
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.22s ease;
+}
+body[data-drawer="open"] .drawer-scrim { opacity: 1; pointer-events: auto; }
 
-.muted { color: var(--text-secondary); }
-.hint { font-size: 13px; color: var(--text-secondary); }
-.row { display: flex; align-items: center; gap: var(--sp-2); }
-.stack { display: flex; flex-direction: column; gap: var(--sp-3); }
-.wrap { width: 100%; max-width: 960px; margin: 0 auto; padding: var(--sp-3); }
-.sr-only {
-  position: absolute; width: 1px; height: 1px; overflow: hidden;
-  clip: rect(0 0 0 0); white-space: nowrap;
+.drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 94;
+  width: min(360px, 88vw);
+  display: flex; flex-direction: column;
+  border-left: var(--line);
+  background: var(--mo);
+  transform: translateX(100%);
+  transition: transform 0.22s ease;
+}
+.drawer[data-open], body[data-drawer="open"] .drawer { transform: none; }
+.drawer__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); padding: var(--sp-3); border-bottom: var(--line); }
+.drawer__head h2 { font-size: 16px; }
+.drawer__close { border: 0; background: none; color: var(--qingyan); font: inherit; font-size: 20px; cursor: pointer; padding: 0 4px; }
+.log { margin: 0; padding: var(--sp-2) 0; list-style: none; overflow-y: auto; scrollbar-width: thin; }
+.log li { display: flex; gap: 8px; padding: 7px var(--sp-3); font-size: 13px; line-height: 1.45; border-left: 2px solid transparent; }
+.log li + li { border-top: 1px dashed rgba(38, 49, 63, 0.7); }
+.log .who { flex: none; font-family: var(--font-display); color: var(--piao); }
+.log .what { min-width: 0; }
+.log li[data-kind="punish"] { border-left-color: var(--zhu); }
+.log li[data-kind="skill"] { border-left-color: var(--piao-dim); }
+.log li[data-kind="uno"] { border-left-color: var(--warn); }
+.log li[data-kind="system"], .log li[data-kind="system"] .who { color: var(--qingyan); }
+
+/* ---------- 骰子（强袭 0/1/2） ---------- */
+.dice { display: inline-flex; gap: 6px; }
+.die {
+  position: relative;
+  display: grid; place-items: center;
+  width: 40px; height: 40px;
+  border: 1px solid var(--piao-dim); border-radius: var(--radius-card);
+  background: var(--sunken);
+  font-family: var(--font-mono); font-size: 20px; font-weight: 700; color: var(--piao);
+}
+
+/* ---------- 窄屏：整体收一档字号与占地，按钮别吃掉半个屏幕 ----------
+   （布局怎么排在各页自己的断点里；这里只管尺度） */
+@media (max-width: 640px) {
+  body { font-size: 14px; }
+  .btn { min-height: 30px; padding: 0 8px; font-size: 11px; }
+  .dock__slot--main .btn { min-height: 36px; font-size: 12.5px; }
+  .colors button { min-height: 40px; font-size: 14px; }
+  .dock__row { gap: 6px; padding: 0 10px 10px; }
+  .dock__say { padding: 0 10px 5px; font-size: 12px; }
+  .hand { padding: 10px 10px 6px; gap: 5px; }
+  .hand-meta { padding: 4px 104px 0 10px; font-size: 11px; }
+  .hand-meta b { font-size: 15px; }
+  .unobar { top: -17px; right: 10px; max-width: calc(100% - 20px); }
+  .unobar .btn { font-size: 11px; }
+  .uno { min-height: 32px; padding: 0 12px; font-size: 12px; }
+  /* 座位卡窄屏**只收字号，不改排版**——手机与桌面同一套结构（三行），
+     一致的位置感比省那几像素值钱。 */
+  .seat { gap: 2px 6px; width: 124px; padding: 4px 7px 5px; }
+  .seat__name { font-size: 13px; }
+  .seat__you { padding: 0 3px; font-size: 9px; }
+  .seat__hand { gap: 3px; }
+  .seat__hand b { font-size: 15px; }
+  .seat__tags { gap: 3px; min-height: 17px; }
+  .seat__hand, .badge { font-size: 9px; }
+  .badge { padding: 0 5px; }
+  .badge::before { width: 4px; height: 4px; }
+  .pip { width: 6px; height: 6px; }
+  .skillbadge { min-height: 20px; padding: 1px 6px; font-size: 10px; }
+  .seat--now::after { bottom: -9px; width: 7px; height: 7px; margin-left: -3.5px; }
+  .ticker { padding: 5px 10px; font-size: 12px; }
+  .dial__track { padding: 6px 10px 11px; }
+  .dial__chev { font-size: 22px; }
+  .pile__label { font-size: 11px; }
+  .sheet { padding: 10px 10px var(--sp-3); }
+  .modal__box { padding: var(--sp-3) 10px; }
+  .drawer__head { padding: 10px; }
+  .log li { padding: 6px 10px; font-size: 12px; }
+  /* 堆的扇形在窄屏改成「贴着坞顶的一条」，不会被顶部的轨或坞裁掉 */
+  .fan {
+    position: fixed; left: 8px; right: 8px; bottom: calc(var(--dock-h) + 8px);
+    transform: none; flex-wrap: wrap; justify-content: center;
+  }
+}
+
+/* ---------- 动效：只做「有东西变了」的提示，不做表演 ----------
+   实现取巧但可靠：状态切换本来就是 display 的切换，元素重新显示时 CSS 动画会自动
+   重播——所以下面这些不需要任何 JS 配合，换状态、换回合、换窗口都会自己动一次。
+   全部动画在 prefers-reduced-motion 下由文件末尾那条规则统一关掉。 */
+
+@keyframes rise { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+@keyframes pop  { from { opacity: 0; transform: scale(0.94); }     to { opacity: 1; transform: none; } }
+@keyframes deal { from { opacity: 0; transform: translateY(20px) scale(0.9); } to { opacity: 1; transform: none; } }
+@keyframes sheet-up { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* 最近一条记录换了 / 一句人话换了 —— 轻轻抬一下，眼睛会被带过去 */
+.ticker, .dock__say { animation: rise 0.3s ease-out; }
+/* 三个槽位的按钮换内容 */
+.dock__slot .btn { animation: rise 0.24s ease-out; }
+/* 牌河：顶牌换了往上淡入一次（`<Pile>` 给顶牌挂了 `key={top.id}`，换牌 = 换元素 = 重播），
+   张数变了闪一下 */
+.pile__stack .card { animation: rise 0.3s ease-out; }
+.pile__count { animation: pop 0.26s ease-out; }
+/* 记录：新的一条从下面浮上来（最新在上，所以只有新那条是新元素） */
+.log li { animation: rise 0.26s ease-out; }
+/* 骰子当众掷：滚 0.5 秒 → **停住**，然后荡两圈波纹把点数指出来（各 1 秒）。
+   停顿这一下是重点：不停就只是「数字又刷新了一次」，看不出掷了几点。
+   三颗错开 90ms，看得出是「掷」不是「刷新」。重播靠 `<CardRiver>` 给这一块的 key。 */
+@keyframes roll {
+  0%   { opacity: 0; transform: rotate(0) scale(0.6); }
+  60%  { opacity: 1; transform: rotate(342deg) scale(1.16); }
+  100% { opacity: 1; transform: rotate(360deg) scale(1); }
+}
+@keyframes ripple {
+  from { opacity: 0.9; transform: scale(0.62); }
+  to   { opacity: 0;   transform: scale(2); }
+}
+.die { animation: roll 0.5s cubic-bezier(0.2, 0.9, 0.25, 1) backwards; }
+/* 波纹从骰子停下那一刻起（delay = roll 的时长），荡两圈就收 */
+.die::after {
+  content: ""; position: absolute; inset: -5px;
+  border: 2px solid var(--piao); border-radius: 50%;
+  animation: ripple 1s ease-out 0.5s 2 backwards;
+}
+.die:nth-child(2) { animation-delay: 0.09s; }
+.die:nth-child(2)::after { animation-delay: 0.59s; }
+.die:nth-child(3) { animation-delay: 0.18s; }
+.die:nth-child(3)::after { animation-delay: 0.68s; }
+/* 惩罚链新叠了一段 */
+.chain, .chain .seg { animation: rise 0.28s ease-out; }
+/* 轮转轨：指针落到新的人身上 */
+.seat--now::after { animation: pop 0.24s ease-out; }
+.seat { animation: fade 0.24s ease-out; }
+/* 手牌逐张发出来（摸牌、换手、重排都会重播一次） */
+.hand .card { animation: deal 0.26s ease-out backwards; }
+.hand .card:nth-child(1) { animation-delay: 0s; }
+.hand .card:nth-child(2) { animation-delay: 0.03s; }
+.hand .card:nth-child(3) { animation-delay: 0.06s; }
+.hand .card:nth-child(4) { animation-delay: 0.09s; }
+.hand .card:nth-child(5) { animation-delay: 0.12s; }
+.hand .card:nth-child(6) { animation-delay: 0.15s; }
+.hand .card:nth-child(7) { animation-delay: 0.18s; }
+.hand .card:nth-child(8) { animation-delay: 0.21s; }
+.hand .card:nth-child(n + 9) { animation-delay: 0.24s; }
+/* 高亮的出现与消失走过渡，不是硬切 */
+.card { transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease; }
+/* 浮层：升起面板 / 弹窗 / 遮罩 / 堆的扇形 */
+.sheet { animation: sheet-up 0.26s ease-out; }
+.modal__box { animation: pop 0.22s ease-out; }
+.scrim, .modal, .modal::backdrop { animation: fade 0.2s ease-out; }
+.fan { animation: pop 0.18s ease-out; }
+/* 抽屉：滑入 + 遮罩淡入（已在各自的 transition 里，这里只统一缓动） */
+.drawer { transition: transform 0.24s cubic-bezier(0.32, 0.72, 0, 1); }
+.drawer-scrim { transition: opacity 0.24s ease; }
+/* 数字变化的闪一下：给真实产品用（客户端在值变化时加 .is-bump，设计稿里不自动触发） */
+@keyframes bump { 0%, 100% { color: inherit; } 35% { color: var(--piao); transform: scale(1.12); } }
+.is-bump { display: inline-block; animation: bump 0.5s ease-out; }
+
+/* ---------- 无障碍底线 ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  /* 动画关掉后，三档氛围仍靠颜色区分得出来 */
+  body[data-turn="you"] .ambience { opacity: 1; }
+  body[data-turn="alert"] .ambience { opacity: 1; }
 }

@@ -59,6 +59,23 @@ export function engineChoices(): string[] {
   ].sort();
 }
 
+/**
+ * 引擎能发出的**事件类型**全集。`EngineEvent.type` 只是 `string`（没有联合类型可以读），
+ * 所以按两种写法认：
+ *
+ * 1. 事件字面量 —— `{ type: "cardPlayed", public: { … } }`（`public` 是事件独有的字段，
+ *    正好把它与同样写 `type: "…"` 的**动作**字面量分开）。中间夹注释也认。
+ * 2. 开窗辅助函数的入参 —— `{ type: "shuffleDiscard", …, event: "shuffleDiscardOpened" }`
+ *    （这几条事件不在调用点拼字面量，`type` 那一格是**窗口**类型不是事件类型）。
+ *
+ * 与 `engineChoices` 同一个理由：读源码才有「引擎加了新事件、前端没写人话就红」这个红。
+ */
+export const engineEventTypes = (): string[] =>
+  collect([
+    /type: "([A-Za-z]+)",(?:[ \t]*\/\/[^\n]*)?(?:\n[ \t]*\/\/[^\n]*)*\s*public:/g,
+    /\bevent: "([A-Za-z]+)"/g,
+  ]);
+
 /** 引擎能吐出的拒因全集：`reject(...)`、`rejected: { reason }`，以及 `malformed` 的裸 return。 */
 export const engineRejectReasons = (): string[] =>
   collect([

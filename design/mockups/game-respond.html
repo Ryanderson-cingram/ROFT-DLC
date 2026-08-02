@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>对局 HUD · 反应窗口（叠链 / 打断 / 洗牌 / 掷骰 / 亮牌）· ROFT-DLC</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  /* 本页只放「布局胶水 + 状态差异」，可复用组件一律在 tokens.css。
+     骨架复制自 game.html；这里的五个状态全是「别人动了、等你响应」的反应窗口：
+     倒计时不占顶栏，只贴决策点（中槽主按钮外圈 .ring + 坞顶那条 .tickline）。 */
+
+  /* 页面是一根竖直的柱：轨贴顶、牌河吃掉剩余高度、底坞贴底（短页面也贴得住） */
+  body { display: flex; flex-direction: column; min-height: 100dvh; }
+
+  /* 设计稿的状态切换器占了顶端，轮转轨往下让 46px；真实产品里轨贴顶 */
+  .dial { top: 46px; }
+  /* 轨是通栏底色，但内容与牌河/底坞同一条 1080 的栏宽 */
+  .dial > * { max-width: 1080px; margin-inline: auto; }
+  /* .tickline 的定位归 tokens（贴坞顶，靠 --dock-h），本页只负责用 syncDockH() 把
+     --dock-h 写成坞的真实高度——5 个状态坞高不同，不同步读条就会飘 */
+
+  /* flex: 1 0 auto —— 空间富余时吃掉剩余高度（牌河居中），空间不够时**不压缩**，
+     由页面上下滚动来解决；1 1 0% 会让牌河被底坞裁掉 */
+  .table { flex: 1 0 auto; width: 100%; max-width: 1080px; margin: 0 auto; padding: var(--sp-3) 0 var(--sp-4); display: grid; gap: var(--sp-3); align-content: center; }
+  .table > * { min-width: 0; }
+
+  /* 牌河：三堆同构，一行放得下（375px 起） */
+  .piles { gap: clamp(var(--sp-3), 6vw, var(--sp-5)); }
+  .follow { display: flex; flex-direction: column; align-items: center; gap: 2px; margin-top: 4px; font-size: 11px; }
+  .follow .swatch { width: 34px; height: 4px; border-radius: 2px; }
+
+  /* 牌河里多出来的那一件（骰子结果 / 被指定的那张牌）：跟三堆同一根中轴，不做弹窗 */
+  /* max-width：.field 是 place-items:center 的网格，子项按 max-content 撑，
+     不封顶的话这行说明会在 375px 上顶出横向滚动 */
+  .field__aside { display: grid; place-items: center; gap: 6px; max-width: min(100%, 44ch); text-align: center; }
+
+  /* 底坞：手牌 + 一句人话 + 三固定槽位 */
+  .dockwrap { position: sticky; bottom: 0; }
+  .dockwrap__in { max-width: 1080px; margin: 0 auto; position: relative; }
+
+  /* 尺度（字号、按钮、座位卡）已经由 tokens 的 640 断点统一收一档，这里只管布局 */
+  @media (max-width: 640px) {
+    :root { --card-w: 48px; --card-h: 72px; }
+    .pile--top .card { --card-w: 58px; --card-h: 87px; }
+    /* 窄屏三槽会把中文挤成竖排：主操作独占一行在上，技能与退让并排在下。
+       槽位语义与位置照旧固定（主永远在上、技能永远左下、退让永远右下） */
+    .dock__row { grid-template-columns: 1fr 1fr; }
+    .dock__slot--main { grid-column: 1 / -1; order: -1; }
+  }
+
+  /* ---- 状态差异（只有这一段随 body[data-state] 变） ---- */
+  body:not([data-state="c"]) .only-c,
+  body:not([data-state="h"]) .only-h,
+  body:not([data-state="m"]) .only-m,
+  body:not([data-state="n"]) .only-n,
+  body:not([data-state="k"]) .only-k { display: none !important; }
+  /* 少数几处是「替换」不是「新增」：H/M 换出牌堆顶、H 换阿柴的技能徽、K 换老白的技能徽 */
+  body[data-state="h"] .not-h,
+  body[data-state="m"] .not-m,
+  body[data-state="k"] .not-k { display: none !important; }
+
+  /* 当前行动者随状态换人：轨上只有一枚指针。
+     反应窗口里指针指的是**动了手的那个人**，你要做的事在底坞（朱砂氛围 + 中槽的环） */
+  body[data-state="h"] .seat--man,
+  body[data-state="c"] .seat--bai,
+  body[data-state="m"] .seat--bai,
+  body[data-state="n"] .seat--bai,
+  body[data-state="k"] .seat--bai { border-color: var(--piao); background: rgba(99, 210, 195, 0.07); }
+  body[data-state="h"] .seat--man::after,
+  body[data-state="c"] .seat--bai::after,
+  body[data-state="m"] .seat--bai::after,
+  body[data-state="n"] .seat--bai::after,
+  body[data-state="k"] .seat--bai::after {
+    content: ""; position: absolute; left: 50%; bottom: -11px;
+    width: 9px; height: 9px; margin-left: -4.5px;
+    background: var(--piao); border-radius: 2px; transform: rotate(45deg);
+  }
+
+  /* ---- 浮层三件的开关（设计稿用 body 属性驱动） ---- */
+  body:not([data-skill="open"]) .modal--skill { display: none; }
+  body:not([data-skill="open"]) .modal--skill + .scrim { display: none; }
+
+  /* 技能弹窗的页签 */
+  .tabs { display: flex; gap: var(--sp-2); margin: var(--sp-3) 0 var(--sp-2); border-bottom: var(--line); }
+  .tabs button {
+    min-height: 38px; padding: 0 4px; margin-bottom: -1px;
+    border: 0; border-bottom: 2px solid transparent; background: none;
+    color: var(--qingyan); font: inherit; font-size: 14px; cursor: pointer;
+  }
+  .tabs button[aria-selected="true"] { color: var(--yuebai); border-bottom-color: var(--piao); }
+  .tabpanel[hidden] { display: none; }
+  .sk__head { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+  .sk__sigil { font-family: var(--font-mono); font-size: 15px; color: var(--piao); }
+  .sk__l0 { margin: var(--sp-3) 0 0; font-size: 15px; }
+  .sk__l1 { margin: var(--sp-2) 0 0; font-size: 14px; color: var(--qingyan); }
+  .sk__l2 { display: flex; gap: 6px; margin: var(--sp-3) 0 0; font-size: 13px; color: var(--danger-text); }
+  .sk__l2::before { content: "✕"; }
+  .sk__meta { display: grid; gap: 6px; margin-top: var(--sp-3); padding-top: var(--sp-3); border-top: var(--line); font-size: 13px; }
+  .sk__meta div { display: flex; justify-content: space-between; gap: var(--sp-3); }
+  .sk__meta dt, .sk__meta span:first-child { color: var(--qingyan); }
+  .creed { margin: 0; padding-left: 1.3em; font-size: 14px; }
+  .creed li { margin-bottom: 6px; }
+  .creed + p { margin: var(--sp-3) 0 0; font-size: 13px; color: var(--qingyan); }
+</style>
+</head>
+<body data-state="c" data-turn="alert">
+
+<nav class="state-picker" aria-label="设计稿状态切换">
+  <button data-state="c" aria-pressed="true">C 惩罚叠链</button>
+  <button data-state="h" aria-pressed="false">H 劫营打断</button>
+  <button data-state="m" aria-pressed="false">M 洗牌取消</button>
+  <button data-state="n" aria-pressed="false">N 强袭掷骰</button>
+  <button data-state="k" aria-pressed="false">K 影歌亮牌</button>
+  <span class="sep"></span>
+  <button data-toggle="skill" aria-pressed="false">浮层：技能弹窗</button>
+  <button data-toggle="drawer" aria-pressed="false">浮层：记录抽屉</button>
+  <button data-toggle="fan" aria-pressed="false">浮层：牌堆展开</button>
+</nav>
+
+<div class="ambience" aria-hidden="true"></div>
+
+<!-- 倒计时读条：与中槽那圈 .ring 同一个数，由 tokens 贴在坞的上沿（不是页面顶缘） -->
+<div class="tickline only-c" style="--w:78%" aria-hidden="true"></div>
+<div class="tickline only-h" style="--w:52%" aria-hidden="true"></div>
+<div class="tickline only-m" style="--w:40%" aria-hidden="true"></div>
+<div class="tickline only-n" data-urgent style="--w:22%" aria-hidden="true"></div>
+<div class="tickline only-k" style="--w:64%" aria-hidden="true"></div>
+
+<!-- 轮转轨：顺序 / 当前行动者 / 方向 / 每个人的技能徽，全在这一条上 -->
+<nav class="dial" data-dir="cw" aria-label="出牌顺序">
+  <ol class="dial__track">
+    <li class="seat seat--you seat--lin">
+      <span class="seat__top"><span class="seat__name">凛</span><span class="seat__you">你</span></span>
+      <span class="seat__hand">手牌 <b>7</b></span>
+      <!-- 你的技能随状态换：C 远星 / H 劫营 / N 强袭 / M·K 恒心 -->
+      <button class="skillbadge only-c" data-skill-open><span class="sigil">♦J</span><span class="nm">远星</span></button>
+      <button class="skillbadge only-h" data-skill-open><span class="sigil">♦10</span><span class="nm">劫营</span></button>
+      <button class="skillbadge only-m" data-skill-open><span class="sigil">♠1</span><span class="nm">恒心</span></button>
+      <button class="skillbadge only-n" data-skill-open><span class="sigil">♦1</span><span class="nm">强袭</span></button>
+      <button class="skillbadge only-k" data-skill-open><span class="sigil">♠1</span><span class="nm">恒心</span></button>
+      <span class="seat__tags"><span class="badge" data-tone="ok">已亮出</span><span class="badge" data-tone="bad">等你响应</span></span>
+    </li>
+    <li class="dial__chev" aria-hidden="true"></li>
+    <li class="seat seat--chai">
+      <span class="seat__top"><span class="seat__name">阿柴</span></span>
+      <span class="seat__hand">手牌 <b>2</b></span>
+      <!-- 一人一个技能：H 里劫营归你，阿柴换成 ♥1 恩惠 -->
+      <button class="skillbadge not-h" data-skill-open><span class="sigil">♦10</span><span class="nm">劫营</span></button>
+      <button class="skillbadge only-h" data-skill-open><span class="sigil">♥1</span><span class="nm">恩惠</span></button>
+      <span class="seat__tags"><span class="badge" data-tone="ok">已喊 UNO</span></span>
+    </li>
+    <li class="dial__chev" aria-hidden="true"></li>
+    <li class="seat seat--sealed seat--man">
+      <span class="seat__top"><span class="seat__name">小满</span></span>
+      <span class="seat__hand">手牌 <b>4</b></span>
+      <button class="skillbadge skillbadge--hidden" data-skill-open><span class="sigil">?</span><span class="nm">未亮出</span></button>
+      <span class="seat__tags"><span class="badge" data-tone="bad">封印</span></span>
+    </li>
+    <li class="dial__chev" aria-hidden="true"></li>
+    <li class="seat seat--bai">
+      <span class="seat__top"><span class="seat__name">老白</span></span>
+      <span class="seat__hand">手牌 <b>11</b></span>
+      <!-- K 里发动影歌的是老白，影歌只有技能这一个来源，所以徽换成 ♦3 影歌 -->
+      <button class="skillbadge not-k" data-skill-open><span class="sigil">♦2</span><span class="nm">血棘</span></button>
+      <button class="skillbadge only-k" data-skill-open><span class="sigil">♦3</span><span class="nm">影歌</span></button>
+      <span class="seat__tags"><span class="badge">神化 <span class="pips"><i class="pip"></i><i class="pip"></i></span></span></span>
+    </li>
+  </ol>
+  <div class="dial__scale" aria-hidden="true"></div>
+  <div class="dial__dir"><b>↻</b> 顺时针</div>
+  <p class="ticker">
+    <span class="ticker__tag">最近</span>
+    <b class="only-c">老白</b><span class="only-c">打出 红+4，累计 6 张 · 你的技能是 ♦J 远星</span>
+    <b class="only-h">小满</b><span class="only-h">并列摆下 蓝7，这一轮还没摆完 · 你的技能是 ♦10 劫营</span>
+    <b class="only-m">老白</b><span class="only-m">打出 洗牌①（定色 蓝），全体手牌打乱重分</span>
+    <b class="only-n">老白</b><span class="only-n">发动 血棘：掷出 2，小满摸 2 张 · 你的技能是 ♦1 强袭</span>
+    <b class="only-k">老白</b><span class="only-k">发动 影歌，指定了 红5</span>
+  </p>
+</nav>
+
+<main class="table">
+
+  <!-- C：惩罚叠链贴在牌河上方，累计张数是这一屏最大的机器量 -->
+  <div class="chain only-c">
+    <span class="seg"><i class="swatch" style="background:var(--card-yellow)"></i>阿柴 <b>+2</b></span>
+    <span class="arrow">›</span>
+    <span class="seg"><i class="swatch" style="background:var(--card-red)"></i>老白 <b>+4</b></span>
+    <span class="total">累计 6 张</span>
+  </div>
+  <!-- 这里原本有一段四行的规则解说，压掉了整个牌河。规则该说的地方：
+       「只能接 +4」在中槽 note、「两种高亮各是什么」在 hand-meta、
+       远星的完整细则在技能弹窗的 L1 —— 牌桌中央不留长文。 -->
+
+  <!-- 牌河：三堆同构。摸牌堆**不给**展开（暗信息），只有厚度与张数 -->
+  <section class="field">
+  <span class="plate" aria-hidden="true"></span>
+
+  <!-- N：骰子结果就摆在牌河里，不做弹窗（手牌永远不被盖住）。
+       老白的血棘：回合开始掷骰，被他封住的小满摸等量的牌 —— 掷 1 颗，出 2，小满摸 2 张 -->
+  <div class="field__aside only-n">
+    <div class="dice" aria-label="老白掷出 2">
+      <span class="die">2</span>
+    </div>
+    <span class="pile__label">老白掷出 <b>2</b> · 小满摸 2 张 · 三面骰只有 0 / 1 / 2</span>
+  </div>
+
+  <!-- K：被影歌指定的那张牌也摆在牌河里，用出牌堆同一档的大牌 -->
+  <div class="field__aside only-k">
+    <div class="pile pile--top" style="cursor:default">
+      <span class="pile__stack"><span class="card" data-color="red" data-face="5"></span></span>
+      <span class="pile__label">老白指定 · <b>红 5</b></span>
+    </div>
+    <span class="hint">同色同数不摸 · 同色或同数摸 1 张 · 不亮摸 3 张</span>
+  </div>
+
+  <div class="piles" aria-label="牌河">
+    <div class="pile" style="--depth:6" aria-label="摸牌堆 38 张">
+      <span class="pile__stack">
+        <span class="card" data-color="back"></span>
+        <span class="pile__count">38</span>
+      </span>
+      <span class="pile__label">摸牌堆</span>
+    </div>
+
+    <button class="pile pile--top not-h not-m" style="--depth:5" data-fan>
+      <span class="pile__stack">
+        <span class="card" data-color="red" data-face="7"></span>
+        <span class="pile__count">12</span>
+      </span>
+      <span class="pile__label">出牌堆 · <b>红 7</b></span>
+      <span class="follow"><i class="swatch" style="background:var(--card-red)"></i>跟色 红 · 跟数 7</span>
+      <span class="fan" role="group" aria-label="出牌堆最近 6 张">
+        <span class="card" data-color="green" data-face="转"></span>
+        <span class="card" data-color="green" data-face="4"></span>
+        <span class="card" data-color="blue" data-face="4"></span>
+        <span class="card" data-color="blue" data-face="停"></span>
+        <span class="card" data-color="wild" data-face="变色"></span>
+        <span class="card" data-color="red" data-face="7"></span>
+        <span class="fan__more" aria-label="查看全部"></span>
+      </span>
+    </button>
+
+    <!-- H：小满并列摆牌，刚摆下的蓝7 现在是堆顶，跟色跟着换成蓝 -->
+    <button class="pile pile--top only-h" style="--depth:5" data-fan>
+      <span class="pile__stack">
+        <span class="card" data-color="blue" data-face="7"></span>
+        <span class="pile__count">12</span>
+      </span>
+      <span class="pile__label">出牌堆 · <b>蓝 7</b></span>
+      <span class="follow"><i class="swatch" style="background:var(--card-blue)"></i>跟色 蓝 · 跟数 7</span>
+      <span class="fan" role="group" aria-label="出牌堆最近 6 张">
+        <span class="card" data-color="green" data-face="4"></span>
+        <span class="card" data-color="blue" data-face="4"></span>
+        <span class="card" data-color="blue" data-face="停"></span>
+        <span class="card" data-color="wild" data-face="变色"></span>
+        <span class="card" data-color="red" data-face="7"></span>
+        <span class="card" data-color="blue" data-face="7"></span>
+        <span class="fan__more" aria-label="查看全部"></span>
+      </span>
+    </button>
+
+    <!-- M：洗牌卡面是「三选一并决定颜色」，三个选项都要定色，所以老白打出时已经定了色（蓝） -->
+    <button class="pile pile--top only-m" style="--depth:5" data-fan>
+      <span class="pile__stack">
+        <span class="card" data-color="wild" data-face="洗牌"></span>
+        <span class="pile__count">12</span>
+      </span>
+      <span class="pile__label">出牌堆 · <b>洗牌①</b></span>
+      <span class="follow"><i class="swatch" style="background:var(--card-blue)"></i>跟色 蓝 · 老白定的</span>
+      <span class="fan" role="group" aria-label="出牌堆最近 6 张">
+        <span class="card" data-color="green" data-face="4"></span>
+        <span class="card" data-color="blue" data-face="4"></span>
+        <span class="card" data-color="blue" data-face="停"></span>
+        <span class="card" data-color="wild" data-face="变色"></span>
+        <span class="card" data-color="red" data-face="7"></span>
+        <span class="card" data-color="wild" data-face="洗牌"></span>
+        <span class="fan__more" aria-label="查看全部"></span>
+      </span>
+    </button>
+
+    <button class="pile" style="--depth:3" data-fan>
+      <span class="pile__stack">
+        <span class="card" data-color="blue" data-face="5"></span>
+        <span class="pile__count">3</span>
+      </span>
+      <span class="pile__label">弃牌堆</span>
+      <span class="fan" role="group" aria-label="弃牌堆全部 3 张">
+        <span class="card" data-color="green" data-face="2"></span>
+        <span class="card" data-color="yellow" data-face="9"></span>
+        <span class="card" data-color="blue" data-face="5"></span>
+        <span class="fan__more" aria-label="查看全部"></span>
+      </span>
+    </button>
+  </div>
+  </section>
+
+</main>
+
+<!-- 底坞：手牌 + 一句人话 + 三固定槽位（左=技能 中=推进的主操作 右=退让与结束）。
+     五个状态里槽位语义与位置一模一样，只有内容变；没有的动作置灰保位，原地写原因 -->
+<div class="dockwrap">
+  <div class="dockwrap__in">
+    <button class="uno">UNO!</button>
+
+    <div class="hand-meta">
+      <span>你的手牌 <b>7</b></span>
+      <span class="only-c">+4 = 接着叠 · 黄+2 = 远星代价牌</span>
+      <span class="only-h">高亮 = 能打断这一轮</span>
+      <span class="only-m">高亮 = 能取消洗牌</span>
+      <span class="only-n">这一手用骰子解决，不出牌</span>
+      <span class="only-k">高亮 = 对得上 红5</span>
+    </div>
+
+    <!-- 手牌恒定排序（排序只在展示层，不代表牌在手里的真实次序）：
+         红 → 蓝 → 黄 → 绿，组内数字升序、该色功能牌（停 → 转 → +2）垫在本色组末尾，
+         无色牌（变色 → +4 → 洗牌 → 毒）排在所有颜色之后。
+         每个状态一副手牌：高亮规则整副换，切状态不会留残影。
+         C 是唯一同屏两种高亮的：.card--legal = 能叠（链顶是 +4，只能接 +4），
+         .card--pulse = 远星的代价牌（弃掉视为你也叠了一层），两者一静一呼吸，分得开 -->
+    <div class="hand only-c">
+      <button class="card card--dim" data-color="red" data-face="3"></button>
+      <button class="card card--dim" data-color="red" data-face="7"></button>
+      <button class="card card--dim" data-color="blue" data-face="7"></button>
+      <button class="card card--pulse" data-color="yellow" data-face="+2"></button>
+      <button class="card card--dim" data-color="green" data-face="0"></button>
+      <button class="card card--dim" data-color="wild" data-face="变色"></button>
+      <button class="card card--legal" data-color="wild" data-face="+4"></button>
+    </div>
+
+    <div class="hand only-h">
+      <button class="card card--dim" data-color="red" data-face="3"></button>
+      <button class="card card--dim" data-color="red" data-face="7"></button>
+      <button class="card card--legal card--pulse" data-color="blue" data-face="7"></button>
+      <button class="card card--dim" data-color="yellow" data-face="+2"></button>
+      <button class="card card--dim" data-color="green" data-face="0"></button>
+      <button class="card card--dim" data-color="wild" data-face="变色"></button>
+      <button class="card card--dim" data-color="wild" data-face="+4"></button>
+    </div>
+
+    <div class="hand only-m">
+      <button class="card card--dim" data-color="red" data-face="3"></button>
+      <button class="card card--dim" data-color="red" data-face="7"></button>
+      <button class="card card--dim" data-color="blue" data-face="7"></button>
+      <button class="card card--dim" data-color="yellow" data-face="+2"></button>
+      <button class="card card--dim" data-color="green" data-face="0"></button>
+      <button class="card card--dim" data-color="wild" data-face="+4"></button>
+      <button class="card card--legal card--pulse" data-color="wild" data-face="洗牌"></button>
+    </div>
+
+    <div class="hand only-n">
+      <button class="card card--dim" data-color="red" data-face="3"></button>
+      <button class="card card--dim" data-color="red" data-face="7"></button>
+      <button class="card card--dim" data-color="blue" data-face="7"></button>
+      <button class="card card--dim" data-color="yellow" data-face="+2"></button>
+      <button class="card card--dim" data-color="green" data-face="0"></button>
+      <button class="card card--dim" data-color="wild" data-face="变色"></button>
+      <button class="card card--dim" data-color="wild" data-face="+4"></button>
+    </div>
+
+    <div class="hand only-k">
+      <button class="card card--legal" data-color="red" data-face="3"></button>
+      <button class="card card--legal card--pulse" data-color="red" data-face="7"></button>
+      <button class="card card--dim" data-color="blue" data-face="7"></button>
+      <button class="card card--dim" data-color="yellow" data-face="+2"></button>
+      <button class="card card--dim" data-color="green" data-face="0"></button>
+      <button class="card card--dim" data-color="wild" data-face="变色"></button>
+      <button class="card card--dim" data-color="wild" data-face="+4"></button>
+    </div>
+
+    <p class="dock__say dock__say--alert only-c">被叠到 6 张：接着叠、吃下，或点黄+2 当代价弃掉</p>
+    <p class="dock__say dock__say--alert only-h">小满刚摆下一张：点高亮的牌打断这一轮，或者放弃</p>
+    <p class="dock__say dock__say--alert only-m">老白打出了洗牌（全体手牌打乱重分）：点高亮的洗牌牌取消，或者放弃</p>
+    <p class="dock__say dock__say--alert only-n">老白掷出了 2（小满摸 2 张）：你可以重掷同样数量，采用你的结果</p>
+    <p class="dock__say dock__say--alert only-k">老白指定了 红5：亮一张对得上的牌，或者不亮直接摸 3 张</p>
+
+    <div class="dock__row">
+      <!-- 左槽 = 技能。反应窗口里主动技能一律不能发动，置灰保位，原地写原因 -->
+      <div class="dock__slot">
+        <button class="btn only-c" disabled><span class="sigil" style="font-family:var(--font-mono)">♦J</span> 远星</button>
+        <button class="btn only-h" disabled><span class="sigil" style="font-family:var(--font-mono)">♦10</span> 劫营</button>
+        <button class="btn only-m" disabled><span class="sigil" style="font-family:var(--font-mono)">♠1</span> 恒心</button>
+        <button class="btn only-n" disabled><span class="sigil" style="font-family:var(--font-mono)">♦1</span> 强袭</button>
+        <button class="btn only-k" disabled><span class="sigil" style="font-family:var(--font-mono)">♠1</span> 恒心</button>
+        <span class="dock__note only-c">惩罚回合不能用主动技能；远星是响应——点高亮的 +2 当代价即可</span>
+        <span class="dock__note only-h">劫营在中间那一颗发动</span>
+        <span class="dock__note only-m">响应窗口里不能发动主动技能</span>
+        <span class="dock__note only-n">强袭在中间那一颗发动</span>
+        <span class="dock__note only-k">响应窗口里不能发动主动技能</span>
+      </div>
+
+      <!-- 中槽 = 推进的主操作。倒计时贴着它：外圈 .ring + .ring__secs -->
+      <div class="dock__slot dock__slot--main">
+        <button class="btn btn--primary ring only-c" style="--p:78"><span class="ring__secs">12s</span>叠上去</button>
+        <button class="btn btn--primary ring only-h" style="--p:52"><span class="ring__secs">8s</span>用 蓝7 打断</button>
+        <button class="btn btn--primary ring only-m" style="--p:40"><span class="ring__secs">10s</span>取消这次洗牌</button>
+        <button class="btn btn--primary ring only-n" data-urgent style="--p:22"><span class="ring__secs">2s</span>重掷 1 颗，采用我的结果</button>
+        <button class="btn btn--primary ring only-k" style="--p:64"><span class="ring__secs">8s</span>亮出 红7（同色，摸 1 张）</button>
+        <span class="dock__note only-c">链顶是 +4，只能接 +4；只算你这张的加成</span>
+        <span class="dock__note only-h">对方摸 1 张，剩下没摆的牌回到他手里，接着从你的下家继续</span>
+        <span class="dock__note only-m">点了要先定色，跟色改成你定的色；先到先得，一人取消就作废</span>
+        <span class="dock__note only-n">重掷出什么都算数，不能反悔</span>
+        <span class="dock__note only-k">同色同数才不摸牌；你手里没有 红5</span>
+      </div>
+
+      <!-- 右槽 = 退让与结束 -->
+      <div class="dock__slot">
+        <button class="btn btn--danger only-c">吃下 6 张</button>
+        <button class="btn btn--ghost only-h">放弃</button>
+        <button class="btn btn--ghost only-m">放弃</button>
+        <button class="btn btn--ghost only-n">放弃</button>
+        <button class="btn btn--danger only-k">不亮，摸 3 张</button>
+        <span class="dock__note only-c">叠链清零，接着轮到你的下家</span>
+        <span class="dock__note only-h">小满继续摆完这一轮</span>
+        <span class="dock__note only-m">洗牌照常生效，全体重分</span>
+        <span class="dock__note only-n">采用老白的 2，小满照旧摸 2 张</span>
+        <span class="dock__note only-k">老白按没亮的人数攒魂</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 记录：右缘把手 + offcanvas + 遮罩（点遮罩即关），桌面与手机同一套 -->
+<button class="drawer__handle" data-toggle="drawer" aria-expanded="false" aria-controls="log">记录</button>
+<div class="drawer-scrim" data-toggle="drawer" aria-hidden="true"></div>
+<aside class="drawer" id="log" aria-label="行动记录">
+  <div class="drawer__head">
+    <h2>行动记录</h2>
+    <span class="hint">最新在上 · 只含公开信息</span>
+    <button class="drawer__close" data-toggle="drawer" aria-label="关闭记录">×</button>
+  </div>
+  <ol class="log">
+    <li data-kind="punish"><span class="who">老白</span><span class="what">打出 红+4，累计 6 张（链顶 +4，只能接 +4）</span></li>
+    <li data-kind="punish"><span class="who">阿柴</span><span class="what">打出 黄+2，累计 2 张</span></li>
+    <li data-kind="uno"><span class="who">阿柴</span><span class="what">喊了 UNO！</span></li>
+    <li data-kind="skill"><span class="who">老白</span><span class="what">发动 血棘：掷骰 2，小满摸 2 张</span></li>
+    <li data-kind="skill"><span class="who">小满</span><span class="what">被老白封印了技能</span></li>
+    <li><span class="who">小满</span><span class="what">打出 红7</span></li>
+    <li data-kind="punish"><span class="who">凛</span><span class="what">吃下惩罚 4 张</span></li>
+    <li data-kind="system"><span class="who">牌桌</span><span class="what">全员选完技能，开打</span></li>
+  </ol>
+</aside>
+
+<!-- 技能详情弹窗：座位卡上的技能徽与坞左槽点的都是它。
+     弹窗体跟着当前状态走（远星 / 劫营 / 恒心 / 强袭），真实产品按 skill_id 取。
+     标题与页签只有一份，所以 id 唯一，页签的 aria-controls 照常工作 -->
+<div class="modal modal--skill" role="dialog" aria-modal="true" aria-labelledby="sk-title">
+  <div class="modal__box">
+    <p class="eyebrow">技能</p>
+    <div class="sk__head">
+      <span class="sk__sigil"><span class="only-c">♦J</span><span class="only-h">♦10</span><span class="only-m">♠1</span><span class="only-n">♦1</span><span class="only-k">♠1</span></span>
+      <h2 id="sk-title"><span class="only-c">远星</span><span class="only-h">劫营</span><span class="only-m">恒心</span><span class="only-n">强袭</span><span class="only-k">恒心</span></h2>
+      <span class="badge"><span class="only-c">响应</span><span class="only-h">响应</span><span class="only-m">主动</span><span class="only-n">响应</span><span class="only-k">主动</span></span>
+      <span class="badge" data-tone="ok">已亮出</span>
+      <button class="btn btn--ghost" style="margin-left:auto;min-height:36px" data-toggle="skill">关闭</button>
+    </div>
+
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" aria-controls="tab-sk">技能</button>
+      <button role="tab" aria-selected="false" aria-controls="tab-creed">四句总则</button>
+    </div>
+
+    <div class="tabpanel" id="tab-sk" role="tabpanel">
+      <div class="only-c">
+        <p class="sk__l0">弃一张 +2 当代价，视为你也叠了一层</p>
+        <p class="sk__l1">上家出 +4 时用：从手牌丢一张 +2 进弃牌堆、自己摸 2 张，就算你跟着叠了一层。
+          视为的那张 +4 用你弃掉的那张 +2 的颜色，不能另选颜色。</p>
+        <p class="sk__l2">不能用在 +2 上，也不能用别的牌当代价</p>
+        <div class="sk__meta">
+          <div><span>本回合主动</span><span class="num">0 / 0</span></div>
+          <div><span>标记</span><span class="muted">此技能没有标记</span></div>
+          <div><span>状态</span><span class="muted">无</span></div>
+        </div>
+        <button class="btn btn--block" style="margin-top:var(--sp-3)" disabled>在底坞点高亮的 +2 发动</button>
+      </div>
+
+      <div class="only-h">
+        <p class="sk__l0">别人并列摆牌时，用同色同数的一张打断</p>
+        <p class="sk__l1">对方摆下一张后你可以立刻打断：对方摸 1 张，他剩下没摆的牌回到手里，
+          这一轮就此结束，接着从你的下家继续。</p>
+        <p class="sk__l2">只能在别人并列摆牌的窗口里用，过了就没了</p>
+        <div class="sk__meta">
+          <div><span>本回合主动</span><span class="num">0 / 0</span></div>
+          <div><span>标记</span><span class="muted">此技能没有标记</span></div>
+          <div><span>状态</span><span class="muted">无</span></div>
+        </div>
+        <button class="btn btn--block" style="margin-top:var(--sp-3)" disabled>在底坞点高亮的牌发动</button>
+      </div>
+
+      <div class="only-m">
+        <p class="sk__l0">弃一张牌，摸一张牌</p>
+        <p class="sk__l1">回合开始阶段用一次：从手牌里丢一张进弃牌堆，再从牌堆摸一张。手牌数不变，专治「一手牌全打不出去」。</p>
+        <p class="sk__l2">响应窗口里不能发动主动技能</p>
+        <div class="sk__meta">
+          <div><span>本回合主动</span><span class="num">0 / 1</span></div>
+          <div><span>标记</span><span class="muted">此技能没有标记</span></div>
+          <div><span>状态</span><span class="muted">无</span></div>
+        </div>
+        <button class="btn btn--block" style="margin-top:var(--sp-3)" disabled>发动：弃 1 张，摸 1 张</button>
+      </div>
+
+      <div class="only-n">
+        <p class="sk__l0">别人掷骰后，你可以用同样数量的骰子重掷</p>
+        <p class="sk__l1">重掷之后一律采用你的结果，原来那次作废。掷成什么都算数，不能反悔。</p>
+        <p class="sk__l2">骰子数量必须与对方相同，不能多掷也不能少掷</p>
+        <div class="sk__meta">
+          <div><span>本回合主动</span><span class="num">0 / 0</span></div>
+          <div><span>标记</span><span class="muted">此技能没有标记</span></div>
+          <div><span>状态</span><span class="muted">无</span></div>
+        </div>
+        <button class="btn btn--block" style="margin-top:var(--sp-3)" disabled>在底坞点「重掷」发动</button>
+      </div>
+
+      <div class="only-k">
+        <p class="sk__l0">弃一张牌，摸一张牌</p>
+        <p class="sk__l1">回合开始阶段用一次：从手牌里丢一张进弃牌堆，再从牌堆摸一张。手牌数不变，专治「一手牌全打不出去」。</p>
+        <p class="sk__l2">响应窗口里不能发动主动技能</p>
+        <div class="sk__meta">
+          <div><span>本回合主动</span><span class="num">0 / 1</span></div>
+          <div><span>标记</span><span class="muted">此技能没有标记</span></div>
+          <div><span>状态</span><span class="muted">无</span></div>
+        </div>
+        <button class="btn btn--block" style="margin-top:var(--sp-3)" disabled>发动：弃 1 张，摸 1 张</button>
+      </div>
+    </div>
+
+    <div class="tabpanel" id="tab-creed" role="tabpanel" hidden>
+      <ol class="creed">
+        <li>回合开始用技能，然后出牌。</li>
+        <li>被 +2/+4 时先叠或不叠；叠的时候只算你自己那张的加成。</li>
+        <li>一人一个技能；亮出来才会生效。</li>
+        <li>神化 = 多几轮出牌；并列 = 一轮里多张。</li>
+      </ol>
+      <p>最后一张牌必须是数字牌才算赢。功能牌（+2 / 停 / 转 / 变色 / +4 / 毒 / 洗牌）打完手牌时要再摸 1 张，牌照常生效，但你没赢。</p>
+    </div>
+  </div>
+</div>
+<div class="scrim" data-toggle="skill" aria-hidden="true"></div>
+
+<script>
+  const body = document.body;
+  const dock = document.querySelector('.dockwrap');
+  // 每个状态里「动了手的那个人」，切状态后把他带回视口（窄屏轨是横滚的）
+  const actorOf = { c: '.seat--bai', h: '.seat--man', m: '.seat--bai', n: '.seat--bai', k: '.seat--bai' };
+  const setPressed = (name, on) => {
+    const b = document.querySelector(`.state-picker [data-toggle="${name}"]`);
+    if (b) b.setAttribute('aria-pressed', String(on));
+  };
+
+  // 坞的真实高度写回 --dock-h：倒计时读条贴坞顶、窄屏扇形展开、遮罩留白都靠它。
+  // 5 个状态的坞高不一样（一句人话长短、槽位换行），所以切状态时也要重算一次
+  const syncDockH = () => document.documentElement.style.setProperty('--dock-h', dock.offsetHeight + 'px');
+
+  function toggle(name, force) {
+    if (name === 'skill') {
+      const on = force ?? body.dataset.skill !== 'open';
+      body.dataset.skill = on ? 'open' : 'closed';
+      setPressed('skill', on);
+    }
+    if (name === 'drawer') {
+      const on = force ?? body.dataset.drawer !== 'open';
+      body.dataset.drawer = on ? 'open' : 'closed';
+      document.querySelector('.drawer__handle').setAttribute('aria-expanded', String(on));
+      setPressed('drawer', on);
+    }
+    if (name === 'fan') {
+      // 出牌堆有两副（默认 / H 的蓝7），一起开合；摸牌堆没有 fan
+      const piles = document.querySelectorAll('.pile--top[data-fan]');
+      const on = force ?? !piles[0].hasAttribute('data-open');
+      piles.forEach(p => p.toggleAttribute('data-open', on));
+      setPressed('fan', on);
+    }
+  }
+
+  // 一个委托监听器管全部：状态切换 / 浮层开关 / 技能徽 / 触屏点堆
+  document.addEventListener('click', e => {
+    const state = e.target.closest('.state-picker [data-state]');
+    if (state) {
+      body.dataset.state = state.dataset.state;
+      body.dataset.turn = 'alert'; // 本页五个状态全是反应窗口
+      document.querySelectorAll('.state-picker [data-state]')
+        .forEach(x => x.setAttribute('aria-pressed', String(x === state)));
+      document.querySelector(actorOf[body.dataset.state])
+        .scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+      syncDockH(); // 坞高随状态变，读条要跟着贴回坞顶
+      return;
+    }
+    const tog = e.target.closest('[data-toggle]');
+    if (tog) return toggle(tog.dataset.toggle);
+    if (e.target.closest('[data-skill-open]')) return toggle('skill', true);
+    const pile = e.target.closest('.pile[data-fan]');
+    if (pile) pile.toggleAttribute('data-open');
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (body.dataset.skill === 'open') toggle('skill');
+    else if (body.dataset.drawer === 'open') toggle('drawer');
+  });
+
+  // 技能弹窗页签
+  document.querySelector('.tabs').addEventListener('click', e => {
+    const t = e.target.closest('[role="tab"]'); if (!t) return;
+    document.querySelectorAll('.tabs [role="tab"]').forEach(x => {
+      x.setAttribute('aria-selected', String(x === t));
+      document.getElementById(x.getAttribute('aria-controls')).hidden = x !== t;
+    });
+  });
+
+  syncDockH();
+  addEventListener('resize', syncDockH);
+</script>
+
+</body>
+</html>

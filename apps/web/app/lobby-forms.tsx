@@ -1,11 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { callEdge, humanReason } from "@/lib/api";
 
 export default function LobbyForms() {
   const router = useRouter();
+  // 零硬编码 id（spec §7.2）：这一份表单眼下只渲染一次，但重复 id 是那种
+  // 「哪天被复用才炸、炸了还只在读屏上炸」的 bug，一行 useId 就不用再想它。
+  const codeId = useId();
   const [rulePack, setRulePack] = useState("base");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState<"create" | "join" | null>(null);
@@ -95,11 +98,11 @@ export default function LobbyForms() {
           <p className="eyebrow">加入一桌</p>
           <h2>加入房间</h2>
           <hr className="rail" />
-          <label htmlFor="code" className="hint">
+          <label htmlFor={codeId} className="hint">
             输入房主给的 6 位房间码
           </label>
           <input
-            id="code"
+            id={codeId}
             className="code-input"
             type="text"
             maxLength={6}

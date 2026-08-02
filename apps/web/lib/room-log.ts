@@ -1,13 +1,19 @@
 "use client";
 
+/**
+ * 行动记录的数据与文案（原 `components/game/log-panel.tsx`）。
+ * 它们是「引擎事件 → 玩家语言」的翻译层，不是视图——所以住在 `lib/`。
+ * 消费者：`<LogDrawer>`（整份）与 `<Ticker>`（最近一条），两处永远说同一句话。
+ */
+
 import type { Card, ClientSnapshot, Color } from "@roft/engine";
 import { useEffect, useRef, useState } from "react";
-import { cardLabel, colorLabel } from "@/lib/cards";
-import { skillById } from "@/lib/skills";
-import { createClient } from "@/lib/supabase/client";
+import { cardLabel, colorLabel, faceLabel } from "./cards";
+import { skillById } from "./skills";
+import { createClient } from "./supabase/client";
 
 /** room_events 的成员可读投影（private_payload 列级 grant 已排除，查不到）。 */
-interface LogEvent {
+export interface LogEvent {
   id: number;
   seq: number;
   type: string;
@@ -20,7 +26,7 @@ const asCard = (v: unknown) => cardLabel(v as Card);
  * 事件 → 人话 + 分类（分类只管左缘颜色）。返回 null = 不值得进日志（handDealt 等）。
  * 只消费 public_payload——private 列根本查不到，这里天然只含公开信息。
  */
-function humanize(
+export function humanize(
   e: LogEvent,
   nameOf: (seat: number) => string,
 ): { who: string; what: string; kind?: "punish" | "skill" | "uno" | "system" } | null {
@@ -57,6 +63,15 @@ function humanize(
       return { who: nameOf(seat), what: "选择接着叠", kind: "punish" };
     case "punishAccepted":
       return { who: nameOf(seat), what: `吃下惩罚 ${p.total} 张`, kind: "punish" };
+    // 远星♦J：弃代价牌 + 摸 2 张 = 视为跟着叠了一段。摸的那 2 张另有 cardsDrawn 事件，这里不重复写
+    case "farstarUsed":
+      return {
+        who: nameOf(seat),
+        what: `远星：弃 ${(p.discarded as Card[]).map(cardLabel).join("、")}，视为跟着叠了一张${
+          colorLabel(p.color as Color)
+        } ${faceLabel(p.as as Card["face"])}`,
+        kind: "skill",
+      };
     case "skillRevealed":
       return { who: nameOf(seat), what: `亮出技能 ${skillName(p.skillId)}`, kind: "skill" };
     case "skillActivated":
@@ -124,7 +139,9 @@ function humanize(
     case "shuffleCancelWindowOpened":
       return {
         who: nameOf(seat),
-        what: `打出洗牌：${(p.actors as number[]).map(nameOf).join("、")}手上有洗牌牌，可以取消`,
+        // 谁手上有洗牌牌是暗信息（手牌私有），所以不点名、也不报人数——
+        // 引擎那边这条事件的 public payload 从 2026-08-02 起就不带 actors 了
+        what: "打出洗牌（全体手牌打乱重分）：等其他人决定要不要取消",
       };
     case "shuffleCancelled":
       return {
@@ -139,7 +156,7 @@ function humanize(
       return { who: nameOf(seat), what: "喊了 UNO！", kind: "uno" };
     // U6：按钮常亮、引擎按下那一刻才判，所以「喊早了」是一条正常事件，不是拒因
     case "unoMiscalled":
-      return { who: nameOf(seat), what: "虚喊 UNO（手牌不是 1 张）——罚摸 2 张", kind: "uno" };
+      return { who: nameOf(seat), what: "回合结束时手牌不是 1 张，喊的 UNO 不作数——罚摸 2 张", kind: "uno" };
     case "unoCaught":
       return { who: nameOf(seat), what: `抓了${nameOf(p.target as number)}没喊 UNO——摸 2 张`, kind: "uno" };
     // 发牌/候选细节要么是暗信息、要么是纯噪音
@@ -153,37 +170,24 @@ function humanize(
 
 export type LogLine = { who: string; what: string; kind?: "punish" | "skill" | "uno" | "system" };
 
-/** 纯展示层：设计对照页（/design/game）与真实数据层共用同一份 DOM。 */
-export function LogPanelView({ lines }: { lines: { id: number; line: LogLine }[] }) {
-  return (
-    <aside className="log-panel" aria-label="行动记录">
-      <div className="log-head">
-        <h2>行动记录</h2>
-        <span className="hint">最新在上 · 只含公开信息</span>
-      </div>
-      <ol className="log-list">
-        {lines.map(({ id, line }) => (
-          <li key={id} data-kind={line.kind}>
-            <span className="who">{line.who}</span>
-            <span className="what">{line.what}</span>
-          </li>
-        ))}
-        {lines.length === 0 && <li data-kind="system"><span className="what">还没有动静。</span></li>}
-      </ol>
-    </aside>
-  );
-}
-
-export function LogPanel({ roomId, snapshot, names }: {
-  roomId: string;
-  snapshot: ClientSnapshot;
-  names: Record<string, string>;
-}) {
+/**
+ * 行动记录的**唯一数据源**：记录抽屉与轮转轨下沿的跑马灯都读它，所以两处永远说同一句话。
+ * 返回值最新在前（`[0]` 就是跑马灯要的那条）。
+ *
+ * ponytail: 两个消费者各自跑一份 effect = 每次 version 变动多一次同样的增量查询。
+ * P3 把日志态收上 `page.tsx` 之后这里换成一个 provider 即可。
+ */
+export function useRoomLog(
+  roomId: string | null | undefined,
+  snapshot: ClientSnapshot,
+  names: Record<string, string>,
+): { id: number; line: LogLine }[] {
   const [events, setEvents] = useState<LogEvent[]>([]);
   const topSeq = useRef(0);
 
   // 快照 version 一动必有新事件（同一事务写入）——增量拉 seq 更大的那截
   useEffect(() => {
+    if (!roomId) return;
     (async () => {
       const supabase = createClient();
       const { data } = await supabase
@@ -207,9 +211,7 @@ export function LogPanel({ roomId, snapshot, names }: {
   }, [roomId, snapshot.version]);
 
   const nameOf = (seat: number) => names[snapshot.players[seat]?.userId ?? ""] ?? `座位 ${seat + 1}`;
-  const lines = events
+  return events
     .map((e) => ({ id: e.id, line: humanize(e, nameOf) }))
     .filter((x): x is { id: number; line: LogLine } => x.line !== null);
-
-  return <LogPanelView lines={lines} />;
 }
