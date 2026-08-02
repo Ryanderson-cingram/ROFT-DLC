@@ -74,7 +74,7 @@ const shadowSong: SkillHandler = (state, b, seat, effect, ctx, data) => {
   if (!paid) return reject(state, "cost_unpayable");
   // 跳过本回合 = 直接交给下家（01-S15：占主动条，但回合都跳了，实际无冲突）
   return {
-    state: commit(state, { ...paid, drawnPlayable: null, ...passTurn(paid, seat) }, "turnStart"),
+    state: commit(state, { ...paid, drawnPlayable: null, ...passTurn(paid, ctx.now, seat) }, "turnStart"),
     events: [{ type: "turnSkipped", public: { seat } }],
   };
 };

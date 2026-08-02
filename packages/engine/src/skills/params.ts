@@ -23,6 +23,12 @@ export interface EffectParams {
   appliesTo?: DrawEventKind[];
   /** 非层名的数值：`discard` / `draws` / `marks` / `dice` / `card_value` / `max`（02 §6 白名单）。 */
   counts: Readonly<Record<string, number>>;
+  /**
+   * 这条效果攒的标记**叫什么、上限多少**，直接来自定义的 `mark_cap`（04 围栏块）。
+   * 这是「标记名 ↔ 上限」唯一的绑定处——`counts.max` 只有一个数，答不出它管哪个标记。
+   * 空表 = 这条效果不攒有上限的标记（无上限的标记压根不写 `mark_cap`，见 SkillEffect）。
+   */
+  markCap: Readonly<Record<string, number>>;
 }
 
 export function paramsOfEffect(e: SkillEffect): EffectParams {
@@ -32,11 +38,11 @@ export function paramsOfEffect(e: SkillEffect): EffectParams {
     if (LAYERS.includes(k)) draw[k as DrawLayer] = v;
     else counts[k] = v;
   }
-  return { draw, counts, appliesTo: e.applies_to };
+  return { draw, counts, appliesTo: e.applies_to, markCap: e.mark_cap ?? {} };
 }
 
 /** 按 `id` + 子效果 `key` 取数值。定义里没有这条子效果 = 一个数都没有，不是 0。 */
 export function paramsOf(id: string, effectKey: string, byId: ReadonlyMap<string, SkillDef>): EffectParams {
   const e = byId.get(id)?.effects?.find((x) => x.key === effectKey);
-  return e ? paramsOfEffect(e) : { draw: {}, counts: {} };
+  return e ? paramsOfEffect(e) : { draw: {}, counts: {}, markCap: {} };
 }

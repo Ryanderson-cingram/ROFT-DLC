@@ -13,9 +13,16 @@ import type { Board } from "../../types.ts";
 /** 没有的标记是 0，不是 undefined。 */
 export const markCount = (b: Board, seat: number, mark: string): number => b.marks[seat]?.[mark] ?? 0;
 
-const withMarks = (b: Board, seat: number, marks: Record<string, number>): Board => ({
+/** `spent` 缺省 = 只动余额（获得），`Board.marksSpent` 一个字节都不写。 */
+const withMarks = (
+  b: Board,
+  seat: number,
+  marks: Record<string, number>,
+  spent?: Record<string, number>,
+): Board => ({
   ...b,
   marks: b.marks.map((m, i) => (i === seat ? marks : m)),
+  ...(spent && { marksSpent: b.marks.map((_m, i) => (i === seat ? spent : (b.marksSpent?.[i] ?? {}))) }),
 });
 
 /**
@@ -45,12 +52,16 @@ export function spendMarks(
 ): Board | null {
   const held = b.marks[seat] ?? {};
   const next = { ...held };
+  // 累计已花（`Board.marksSpent`）：UI 的「魂 3/6 · 已花 2」拿它，余额答不出这个数。
+  // 按**实际扣掉的标记名**记账——用颠顶了 2 个魂，记的是「颠 花了 2」，不是「魂 花了 2」。
+  const spent = { ...(b.marksSpent?.[seat] ?? {}) };
   let owed = n;
   for (const m of [mark, ...substitutes]) {
     const pay = Math.min(owed, next[m] ?? 0);
     next[m] = (next[m] ?? 0) - pay;
+    if (pay > 0) spent[m] = (spent[m] ?? 0) + pay;
     owed -= pay;
     if (owed === 0) break;
   }
-  return owed > 0 ? null : withMarks(b, seat, next);
+  return owed > 0 ? null : withMarks(b, seat, next, spent);
 }

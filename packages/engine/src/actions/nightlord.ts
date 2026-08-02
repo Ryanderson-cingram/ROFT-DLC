@@ -21,7 +21,14 @@ import type { SkillDef, SkillEffect } from "../skills/types.ts";
 import type { Action, ApplyResult, Board, Card, Ctx, EngineEvent, GameState } from "../types.ts";
 
 const WINDOW_MS = 30_000;
-/** 03 §5 的标记名。司夜攒的是「盗」。 */
+/**
+ * 03 §5 的标记名。司夜攒的是「盗」。
+ *
+ * 影歌那边的「魂」已经收敛进定义（`mark_cap: { 魂: 6 }`，见 soul-harvest.ts），这里**没有**：
+ * 盗**没有上限**，而 `mark_cap` 是「上限表」，键只在有上限时才存在——无上限的标记写进去只能
+ * 写成 0，而 0 会被读成「上限是 0」。定义里没有第二个能承载标记名的槽位，所以名字只能留在这里。
+ * 升级路径：等 02 §6 给出一个与上限解耦的 `mark`（或 `values.mark_name`）字段，把这行换成从定义读。
+ */
 const STEAL = "盗";
 /**
  * 超时默认还**刚抽到的那张**（最不泄露、最保守）。是个哨兵而不是牌 id：
@@ -82,7 +89,7 @@ export function resumeNightlord(
     return { ...opened, events: [...events, ...opened.events] };
   }
   // 无色牌里只有 +4 开窗口；变色牌打完就交回合（它不是停/转，所以恒为跨 1 步）
-  return { state: commit(state, { ...b, ...passTurn(b, spec.seat) }, "turnStart"), events };
+  return { state: commit(state, { ...b, ...passTurn(b, ctx.now, spec.seat) }, "turnStart"), events };
 }
 
 /** ②那条子效果：`kind: meta_rule` + `window: turn_start`，一次要花的盗从 `values.marks` 读。 */

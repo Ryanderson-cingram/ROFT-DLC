@@ -1,7 +1,8 @@
 // 喊 UNO 与抓漏喊。规则：01-U6/U7 + 「U6/U7 补充」（2026-08-01 改判：声明的作用域是你的这个回合）。
 import { describe, expect, it } from "vitest";
-import { applyAction, legalActions } from "../src/index.ts";
-import { card, ctx, table } from "./helpers.ts";
+import { applyAction, legalActions, projectView } from "../src/index.ts";
+import { UNO_GRACE_MS } from "../src/legal.ts";
+import { card, ctx, ctxAfter, NOW, table } from "./helpers.ts";
 import type { Board, Card, GameState } from "../src/types.ts";
 
 const R7 = card("R", "7");
@@ -24,12 +25,17 @@ const exposed = (over: Partial<Board> = {}) =>
   });
 
 const call = (s: GameState, seat: number) => applyAction(s, { type: "callUno", seat }, ctx());
-const catchIt = (s: GameState, seat: number, target: number) =>
-  applyAction(s, { type: "catchUno", seat, target }, ctx());
+/**
+ * 抓一次。**默认把时间推过 U7b 那 1 秒补喊宽限**——绝大多数用例问的是「抓不抓得着」，
+ * 而不是「宽限灵不灵」；不推时间的话交回合后立刻抓一律 `uno_grace`，测的就成了别的东西。
+ * 宽限本身有专门的 describe（传 `0` 走原时点）。
+ */
+const catchIt = (s: GameState, seat: number, target: number, afterMs = 1_500) =>
+  applyAction(s, { type: "catchUno", seat, target }, ctxAfter(afterMs));
 
 // ---------------------------------------------------------------- 按下那一刻判
 
-describe("U6 按钮常亮，判在按下那一刻", () => {
+describe("U6 按钮常亮，按下只记录（2026-08-02 改判：唯一结算在交回合）", () => {
   it("恰 1 张：声明成立、一张都不摸", () => {
     const s = exposed({ currentSeat: 1 });
     const r = call(s, 1);
@@ -40,34 +46,26 @@ describe("U6 按钮常亮，判在按下那一刻", () => {
     expect(call(r.state, 1).rejected?.reason).toBe("already_said");
   });
 
-  it("2 张虚喊：不被拒，罚摸 2 张，发 unoMiscalled，声明仍为假", () => {
-    const s = twoCards();
-    const r = call(s, 0);
-    expect(r.rejected).toBeUndefined();
-    expect(r.state.board!.hands[0]).toHaveLength(2 + 2);
-    expect(r.state.board!.saidUno[0]).toBe(false);
-    expect(r.events.map((e) => e.type)).toEqual(["unoMiscalled", "cardsDrawn"]);
-    expect(r.events[0].public).toEqual({ seat: 0 });
-    // 罚完还是没喊 → 按钮还在，再按还是罚（合法 ≠ 划算）
-    expect(legalActions(r.state, 0)).toContainEqual({ type: "callUno", seat: 0 });
-  });
-
-  it("3 张虚喊：同样受理并罚摸 2（资格一概不拦）", () => {
-    const three = twoCards({
-      hands: [[card("R", "3"), card("R", "4"), card("R", "5")], [card("Y", "1")], [card("Y", "2")]],
+  // 「按下即判、虚喊当场罚 2」是 2026-08-01 的口径，2026-08-02 撤了：按下只记录
+  it.each([2, 3])("自己回合里拿着 %i 张先喊：当场不罚、只记下「喊过」", (n) => {
+    const many = twoCards({
+      hands: [Array.from({ length: n }, (_, i) => card("R", String(i + 3) as Card["face"])),
+        [card("Y", "1")], [card("Y", "2")]],
     });
-    const r = call(three, 0);
+    const r = call(many, 0);
     expect(r.rejected).toBeUndefined();
-    expect(r.state.board!.hands[0]).toHaveLength(3 + 2);
-    expect(r.state.board!.saidUno[0]).toBe(false);
-    expect(r.events.some((e) => e.type === "unoMiscalled")).toBe(true);
+    expect(r.state.board!.hands[0]).toHaveLength(n); // 一张都没摸
+    expect(r.state.board!.saidUno[0]).toBe(true);    // 回合内不清（syncUno 只管回合外）
+    expect(r.events.map((e) => e.type)).toEqual(["unoCalled"]);
+    // 已经记下了 → 按钮收回（再按是 already_said）
+    expect(legalActions(r.state, 0)).not.toContainEqual({ type: "callUno", seat: 0 });
   });
 
-  it("罚不到就不受理：牌堆枯竭时虚喊 deck_empty，version 不涨", () => {
+  it("牌堆枯竭也照喊不误：按下不摸牌，就没有 deck_empty 这条路了", () => {
     const s = twoCards({ drawPile: [], discardPile: [], playedPile: [R7], reshuffles: 2 });
     const r = call(s, 0);
-    expect(r.rejected?.reason).toBe("deck_empty");
-    expect(r.state.version).toBe(s.version);
+    expect(r.rejected).toBeUndefined();
+    expect(r.state.board!.saidUno[0]).toBe(true);
   });
 
   it("legalActions：按钮常亮，手牌数不参与——只有已喊才收回", () => {
@@ -117,14 +115,16 @@ describe("U6 按钮常亮，判在按下那一刻", () => {
     expect(r.state.version).toBe(s.version + 1);
   });
 
-  it("补喊与抓先到先得：被抓在前，补喊就成了虚喊（那时他手上 3 张）", () => {
+  it("补喊与抓先到先得：被抓在前，补喊就落空（回合外 3 张，syncUno 当场作废，也不罚）", () => {
     const s = exposed();
     const caught = catchIt(s, 2, 1).state;
     expect(caught.board!.hands[1]).toHaveLength(3);
     const late = call(caught, 1);
     expect(late.rejected).toBeUndefined();
+    // 不在自己回合 + 手牌 ≠1 → syncUno 当场清掉；2026-08-02 之后这一下不再罚
     expect(late.state.board!.saidUno[1]).toBe(false);
-    expect(late.events.some((e) => e.type === "unoMiscalled")).toBe(true);
+    expect(late.state.board!.hands[1]).toHaveLength(3);
+    expect(late.events.some((e) => e.type === "unoMiscalled")).toBe(false);
   });
 });
 
@@ -154,7 +154,7 @@ describe("U6 声明的作用域是你的这个回合", () => {
     expect(catchIt(used.state, 1, 0).rejected?.reason).toBe("not_catchable");
   });
 
-  it("交回合结算：喊过但回合结束时手牌 2 张 → 声明作废，且**不追罚**", () => {
+  it("交回合结算：喊过但回合结束时手牌 2 张 → 声明作废 **且罚摸 2**（2026-08-02 改判）", () => {
     const said = call(steadfast(), 0).state;
     const used = applyAction(
       said, { type: "activateSkill", seat: 0, effectKey: "1", cardIds: [said.board!.hands[0][0].id] }, ctx(),
@@ -163,10 +163,10 @@ describe("U6 声明的作用域是你的这个回合", () => {
     const r = applyAction(used, { type: "drawCard", seat: 0 }, ctx());
     expect(r.rejected).toBeUndefined();
     expect(r.state.board!.currentSeat).toBe(1);
-    // 罚只在按下那一刻判：作废是作废，不再补罚 2 张（手上就是那 1 + 1 张）
-    expect(r.state.board!.hands[0]).toHaveLength(2);
+    // 结算只在交回合那一刻：1（弃1摸1后）+ 1（摸的）= 2 张 ≠ 1 → 作废并罚摸 2 → 4 张
+    expect(r.state.board!.hands[0]).toHaveLength(4);
     expect(r.state.board!.saidUno[0]).toBe(false);
-    expect(r.events.some((e) => e.type === "unoMiscalled")).toBe(false);
+    expect(r.events.some((e) => e.type === "unoMiscalled")).toBe(true);
     // 下次到 1 张须重喊——按钮本来就常亮着
     expect(legalActions(r.state, 0)).toContainEqual({ type: "callUno", seat: 0 });
   });
@@ -187,46 +187,9 @@ describe("U6 声明的作用域是你的这个回合", () => {
     expect(catchIt(skipped, 1, 0).rejected?.reason).toBe("not_catchable");
   });
 
-  it("并列逐张摆：第 2 张落地后的窗口里手牌恰 1 张，喊得成立且跨中间态存活", () => {
-    const pair = [card("R", "2"), card("R", "2")];
-    const raider = card("R", "2");
-    const s = table([[...pair, card("R", "9")], [raider, card("B", "5")], [card("Y", "3"), card("Y", "4")]], {
-      playedPile: [R7],
-      drawPile: filler(30),
-      skills: ["heart-4", "diamond-10", null],
-      revealed: [true, true, false],
-    });
-    // 并列 2 张同色同数：每张落地各开一次劫营窗口。第 1 张之后他手上还有 2 张——
-    // 那时点喊就是虚喊，所以中途确实没有喊的机会
-    const first = applyAction(s, { type: "playCards", seat: 0, cardIds: pair.map((c) => c.id) }, ctx()).state;
-    expect(first.pendingWindow?.type).toBe("interrupt");
-    expect(first.board!.hands[0]).toHaveLength(2);
-
-    // 第 1 个窗口 pass → 第 2 张落地 → 又开一个窗口，此刻他手上恰 1 张、回合还是他的
-    const second = applyAction(
-      first, { type: "respond", seat: 1, windowId: wid(first), choice: "pass" }, ctx(),
-    ).state;
-    expect(second.pendingWindow?.type).toBe("interrupt");
-    expect(second.board!.hands[0]).toHaveLength(1);
-    expect(second.board!.currentSeat).toBe(0);
-    expect(catchIt(second, 1, 0).rejected?.reason).toBe("not_catchable"); // 宽限期
-
-    const windowId = wid(second); // 喊会涨 version，窗口 id 在那之前冻住（U7）
-    const said = call(second, 0);
-    expect(said.rejected).toBeUndefined();
-    expect(said.state.board!.saidUno[0]).toBe(true);
-
-    // 窗口 pass 收尾 → 交回合，声明跟着那 1 张存续
-    const done = applyAction(
-      said.state, { type: "respond", seat: 1, windowId, choice: "pass" }, ctx(),
-    ).state;
-    expect(done.board!.currentSeat).toBe(1);
-    expect(done.board!.hands[0]).toHaveLength(1);
-    expect(done.board!.saidUno[0]).toBe(true);
-    expect(catchIt(done, 1, 0).rejected?.reason).toBe("not_catchable");
-  });
-
-  it("劫营真的截断：剩牌回手 + 摸 1 → 3 张，此刻抓不着、按下去是虚喊", () => {
+  // 2026-08-02 改判：并列整组一次落地，中途不再有窗口，所以「摆到一半手牌几张」这个
+  // 可观察的中间态整个不存在了。剩下的是「整组落完之后手上恰 1 张」这一种局面。
+  it("并列整组落地后手牌恰 1 张：窗口挂着也喊得成立，且跨中间态存活", () => {
     const pair = [card("R", "2"), card("R", "2")];
     const raider = card("R", "2");
     const s = table([[...pair, card("R", "9")], [raider, card("B", "5")], [card("Y", "3"), card("Y", "4")]], {
@@ -236,16 +199,45 @@ describe("U6 声明的作用域是你的这个回合", () => {
       revealed: [true, true, false],
     });
     const opened = applyAction(s, { type: "playCards", seat: 0, cardIds: pair.map((c) => c.id) }, ctx()).state;
+    expect(opened.pendingWindow?.type).toBe("interrupt");
+    // 两张一次落地 → 手上只剩红 9；回合还是他的，所以抓不得（宽限期）
+    expect(opened.board!.hands[0]).toHaveLength(1);
+    expect(opened.board!.currentSeat).toBe(0);
+    expect(catchIt(opened, 1, 0).rejected?.reason).toBe("not_catchable");
+
+    const said = call(opened, 0);
+    expect(said.rejected).toBeUndefined();
+    expect(said.state.board!.saidUno[0]).toBe(true);
+    // 劫营放弃 → 交回合，此刻恰 1 张 → 声明存续、不罚
+    // windowId 取**开窗那一版**：callUno 会 version+1 并把当时的 id 冻进窗口（uno.ts::bump），
+    // 拿 `wid(said.state)` 现算就是 stale_window
+    const passed = applyAction(
+      said.state, { type: "respond", seat: 1, windowId: wid(opened), choice: "pass" }, ctx(),
+    );
+    expect(passed.state.board!.saidUno[0]).toBe(true);
+    expect(passed.state.board!.hands[0]).toHaveLength(1);
+    expect(passed.events.some((e) => e.type === "unoMiscalled")).toBe(false);
+  });
+
+  it("劫营真的截断：整组已落地，被打断者摸 1 → 2 张，交回合时喊过就要罚", () => {
+    const pair = [card("R", "2"), card("R", "2")];
+    const raider = card("R", "2");
+    const s = table([[...pair, card("R", "9")], [raider, card("B", "5")], [card("Y", "3"), card("Y", "4")]], {
+      playedPile: [R7],
+      drawPile: filler(30),
+      skills: ["heart-4", "diamond-10", null],
+      revealed: [true, true, false],
+    });
+    const opened = applyAction(s, { type: "playCards", seat: 0, cardIds: pair.map((c) => c.id) }, ctx()).state;
+    const said = call(opened, 0).state; // 此刻恰 1 张，喊得对
     const cut = applyAction(
-      opened,
-      { type: "respond", seat: 1, windowId: wid(opened), choice: "raid", cardIds: [raider.id] },
-      ctx(),
-    ).state;
-    // 没摆的那张留在手上 + G5 的摸 1 = 3 张
-    expect(cut.board!.hands[0]).toHaveLength(3);
-    expect(cut.board!.saidUno[0]).toBe(false);
-    expect(catchIt(cut, 1, 0).rejected?.reason).toBe("not_catchable");
-    expect(call(cut, 0).events.some((e) => e.type === "unoMiscalled")).toBe(true);
+      said, { type: "respond", seat: 1, windowId: wid(opened), choice: "raid", cardIds: [raider.id] }, ctx(),
+    );
+    // 红 9 + G5 的摸 1 = 2 张（逐张模型下这里是 3）
+    expect(cut.state.board!.hands[0]).toHaveLength(2 + 2);
+    // 交回合时不是 1 张 → 声明作废 + 罚摸 2（U6 2026-08-02）
+    expect(cut.state.board!.saidUno[0]).toBe(false);
+    expect(cut.events.some((e) => e.type === "unoMiscalled")).toBe(true);
   });
 
   it("洗牌②摸 1 弃 1：喊过之后声明跨中间态存活（不再靠 ShufflePending.sayUno 透传）", () => {
@@ -309,7 +301,7 @@ describe("U7 宽限期 = 你自己的回合", () => {
     expect(legalActions(s, 0)).toContainEqual({ type: "callUno", seat: 0 });
   });
 
-  it("回合一交出去立刻可抓", () => {
+  it("回合交出去满 1 秒之后可抓", () => {
     const passed = applyAction(inTurn(), { type: "activateSkill", seat: 0, effectKey: "2" }, ctx()).state;
     expect(passed.board!.currentSeat).toBe(1);
     expect(legalActions(passed, 1)).toContainEqual({ type: "catchUno", seat: 1, target: 0 });
@@ -318,7 +310,7 @@ describe("U7 宽限期 = 你自己的回合", () => {
     expect(caught.state.board!.hands[0]).toHaveLength(3);
   });
 
-  it("在别人回合里被顶到 1 张没有宽限期：劫营打断者当场可抓", () => {
+  it("在别人回合里被顶到 1 张没有宽限期：劫营打断者满 1 秒后可抓", () => {
     const r2 = card("R", "2");
     const raider = card("R", "2");
     const s = table([[r2, card("R", "9")], [raider, card("B", "5")], [card("Y", "3"), card("Y", "4")]], {
@@ -337,6 +329,61 @@ describe("U7 宽限期 = 你自己的回合", () => {
     expect(cut.board!.hands[1]).toHaveLength(1);
     expect(cut.board!.currentSeat).toBe(2);
     expect(catchIt(cut, 0, 1).rejected).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------- U7b 补喊宽限（2026-08-02）
+
+describe("U7b 交回合后 1 秒补喊宽限", () => {
+  /** 座位 0 只剩 1 张、没喊，轮到他；持影歌②以便原样把回合交出去。 */
+  const passed = () =>
+    applyAction(
+      table([[card("R", "3")], [card("Y", "1"), card("Y", "5")], [card("Y", "2"), card("Y", "6")]], {
+        playedPile: [R7],
+        drawPile: filler(30),
+        skills: ["diamond-3", null, null],
+        revealed: [true, false, false],
+        marks: [{ 魂: 2 }, {}, {}],
+      }),
+      { type: "activateSkill", seat: 0, effectKey: "2" },
+      ctx(),
+    ).state;
+
+  it("宽限里抓 → uno_grace，局面纹丝不动（version 不涨、手牌不变）", () => {
+    const s = passed();
+    for (const at of [0, 500, 999]) {
+      const r = catchIt(s, 1, 0, at);
+      expect(r.rejected?.reason).toBe("uno_grace");
+      expect(r.state.version).toBe(s.version);
+      expect(r.state.board!.hands[0]).toHaveLength(1);
+    }
+  });
+
+  it("满 1 秒之后照常抓得着", () => {
+    const s = passed();
+    expect(catchIt(s, 1, 0, 1_000).rejected).toBeUndefined();
+    expect(catchIt(s, 1, 0, 5_000).rejected).toBeUndefined();
+  });
+
+  it("宽限里他自己补喊得成：这正是这 1 秒的用处", () => {
+    const r = call(passed(), 0);
+    expect(r.rejected).toBeUndefined();
+    expect(r.state.board!.saidUno[0]).toBe(true);
+    expect(r.state.board!.hands[0]).toHaveLength(1);
+  });
+
+  it("宽限**只保护刚交出回合的那个座位**，别人照抓不误", () => {
+    // 座位 0 交出回合（拿宽限），座位 2 手上也是 1 张没喊却没交过回合
+    const s = passed();
+    const other = { ...s, board: { ...s.board!, hands: [s.board!.hands[0], s.board!.hands[1], [card("Y", "2")]] } };
+    expect(other.board.unoGrace!.seat).toBe(0);
+    expect(catchIt(other, 1, 2, 0).rejected).toBeUndefined();
+  });
+
+  it("快照带着宽限的截止时刻，UI 才画得出「还不能抓」", () => {
+    const s = passed();
+    expect(projectView(s, 1).unoGrace).toEqual(s.board!.unoGrace);
+    expect(Date.parse(s.board!.unoGrace!.until) - Date.parse(NOW)).toBe(UNO_GRACE_MS);
   });
 });
 

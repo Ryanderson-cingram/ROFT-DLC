@@ -568,3 +568,42 @@ describe("洗牌 · 契约与牌组", () => {
     expect(buildDeck("gods").filter((c) => c.face === "shuffle")).toHaveLength(3);
   });
 });
+
+// ---------------------------------------------------------------- 取消窗口不泄露谁有洗牌牌
+
+describe("洗牌③取消窗口：谁手上有洗牌牌是暗信息（2026-08-02）", () => {
+  /** 座位 0 打①；座位 1 与 2 手上都有洗牌牌，所以两人都是 actors。 */
+  const opened = () => {
+    const play = sh();
+    const s = table([[play, card("R", "9")], [sh(), card("B", "5")], [sh(), card("Y", "4")]], {
+      playedPile: [R7],
+      drawPile: pile(),
+    });
+    return applyAction(
+      s, { type: "playCards", seat: 0, cardIds: [play.id], chosenColor: "R", shuffleChoice: "shuffle" }, ctx(),
+    );
+  };
+
+  it("公开事件不带 actors——那一串就是「谁手上有洗牌牌」，而手牌是私有的", () => {
+    const e = opened().events.find((x) => x.type === "shuffleCancelWindowOpened")!;
+    expect(e.public).not.toHaveProperty("actors");
+    // 打出者是谁、窗口到什么时候，这两条本来就公开
+    expect(e.public!.seat).toBe(0);
+  });
+
+  it("快照里每个人只看得到「有没有自己」，看不到还有谁能取消", () => {
+    const s = opened().state;
+    // 真相仍在服务端：两个人都能取消
+    expect(s.pendingWindow!.actors).toEqual([1, 2]);
+    // 投影只留自己；打出者一个名字都拿不到
+    expect(projectView(s, 1).pendingWindow!.actors).toEqual([1]);
+    expect(projectView(s, 2).pendingWindow!.actors).toEqual([2]);
+    expect(projectView(s, 0).pendingWindow!.actors).toEqual([]);
+  });
+
+  it("遮罩只管显示，不动合法性：能取消的人照样拿得到 respond", () => {
+    const s = opened().state;
+    expect(legalActions(s, 1).some((a) => a.type === "respond" && a.choice === "cancel")).toBe(true);
+    expect(legalActions(s, 0).some((a) => a.type === "respond")).toBe(false);
+  });
+});

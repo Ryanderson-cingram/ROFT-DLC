@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { applyAction, legalActions, projectView } from "../src/index.ts";
 import { windowIdOf } from "../src/actions/punish.ts";
+import { spendMarks } from "../src/skills/primitives/marks.ts";
 import { card, ctx, lobby, table } from "./helpers.ts";
 
 const R7 = card("R", "7");
@@ -35,7 +36,10 @@ describe("projectView privacy (spec §1: client never sees other hands)", () => 
       skillId: null,
       revealed: false,
       marks: {},
+      marksSpent: {},
       statuses: [],
+      activatedThisTurn: false,
+      sealedBy: null,
       ascensions: 0,
     });
     expect(snap.drawPileCount).toBe(164 - 28 - 1);
@@ -149,6 +153,133 @@ describe("legalActions", () => {
     expect(done.phase).toBe("finished");
     expect(legalActions(done, 0)).toEqual([]);
     expect(projectView(done, 0).winner).toBe(0);
+  });
+});
+
+describe("出牌堆的投影（02 §5 / 06-Q55：牌河分堆）", () => {
+  const older = [card("R", "4"), card("B", "4"), card("B", "9")];
+
+  it("`[0]` 是牌顶：刚打出的那张排在最前，与 discardPile 的旧→新方向相反", () => {
+    const mine = card("R", "3");
+    const s = table([[mine, card("G", "8")], [card("Y", "1")], [card("Y", "2")]], {
+      playedPile: [R7, ...older],
+      discardPile: [card("G", "2"), card("Y", "9")],
+    });
+    const after = applyAction(s, { type: "playCards", seat: 0, cardIds: [mine.id] }, ctx()).state;
+    const snap = projectView(after, 0);
+    expect(snap.playedPile).toEqual([mine, R7, ...older]);
+    expect(snap.playedPile[0]).toEqual(snap.playedTop);
+    // 弃牌堆方向相反：`[0]` 是最旧的一张。两个堆同向的假设会把 UI 画反
+    expect(snap.discardPile[0]).toEqual({ ...snap.discardPile[0], face: "2" });
+  });
+
+  it("摸牌堆见底洗回之后被截到只剩牌顶那一张（所以它是「上次重洗以来」，不是整局历史）", () => {
+    const s = table([[card("G", "8")], [card("Y", "1")], [card("Y", "2")]], {
+      playedPile: [R7, ...older],
+      drawPile: [],
+    });
+    expect(projectView(s, 0).playedPile).toHaveLength(4);
+    const after = applyAction(s, { type: "drawCard", seat: 0 }, ctx()).state;
+    expect(after.board!.reshuffles).toBe(1);
+    expect(projectView(after, 0).playedPile).toEqual([R7]);
+  });
+});
+
+// 这一条是本批投影的**回归闩**：三个中间态都同时含着暗信息与公开信息，
+// 投影只许放公开的那一半出去。加字段的人删不掉这个测试就漏不了牌。
+describe("暗信息不进快照（司夜的 cardId / 洗牌的 drawnId / 掷骰的 resume）", () => {
+  const stolen = card("B", "5");
+  const drawn = card("G", "7");
+  const s = table([[stolen, card("R", "3")], [card("Y", "1")], [card("Y", "2")]], {
+    swap: { seat: 0, target: 1, cardId: stolen.id },
+    shufflePending: { seat: 0, choice: "drawDiscard", drawnId: drawn.id },
+  }, {
+    pendingDice: {
+      seat: 0,
+      reason: "bloodthorn",
+      values: [2],
+      resume: { kind: "bloodthorn", seat: 0, target: 2 },
+    },
+  });
+
+  it("司夜②：只投「谁跟谁换」，盲抽那张的 id 不出现在旁观者的快照里", () => {
+    for (const viewer of [0, 1, 2]) {
+      const snap = projectView(s, viewer);
+      expect(snap.swap).toEqual({ seat: 0, target: 1 });
+      expect(Object.keys(snap.swap!)).toEqual(["seat", "target"]);
+    }
+    // 盲抽那张此刻在司夜者（座位 0）手里，他当然看得见；旁人一个字节都不该拿到
+    expect(JSON.stringify(projectView(s, 2))).not.toContain(stolen.id);
+    expect(JSON.stringify(projectView(s, 1))).not.toContain(stolen.id);
+  });
+
+  it("洗牌牌：只投「谁打的、选的哪一项」，刚摸那张的 id 不投", () => {
+    for (const viewer of [0, 1, 2]) {
+      const snap = projectView(s, viewer);
+      expect(snap.shufflePending).toEqual({ seat: 0, choice: "drawDiscard" });
+      expect(JSON.stringify(snap)).not.toContain("drawnId");
+      expect(JSON.stringify(snap)).not.toContain(drawn.id);
+    }
+  });
+
+  it("掷骰：点数与受害者公开，续跑指令 resume 整个不进快照", () => {
+    const snap = projectView(s, 1);
+    expect(snap.dice).toEqual({ seat: 0, reason: "bloodthorn", values: [2], target: 2 });
+    expect(JSON.stringify(snap)).not.toContain("resume");
+    expect(JSON.stringify(snap)).not.toContain("bloodthorn\",\"seat");
+  });
+
+  it("影歌①：宣言与已摸张数公开，队列与 effectKey 是内部记账不投", () => {
+    const h = table([[card("R", "3")], [card("Y", "1")], [card("Y", "2")]], {
+      soulHarvest: { seat: 0, declared: { color: "R", face: "5" }, queue: [1, 2], drawn: 3, effectKey: "1" },
+    });
+    expect(projectView(h, 2).soulHarvest).toEqual({ seat: 0, declared: { color: "R", face: "5" }, drawn: 3 });
+  });
+});
+
+describe("标记的已花计数（03 §5）", () => {
+  const s = table([[card("R", "3")], [card("Y", "1")], [card("Y", "2")]], {
+    marks: [{ 魂: 5 }, {}, {}],
+  });
+
+  it("spendMarks 之后 marksSpent 累加，余额同步减少", () => {
+    const once = spendMarks(s.board!, 0, "魂", 2)!;
+    const twice = spendMarks(once, 0, "魂", 1)!;
+    const p = projectView({ ...s, board: twice }, 0).players[0];
+    expect(p.marks).toEqual({ 魂: 2 });
+    expect(p.marksSpent).toEqual({ 魂: 3 });
+    // 没花过的座位仍是空表，不是 undefined
+    expect(projectView({ ...s, board: twice }, 0).players[1].marksSpent).toEqual({});
+  });
+
+  it("用替代标记顶替时按**实际扣掉的那个标记名**记账", () => {
+    const marks: Record<string, number>[] = [{ 魂: 1, 颠: 4 }, {}, {}];
+    const b = { ...s.board!, marks };
+    const paid = spendMarks(b, 0, "魂", 3, ["颠"])!;
+    expect(projectView({ ...s, board: paid }, 0).players[0].marksSpent).toEqual({ 魂: 1, 颠: 2 });
+  });
+});
+
+describe("标记上限 marksCap（绑定来自 04 围栏块的 mark_cap）", () => {
+  it("影歌的魂上限 6 从定义读得出来", () => {
+    const s = table([[card("R", "3")], [card("Y", "1")], [card("Y", "2")]], {
+      skills: ["diamond-3", null, null],
+      revealed: [true, false, false],
+    });
+    expect(projectView(s, 0).marksCap.魂).toBe(6);
+  });
+
+  it("没有上限的标记不出现在表里——盗攒着也不给 key，更不是 0", () => {
+    const s = table([[card("R", "3")], [card("Y", "1")], [card("Y", "2")]], {
+      skills: ["club-3", null, null],
+      revealed: [true, false, false],
+      marks: [{ 盗: 4 }, {}, {}],
+    });
+    const snap = projectView(s, 0);
+    expect(snap.players[0].marks.盗).toBe(4);
+    expect("盗" in snap.marksCap).toBe(false);
+    // 缺席才是「无上限」的表达；0 会被 UI 读成「上限是 0」
+    expect(snap.marksCap.盗).toBeUndefined();
   });
 });
 

@@ -58,6 +58,13 @@ describe("影歌① 的宣言", () => {
     expect(harvest(seated(), { color: null, face: "2" }).rejected?.reason).toBe("bad_declaration");
   });
 
+  // 04 2026-08-02 裁定：0 每色 2 张、1–9 每色 3 张，宣言 0 是严格占优的一手
+  it("宣言不含 0（1–9 才行），但 0 照旧是数字牌——只收窄宣言", () => {
+    expect(harvest(seated(), { color: "B", face: "0" }).rejected?.reason).toBe("bad_declaration");
+    for (const face of ["1", "5", "9"] as const)
+      expect(harvest(seated(), { color: "B", face }).rejected, face).toBeUndefined();
+  });
+
   it("发动者手里没有那张牌照样可以指定（2026-07-30 更正）", () => {
     const s = seated();
     expect(s.board!.hands[0].some((c) => c.color === "B" && c.face === "2")).toBe(false);
@@ -193,7 +200,7 @@ describe("影歌① 的结算", () => {
     expect(markCount(r.state.board!, 0, "魂")).toBe(1);
   });
 
-  it("S15：魂上限 6，上限从定义的 values.max 读", () => {
+  it("S15：魂上限 6，标记名与上限都从定义的 mark_cap 读", () => {
     // 4 人局，三个人各摸 3 = 9 张，攒到 6 就封顶
     const four = seated(
       { skills: ["diamond-3", null, null, null], revealed: [true, false, false, false] },

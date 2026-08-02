@@ -265,7 +265,10 @@ describe("血棘 的快照投影", () => {
       expect(projectView(sealed, viewer).players.map((p) => p.statuses)).toEqual([[], ["封印"], []]);
   });
 
-  it("「谁封的我」是引擎记账，不进快照", () => {
-    expect(JSON.stringify(projectView(sealed, 1))).not.toContain("sealedBy");
+  // 2026-08-02 改判：「谁封的我」进快照。`sealed` 事件的 public payload 一直带 `by`，
+  // 行动记录早就在渲染「被老白封印了技能」——瞒着它只是让 UI 写不出 01-P14 的解封条件。
+  it("「谁封的我」是公开信息：各视角一致", () => {
+    for (const viewer of [0, 1, 2])
+      expect(projectView(sealed, viewer).players.map((p) => p.sealedBy)).toEqual([null, 0, null]);
   });
 });

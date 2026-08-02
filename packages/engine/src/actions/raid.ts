@@ -13,7 +13,7 @@
  */
 import { sealedOff } from "./dice.ts";
 import { drawCards, drawEvents, giveTo } from "./draw.ts";
-import { placeParallel, settlePlay } from "./play-cards.ts";
+import { settlePlay } from "./play-cards.ts";
 import { commit, isNumberCard, passTurn, reject, windowIdOf } from "../legal.ts";
 import { SKILL_DATA } from "../skills/draw-passives.ts";
 import { paramsOfEffect } from "../skills/params.ts";
@@ -54,10 +54,16 @@ function raidEffect(b: Board, seat: number, data: SkillData): SkillEffect | unde
 export const canRaid = (c: Card, top: Card) =>
   isNumberCard(c) && c.color === top.color && c.face === top.face;
 
-/** 刚摆出 `top` 之后，此刻能打断的座位（其他座位、亮着劫营、手里有得截）。 */
-export function raidActors(b: Board, seat: number, top: Card, data: SkillData = SKILL_DATA): number[] {
+/**
+ * 刚落地的那**几张**里有没有截得动的（单张出牌就是 1 张；并列是整组，
+ * 04 ♥4 的 2026-08-02 改判：触发面是**组内任意一张**）。
+ */
+export const canRaidAny = (c: Card, tops: Card[]) => tops.some((t) => canRaid(c, t));
+
+/** 刚落地 `tops` 之后，此刻能打断的座位（其他座位、亮着劫营、手里有得截）。 */
+export function raidActors(b: Board, seat: number, tops: Card[], data: SkillData = SKILL_DATA): number[] {
   return b.hands.flatMap((h, i) =>
-    i !== seat && raidEffect(b, i, data) && h.some((c) => canRaid(c, top)) ? [i] : [],
+    i !== seat && raidEffect(b, i, data) && h.some((c) => canRaidAny(c, tops)) ? [i] : [],
   );
 }
 
@@ -67,7 +73,7 @@ export function openRaidWindow(
   board: Board,
   seat: number,
   actors: number[],
-  card: Card,
+  cards: Card[],
   ctx: Ctx,
   before: EngineEvent[],
 ): ApplyResult {
@@ -82,8 +88,8 @@ export function openRaidWindow(
     state: next,
     events: [
       ...before,
-      // 刚打出的那张本来就在牌顶，是公开信息；窗口针对的正是它
-      { type: "raidWindowOpened", public: { windowId: windowIdOf(next), actors, seat, card, deadline } },
+      // 刚打出的那几张本来就在牌河上，是公开信息；窗口针对的正是它们（并列 = 整组）
+      { type: "raidWindowOpened", public: { windowId: windowIdOf(next), actors, seat, cards, deadline } },
     ],
   };
 }
@@ -110,8 +116,12 @@ export function settleRaid(
     // 所以「洗牌中间态 + 打断窗口」并存的牌桌走不到这里），但触发面一旦再放宽就会留下
     // 一个没有窗口的孤儿中间态——正是 fuzz 那条「中间态与窗口同生共死」要抓的东西
     const { parallelPending: _resumed, playPending: _done, shufflePending: _shuffle, ...cleared } = b;
-    // 并列：接着摆下一张（声明时的 chosenColor 随 pending 一起透传）
-    if (pend) return placeParallel(state, cleared, pend, ctx, data);
+    // 并列：整组早就落地了，只剩交回合（2026-08-02 之后没有「接着摆下一张」这回事）
+    if (pend)
+      return {
+        state: commit(state, { ...cleared, ...passTurn(cleared, ctx.now, pend.seat) }, "turnStart"),
+        events: [],
+      };
     // 单张：把这次出牌余下的结算跑完（收官 / 获盗 / 惩罚链 / 交回合）
     return settlePlay(state, cleared, single!.seat, b.playedPile[0], single!.dice, ctx, [], data);
   }
@@ -123,13 +133,13 @@ export function settleRaid(
     ? b.hands[action.seat].find((c) => c.id === action.cardIds![0])
     : undefined;
   if (!played) return reject(state, "not_in_hand");
-  // 窗口只针对**刚摆的那张**（= 牌顶）：异色同数、同色异数都截不了
-  if (!canRaid(played, b.playedPile[0])) return reject(state, "bad_choice");
+  // 窗口针对刚落地的那几张（并列 = 整组，单张 = 牌顶）：异色同数、同色异数都截不了
+  if (!canRaidAny(played, b.parallelPending?.cards ?? [b.playedPile[0]])) return reject(state, "bad_choice");
 
   const { parallelPending: _interrupted, playPending: _stopped, shufflePending: _voided, ...rest } = b;
   // 打断牌压牌顶，跟牌目标变成它（用户原话「从劫营的人的下家按黄 2 继续」）。
-  // 已摆出的牌留在牌河不回滚（G5 打断的是剩余轮次与行动权，不是没收已打的牌）；
-  // `remaining` 本来就没离手，清掉 `parallelPending` 它们就留在手上了。
+  // 并列整组已经全在牌河，不回滚（G5 打断的是剩余轮次与行动权，不是没收已打的牌）——
+  // 2026-08-02 之后不再有「没摆的留在手上」这回事。
   const interrupted: Board = {
     ...rest,
     hands: rest.hands.map((h, i) => (i === action.seat ? h.filter((c) => c.id !== played.id) : h)),
@@ -157,7 +167,7 @@ export function settleRaid(
   );
   const drawn: Board = { ...r.board, hands: giveTo(r.board, victim, r.drawn) };
   // G5：打断者**不进回合**，从他的下家继续
-  const passed = passTurn(drawn, action.seat);
+  const passed = passTurn(drawn, ctx.now, action.seat);
   const board: Board = {
     ...drawn,
     ...passed,

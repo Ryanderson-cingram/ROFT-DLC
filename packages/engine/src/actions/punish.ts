@@ -37,14 +37,17 @@ export function canStack(card: Card, chain: PunishChain): boolean {
  * P6：贡献在打出进链时结算，只作用于自己那一张，所以逐段累加而不是 `2 * count`。
  * P11：受罚侧要「先加总各段贡献再套用」，`total` 就是那个加总。
  * `draw` 缺席 = 按面值；强袭①掷骰改倍率时由调用方算好传进来（02 §7：这类修正计入 L0，不走层级）。
+ * `color` = 这一段在牌桌上呈现的颜色，**必传**：远星♦J 的「视为打出」不进牌河，UI 回推不出来，
+ * 所以只有进链的那一刻知道，见 `PunishSegment.color`。
  */
 export function extendChain(
   chain: PunishChain | undefined,
   seat: number,
   face: PunishFace,
+  color: Color | null,
   draw: number = PUNISH_DRAW[face],
 ): PunishChain {
-  const segments = [...(chain?.segments ?? []), { seat, face, draw }];
+  const segments = [...(chain?.segments ?? []), { seat, face, draw, color }];
   return {
     initiator: chain?.initiator ?? seat,
     segments,
@@ -82,7 +85,11 @@ export function resumeAssault(
   values: number[],
   ctx: Ctx,
 ): ApplyResult {
-  const chain = extendChain(board.punish, spec.seat, spec.face, PUNISH_DRAW[spec.face] * values[0]);
+  // 段色 = 刚打出那张的呈现色。它就是 `activeColor`：这张牌落地时被设成 follow.color，
+  // 而接管窗口里只允许重掷/放过（劫营截不了功能牌），中间没人动得了它。
+  const chain = extendChain(
+    board.punish, spec.seat, spec.face, board.activeColor, PUNISH_DRAW[spec.face] * values[0],
+  );
   return openPunishWindow(state, { ...board, punish: chain }, spec.seat, ctx);
 }
 
@@ -175,7 +182,8 @@ export function settleFarstar(
   const board: Board = {
     ...r.board,
     hands: giveTo(r.board, seat, r.drawn),
-    punish: extendChain(chain, seat, face),
+    // 04 ♦J：视为的那张用所弃代价牌的颜色（上面 activeColor 也是这么设的），两者恒等
+    punish: extendChain(chain, seat, face, paid[0].color),
     drawnPlayable: null,
   };
   const opened = openPunishWindow(state, board, seat, ctx);
@@ -295,7 +303,7 @@ function settle(state: GameState, seat: number, choice: string, ctx: Ctx): Apply
   };
   return {
     // passTurn 读**摸完之后**的手牌（U6 的声明结算按最终张数判），所以传 eaten 而不是 board
-    state: commit(state, { ...eaten, ...passTurn(eaten, seat) }, "turnStart"),
+    state: commit(state, { ...eaten, ...passTurn(eaten, ctx.now, seat) }, "turnStart"),
     events: [
       { type: "punishAccepted", public: { seat, total: chain.total, segments: chain.segments } },
       ...sealing.events,

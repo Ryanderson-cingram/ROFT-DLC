@@ -381,8 +381,10 @@ export const skillDefs: SkillDefsDoc = {
           "window": "turn_start",
           "values": {
             "draws": 3,
-            "draws_partial": 1,
-            "max": 6
+            "draws_partial": 1
+          },
+          "mark_cap": {
+            "魂": 6
           },
           "targeting": "all_others",
           "once": "once",
@@ -486,7 +488,7 @@ export const skillDefs: SkillDefsDoc = {
       "name": "劫营",
       "suit_rank": "♦10",
       "status": "✅",
-      "summary": "同色同数同时打出；对方摸 1；你下家继续；可打断**任何人打出的任何一张牌**（含并列/神化的每一张）；剩余神化轮作废",
+      "summary": "同色同数同时打出；对方摸 1；你下家继续；可打断**任何人打出的任何一张牌**（并列按**整组**算一次、神化仍是每一张，2026-08-02）；剩余神化轮作废",
       "caveats": null,
       "notes": "已定",
       "effects": [
