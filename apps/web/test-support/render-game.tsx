@@ -68,12 +68,17 @@ function Game({
   );
 }
 
+/** `update(snap)` 原地换一份快照——「同一棵树上内容变了之后」的那几条（重挂、闪一下、浮报）要它。 */
 export const renderGame = (
   snapshot: ClientSnapshot,
   on: Partial<Handlers> = {},
   pickColor?: PickColor | null,
   costPick?: { onPick: (card: Card) => void; onCancel: () => void } | null,
-) => render(<Game snapshot={snapshot} on={on} pickColor={pickColor} costPick={costPick} />);
+) => {
+  const ui = (s: ClientSnapshot) => <Game snapshot={s} on={on} pickColor={pickColor} costPick={costPick} />;
+  const r = render(ui(snapshot));
+  return { ...r, update: (s: ClientSnapshot) => r.rerender(ui(s)) };
+};
 
 /** 手牌区。可点的牌是 `<button>`、不可点的是 `<span>`——所以 role 查询天然只捞到可点的那些。 */
 export const hand = (root: HTMLElement) => within(root).getByRole("group", { name: "你的手牌" });

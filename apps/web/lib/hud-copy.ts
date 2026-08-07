@@ -1,7 +1,7 @@
 import type { Action, ClientSnapshot } from "@roft/engine";
 import { cardLabel } from "./cards";
 import { costActionsOf, playableIds } from "./legal";
-import { effectLabel } from "./skills";
+import { effectLabel, skillById } from "./skills";
 
 /**
  * 快照 → 玩家读得懂的一句话／一个按钮标签。零 DOM、零规则：
@@ -28,6 +28,17 @@ export const CHOICE_LABEL: Record<string, string> = {
   draw3: "不亮牌，摸 3 张",
   "soul-skip": "花魂跳过本回合",
   takeover: "重掷，采用我的结果",
+  // 异议♥8①：反转方向 + 跳过自己 = 这串惩罚原样弹回上家（整局一次）
+  dissent: "异议：原样弹回给上家",
+  // 合纵/连横②（01-S14 每次可选）：张数是变的，按钮上那句由 `buttonLabel` 带 picks 写全
+  take: "摸牌再弃掉",
+  decline: "这次不摸",
+  // 合纵/连横①（01-S13）：相应即亮出并互换整副手牌
+  ally: "相应：亮出并互换整副手牌",
+  refuse: "不相应",
+  // 近卫♥6（01-P12）：交几张手牌给链首。张数由坞里的确认键带，这里只写兜底
+  give: "交牌给链首",
+  keep: "不交牌",
 };
 
 /** 座位 → 昵称。快照里只有 userId，昵称由调用方从 room_seats join profiles 映射。 */
@@ -53,7 +64,27 @@ export function sayFor(s: ClientSnapshot, nameOf: NameOf): string {
     if (w.type === "soulHarvest")
       return "轮到你了：亮一张对得上的牌，或者不亮直接摸牌（对方按此攒魂）";
     if (w.type === "swapReturn") return "盲抽完了：从手牌里挑 1 张还给对方";
-    if (w.type === "shuffleDiscard") return "洗牌·摸一弃一：摸完了，从手牌里挑 1 张弃掉";
+    // 摸 N 弃 N（03 §2）：洗牌②的「摸一弃一」是 N = 1 的特例，同一句话
+    if (w.type === "drawDiscard") return `摸完了：从手牌里挑 ${s.drawDiscard?.picks ?? 1} 张弃掉`;
+    // 近卫♥6（01-P12）：吃完 ≥4 的惩罚，每张 +2/+4 可交 1 张手牌给链首
+    if (w.type === "handOver")
+      return `吃完了：可以从手牌里挑最多 ${s.handOver?.max ?? 1} 张交给${nameOf(s.handOver?.target ?? 0)}，也可以不交`;
+    // 合纵/连横①（01-S13）：亮出当下立刻决定，不选 = 无人相应，且**一锤定音**
+    if (w.type === "alliance")
+      return "对家亮出了另一半：相应就亮出你的技能并互换整副手牌，此后每回合开始都能再换；不相应就此作罢";
+    // 「要不要这次摸 N 弃 N」：合纵/连横②（S14 每次可选）与神授♥5（S17b 非强制的摸牌）共用。
+    // **来源写在句首**：同一句话在两个来源下最优解相反（合纵②是白给的换牌机会，通常该拿；
+    // 神授的重点在后半句「可以不摸」，通常该拒），不点名等于把最关键的那半句藏起来；
+    // 而且神授上一轮罚摸时一声不吭、这一轮却弹窗口，不解释就会被当成「引擎有时候忘了问」。
+    // 来源不用引擎给：开这个窗口的两条路都是**受问者自己已亮出的**技能，
+    // `players[seat].skillId` 本来就在快照里。
+    // ponytail: 前提是「开窗口的技能 = 被问的人自己的技能」。真出现替别人开这个窗口的牌，
+    // 那时才给 `drawOffer` 加 `by` 字段——在那之前加就是给一个不存在的场景付钱。
+    if (w.type === "drawOffer") {
+      const n = s.drawOffer?.picks ?? 1;
+      const by = skillById(s.players.find((p) => p.seat === s.youSeat)?.skillId ?? null)?.name;
+      return `${by ? `${by}：` : ""}可以摸 ${n} 张再弃 ${n} 张，也可以这次不摸`;
+    }
     // 洗牌①：手上有洗牌牌的人先到先得，一人取消就作废
     if (w.type === "shuffleCancel")
       return `${nameOf(s.currentSeat ?? 0)}打出了洗牌（全体手牌打乱重分）：点高亮的洗牌牌取消，或者放弃`;
@@ -86,6 +117,12 @@ export function sayFor(s: ClientSnapshot, nameOf: NameOf): string {
  * 高亮的意思是「可以还给对方」「可以弃掉」，不是「现在能打」。
  */
 export function handHint(s: ClientSnapshot, multiPicking: boolean, costPicking = false): string {
+  // 摸 N 弃 N：手牌全部可选（要弃的可以是刚摸的、也可以是原本就有的），点够 N 张再提交
+  if (s.pendingWindow?.type === "drawDiscard" && s.pendingWindow.actors.includes(s.youSeat))
+    return `点选 ${s.drawDiscard?.picks ?? 1} 张弃掉（手牌全部可选）`;
+  // 近卫交牌：1 ‥ max 张，凑够 1 张就能交
+  if (s.pendingWindow?.type === "handOver" && s.pendingWindow.actors.includes(s.youSeat))
+    return `点选最多 ${s.handOver?.max ?? 1} 张交出去（手牌全部可选）`;
   if (multiPicking) return "多打：点选 2 张同色同数 / 4 张同数 / 6 张同色";
   if (costPicking) return "点一张牌弃掉当代价（手牌全部可选）";
   if (costActionsOf(s).size > 0) {
@@ -95,7 +132,6 @@ export function handHint(s: ClientSnapshot, multiPicking: boolean, costPicking =
   }
   if (s.pendingWindow?.actors.includes(s.youSeat)) {
     if (s.pendingWindow.type === "swapReturn") return "高亮 = 可以还给对方";
-    if (s.pendingWindow.type === "shuffleDiscard") return "高亮 = 可以弃掉";
   }
   return playableIds(s).size > 0 ? "高亮 = 现在能打" : "这一轮没有能打的牌";
 }
@@ -126,6 +162,8 @@ export function buttonLabel(a: Action, s: ClientSnapshot, nameOf: NameOf): strin
       return `发动技能：${effectLabel(s.players[a.seat]?.skillId ?? null, a.effectKey)}`;
     case "respond": {
       if (a.choice === "accept") return `吃下 ${s.punish?.total ?? 0} 张`;
+      // 合纵/连横②：几张写在按钮上（1/2/3 三档都可能，连横还会因连击升档）
+      if (a.choice === "take" && s.drawOffer) return `摸 ${s.drawOffer.picks} 张再弃 ${s.drawOffer.picks} 张`;
       // 影歌①的亮牌选项：动作自带要亮哪张，按钮就写清楚亮的是什么、亮完摸不摸
       const shown = a.cardIds && s.yourHand.find((c) => c.id === a.cardIds![0]);
       if (shown)

@@ -108,8 +108,9 @@ const STATES: { name: string; go: () => ReturnType<typeof renderGame> }[] = [
     go: () => renderGame(win("swapReturn", "stolen", [respond("swapReturn", R3.id)])),
   },
   {
-    name: "I 洗牌弃牌",
-    go: () => renderGame(win("shuffleDiscard", "drawn", [respond("shuffleDiscard", R3.id)])),
+    name: "I 摸 N 弃 N 的弃牌",
+    go: () =>
+      renderGame(win("drawDiscard", "drawn", [respond("drawDiscard", "discard")], { drawDiscard: { seat: 0, picks: 1 } })),
   },
   {
     name: "E 开局抽 3 选 1",

@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useState } from "react";
 import { skillById } from "@/lib/skills";
+import { Emphasis } from "../emphasis";
 import { Modal } from "./modal";
 
 /**
@@ -62,12 +63,27 @@ export function DraftSheet({
           <p className="lead">整局只有这一个技能，亮出来才生效。</p>
           <div className="draft">
             {skills.map(({ id, s }) => (
-              <label className="draft-opt" key={id}>
-                <input type="radio" name="draft" checked={choice === id} onChange={() => setChoice(id)} />
-                <span className="sigil">{s?.sigil ?? "?"}</span>
-                <h3>{s?.name ?? id}</h3>
-                <p>{s?.l0}</p>
-              </label>
+              /* 外层是 `<div>` 不是 `<label>`：细则要能单独点开，而 `<label>` 里的点击
+                 一律被转给那个 radio——包进去就成了「想看说明结果把它选了」。
+                 选中/焦点的样式照旧走 `:has(input:…)`，容器换成 div 一样命中。 */
+              <div className="draft-opt" key={id}>
+                <label>
+                  <input type="radio" name="draft" checked={choice === id} onChange={() => setChoice(id)} />
+                  <span className="sigil">{s?.sigil ?? "?"}</span>
+                  <h3>{s?.name ?? id}</h3>
+                  <p>{s && <Emphasis text={s.l0} />}</p>
+                </label>
+                {/* 一句 L0 定不了一整局的技能：`l1` 才写着代价、时机、边界。
+                    与百科页同一套 `<details>`（零 JS，默认收起，要看的自己展开）。 */}
+                {s && (
+                  <details>
+                    <summary>细则</summary>
+                    <p>
+                      <Emphasis text={s.l1} />
+                    </p>
+                  </details>
+                )}
+              </div>
             ))}
           </div>
           <div className="draft-foot">

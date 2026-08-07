@@ -1,14 +1,18 @@
 "use client";
 
 import type { Card, ClientSnapshot, Color } from "@roft/engine";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { CardFace } from "./card-face";
 import { Pile } from "./pile";
-import { cardLabel, colorLabel, faceLabel } from "@/lib/cards";
+import { cardLabel, colorLabel, colorSwatch, faceLabel } from "@/lib/cards";
 import type { NameOf } from "@/lib/hud-copy";
+import { type ChosenPick, effectLabel, globalPicks, skillById } from "@/lib/skills";
 
 /** 哪一堆的「全貌」——P3 的弹窗按它决定列哪一堆。 */
 export type PileKey = "played" | "discard";
+
+/** 牌桌上能浮出一层说明的东西：三堆的扇形，加上全场生效的那几条。同一时刻只开一个。 */
+type OpenKey = PileKey | "pick";
 
 type Props = {
   snapshot: ClientSnapshot;
@@ -19,15 +23,6 @@ type Props = {
 
 /** 扇形只浮出最近这几张；要整堆走 `.fan__more`。 */
 const FAN = 6;
-
-const COLOR_VAR: Record<Color, string> = {
-  R: "var(--card-red)",
-  B: "var(--card-blue)",
-  Y: "var(--card-yellow)",
-  G: "var(--card-green)",
-};
-/** 无色（开局还没定色）就画一段发丝线的灰，别装作有颜色。 */
-export const colorSwatch = (c: Color | null | undefined) => (c ? COLOR_VAR[c] : "var(--edge)");
 
 /**
  * 牌河（design/mockups/game.html 的 `.field` + `.piles`）：三堆同构，外加**场上物件**
@@ -40,9 +35,10 @@ export function CardRiver({ snapshot: s, nameOf, onOpenPile }: Props) {
   const discardFan = s.discardPile.slice(-FAN);
   const declared = s.soulHarvest?.declared;
 
-  // 至多一堆的扇形开着（窄屏两个 `.fan` 是同一个 fixed 定点，各持一个 open 会叠成两层）
-  const [openFan, setOpenFan] = useState<PileKey | null>(null);
-  const fanProps = (which: PileKey) => ({
+  // 至多一层浮出来（窄屏两个 `.fan` 是同一个 fixed 定点，各持一个 open 会叠成两层）。
+  // 全场生效那条的说明浮窗也挂在这一个开关上——它与扇形是同一类东西，天然互斥。
+  const [openFan, setOpenFan] = useState<OpenKey | null>(null);
+  const fanProps = (which: OpenKey) => ({
     open: openFan === which,
     onToggle: () => setOpenFan((v) => (v === which ? null : which)),
   });
@@ -51,6 +47,17 @@ export function CardRiver({ snapshot: s, nameOf, onOpenPile }: Props) {
     <section className="field">
       {/* 地盘刻度：签名母题，纯装饰 */}
       <span className="plate" aria-hidden="true" />
+
+      {/* 全场生效的技能分支（吟游♣5 的歌声）：**摆在牌桌上**，不挂在谁的座位卡上——
+          它改的是全场的账（战争序让所有惩罚 ×2、行进曲锁全场的定色），对手也吃。
+          `targeting: global` 是它上桌的唯一判据，不认技能 id。
+
+          位置在牌河**之上**，与惩罚链同一档（两者都是「此刻全桌都要吃的一个条件」）。
+          摆在牌河下面量过：320px 的机器上它会被从坞里探头的 UNO 定点压住；
+          排在 `.field` 第一个还顺带保证了骰子/宣言那两块出现时它不会被顶下去。 */}
+      {globalPicks(s).map((pick) => (
+        <GlobalPick key={pick.skillId} snapshot={s} pick={pick} nameOf={nameOf} {...fanProps("pick")} />
+      ))}
 
       {/* 骰子当众掷，点数与「指向谁」都是公开的（spec §5 #6）。
           key = 这一掷的身份：换一掷就重新挂载，`.die` 的 roll 动画跟着重播一次。
@@ -122,6 +129,69 @@ export function CardRiver({ snapshot: s, nameOf, onOpenPile }: Props) {
         />
       </div>
     </section>
+  );
+}
+
+/**
+ * 牌桌上那枚「现在全场吃着哪一条」的牌，点开有一句说明。
+ *
+ * 交互与牌堆的扇形**同构**：`data-open` 管触屏点击、CSS 的 `(hover: hover)` 管桌面悬停，
+ * 开合状态与三堆共用 `<CardRiver>` 那一个（同一时刻只浮出一层）。
+ *
+ * 说明那句直接用发动按钮的文案（`effectLabel`）——同一条子效果不写第二份文案，
+ * 两处迟早会对不上。封印期间（06-Q65 只压制不清值）牌**不撤**，只退成灰并改口说暂停生效。
+ */
+function GlobalPick({
+  snapshot: s,
+  pick,
+  nameOf,
+  open,
+  onToggle,
+}: {
+  snapshot: ClientSnapshot;
+  pick: ChosenPick;
+  nameOf: NameOf;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const popId = useId();
+  const skill = skillById(pick.skillId);
+  const who = nameOf(pick.seat);
+  const sealed = !!s.players.find((p) => p.seat === pick.seat)?.statuses.includes("封印");
+  const state = sealed ? "被封印，暂停生效" : "全场生效";
+
+  return (
+    <button
+      type="button"
+      className={`songmark${sealed ? " songmark--sealed" : ""}`}
+      data-open={open || undefined}
+      aria-expanded={open}
+      aria-controls={popId}
+      /* 名字写全在这里：不给 aria-label 的话按钮的可及名会把整个浮窗的字都吞进去 */
+      aria-label={`${skill?.name ?? pick.skillId}：${pick.key}，${who}选的（${state}）`}
+      onClick={onToggle}
+    >
+      <span className="sigil">{skill?.sigil ?? "?"}</span>
+      <span className="nm">{pick.key}</span>
+      <span className="who">{who}</span>
+
+      {/* 关着的时候 `display: none`，压根不在 a11y 树里；开着才读得到。
+          按钮上那句 aria-label 已经把要点说全了，所以这里**不**再 aria-hidden——
+          浏览模式下把这几行读出来是加分的，藏起来才是减分。 */}
+      <span className="songpop" id={popId} role="note">
+        <span className="songpop__head">
+          <span className="sigil">{skill?.sigil ?? "?"}</span>
+          <b>{skill?.name ?? pick.skillId}</b>
+          <span className="badge" data-tone={sealed ? "bad" : "ok"}>
+            {state}
+          </span>
+        </span>
+        <span className="songpop__line">{effectLabel(pick.skillId, pick.key)}</span>
+        <span className="songpop__foot">
+          {sealed ? `${who}被封印：解封后回到这一条` : `${who}选的 · 他的回合开始可以换`}
+        </span>
+      </span>
+    </button>
   );
 }
 

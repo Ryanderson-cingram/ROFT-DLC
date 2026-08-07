@@ -5,8 +5,17 @@ import { type CSSProperties, type ReactNode, useState } from "react";
 import { COLORS, cardFaceLabel } from "@/lib/cards";
 import type { DockSlots as Slots, Slot, SlotName } from "@/lib/dock-slots";
 
-/** 待定色的那一手：中槽整个换成四个色块，**不上遮罩**，手牌全程可见（spec §3.4）。 */
-export type PickColor = { card: Card; onPick: (color: Color) => void; onCancel: () => void };
+/**
+ * 待定色的那一手：中槽整个换成四个色块，**不上遮罩**，手牌全程可见（spec §3.4）。
+ * `lockedTo` = 03 §4 五彩的「使用变色牌时不能改变颜色」：只画那一个色块，
+ * 别的点了也只会被引擎拒（`color_locked`）。
+ */
+export type PickColor = {
+  card: Card;
+  onPick: (color: Color) => void;
+  onCancel: () => void;
+  lockedTo?: Color | null;
+};
 
 /** 倒计时：主按钮外圈的环（`--p`）+ 右上角秒数。数值由 `<Dock>` 按 deadline 实时算。 */
 export type Ring = { pct: number; secs: number | null; urgent: boolean };
@@ -85,8 +94,12 @@ function SlotButton({
 function ColorSlots({ pick }: { pick: PickColor }) {
   return (
     <>
-      <div className="colors" role="group" aria-label={`${cardFaceLabel(pick.card)}：选择颜色`}>
-        {COLORS.map((c) => (
+      <div
+        className="colors"
+        role="group"
+        aria-label={`${cardFaceLabel(pick.card)}：${pick.lockedTo ? "五彩：颜色维持不变" : "选择颜色"}`}
+      >
+        {COLORS.filter((c) => !pick.lockedTo || c.value === pick.lockedTo).map((c) => (
           <button type="button" key={c.value} data-color={c.value} onClick={() => pick.onPick(c.value)}>
             {c.label}
           </button>

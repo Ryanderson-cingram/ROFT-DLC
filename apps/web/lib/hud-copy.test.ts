@@ -61,9 +61,52 @@ describe("sayFor（牌桌中央那句人话）", () => {
     },
     { name: "7 司夜还牌", snap: { pendingWindow: win("swapReturn") }, want: "盲抽完了：从手牌里挑 1 张还给对方" },
     {
-      name: "8 洗牌·摸一弃一",
-      snap: { pendingWindow: win("shuffleDiscard") },
-      want: "洗牌·摸一弃一：摸完了，从手牌里挑 1 张弃掉",
+      name: "8 摸 N 弃 N（洗牌②是 N = 1 的特例）",
+      snap: { pendingWindow: win("drawDiscard"), drawDiscard: { seat: 0, picks: 1 } },
+      want: "摸完了：从手牌里挑 1 张弃掉",
+    },
+    {
+      name: "8b 摸 8 弃 8",
+      snap: { pendingWindow: win("drawDiscard"), drawDiscard: { seat: 0, picks: 8 } },
+      want: "摸完了：从手牌里挑 8 张弃掉",
+    },
+    {
+      // 合纵/连横②（01-S14）：张数三档（连横 1/3、合纵 2），句子跟着 picks 走。
+      // 窗口是与神授共用的，所以**来源写在句首**（A4）：来源从自己的 skillId 推，引擎零改动
+      name: "8c 「要不要摸弃」· 连横②（S14 每次可选）",
+      snap: {
+        pendingWindow: win("drawOffer"),
+        drawOffer: { seat: 0, picks: 3 },
+        players: PLAYERS.map((p) => (p.seat === 0 ? { ...p, skillId: "spade-6" } : p)),
+      },
+      want: "连横：可以摸 3 张再弃 3 张，也可以这次不摸",
+    },
+    {
+      // 同一个窗口、同一句话，换一个来源就得换一句：连横②是白给的换牌机会（通常该拿），
+      // 神授的重点在后半句「可以不摸」（通常该拒）。不点名等于把关键那半句藏起来
+      name: "8c' 同一个窗口，来源是神授♥5（S17b 非强制的摸牌）",
+      snap: {
+        pendingWindow: win("drawOffer"),
+        drawOffer: { seat: 0, picks: 2 },
+        players: PLAYERS.map((p) => (p.seat === 0 ? { ...p, skillId: "heart-5" } : p)),
+      },
+      want: "神授：可以摸 2 张再弃 2 张，也可以这次不摸",
+    },
+    {
+      // 认不出技能（诸神包等没写玩家版文案的）就退回原来那句，不出「undefined：」
+      name: "8c'' 认不出来源时退回不点名的那句",
+      snap: {
+        pendingWindow: win("drawOffer"),
+        drawOffer: { seat: 0, picks: 1 },
+        players: PLAYERS.map((p) => (p.seat === 0 ? { ...p, skillId: "god-ricin" } : p)),
+      },
+      want: "可以摸 1 张再弃 1 张，也可以这次不摸",
+    },
+    {
+      // 近卫♥6（01-P12）：交给谁、最多几张都写在句子里
+      name: "8d 近卫交牌",
+      snap: { pendingWindow: win("handOver"), handOver: { seat: 0, target: 3, max: 2 } },
+      want: "吃完了：可以从手牌里挑最多 2 张交给老白，也可以不交",
     },
     {
       name: "9 洗牌取消",
@@ -140,12 +183,14 @@ describe("handHint（手牌上方那行）", () => {
     expect(handHint(s, false)).toBe("高亮 = 可以还给对方");
   });
 
-  it("洗牌②弃牌窗口：高亮 = 可以弃掉", () => {
+  it("摸 N 弃 N：手牌全部可选，提示语说要挑几张（多选态也照说，不退回并列那句）", () => {
     const s = makeSnapshot({
-      pendingWindow: win("shuffleDiscard"),
-      legalActions: [respond(R3.id)],
+      pendingWindow: win("drawDiscard"),
+      drawDiscard: { seat: 0, picks: 3 },
+      legalActions: [],
     });
-    expect(handHint(s, false)).toBe("高亮 = 可以弃掉");
+    expect(handHint(s, false)).toBe("点选 3 张弃掉（手牌全部可选）");
+    expect(handHint(s, true)).toBe("点选 3 张弃掉（手牌全部可选）");
   });
 
   it("两个窗口不等你的时候不套用那两句（actors 里没有你）", () => {

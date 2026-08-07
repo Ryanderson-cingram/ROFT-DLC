@@ -59,8 +59,11 @@ type Pending =
   | { kind: "pickFromHand"; effectKey: string }
   /** 影歌♦3①：当众宣言一张色 + 数。 */
   | { kind: "declare"; effectKey: string }
-  /** 并列♥4：本地多选，选中的牌 id 按点选顺序。 */
-  | { kind: "multiPlay"; picked: string[] };
+  /**
+   * 手牌多选（本地态）：并列♥4 的「多张一起打」与摸 N 弃 N 的「挑 N 张弃掉」共用一个。
+   * 两者互斥——弃牌窗口挂着时打不出牌，所以提交口由**窗口类型**决定，不必分成两态。
+   */
+  | { kind: "pickMany"; picked: string[] };
 
 /** 弹窗类的纯视图态（不含任何待提交的输入）。抽屉常驻 DOM，所以它自己一个 state。 */
 type View = { kind: "skill"; seat: number } | { kind: "pile"; which: PileKey } | null;
@@ -68,7 +71,7 @@ type View = { kind: "skill"; seat: number } | { kind: "pile"; which: PileKey } |
 /** 洗牌牌的卡面三选一里能主动打出的两个（③取消是响应，只能从 shuffleCancel 窗口出）。 */
 const SHUFFLE_CHOICES: { value: ShuffleChoice; title: string; note: string }[] = [
   { value: "shuffle", title: "① 洗牌", note: "全体手牌合并打乱，从你的下家起逐张轮流发回。手上有洗牌牌的人可以取消。" },
-  { value: "drawDiscard", title: "② 摸一弃一", note: "先摸 1 张，再从手牌里挑 1 张弃进弃牌堆。" },
+  { value: "drawDiscard", title: "② 摸一弃一", note: "先摸 1 张，再从手牌里挑 1 张弃进弃牌堆（摸 N 弃 N 的 N = 1）。" },
 ];
 
 export default function GamePage() {
@@ -218,6 +221,15 @@ export default function GamePage() {
   };
 
   /**
+   * 03 §4 五彩：使用**变色牌**时不能改变颜色。锁的是无色牌那一支——并列 4 张同数的定色
+   * 不是「使用变色牌」，引擎那边也不锁（`legal.ts::colorLocked` 只在无色牌路径上问）。
+   */
+  const lockedTo = (card?: Card) =>
+    card?.color === null && snapshot.players[snapshot.youSeat]?.statuses.includes("五彩")
+      ? snapshot.activeColor
+      : null;
+
+  /**
    * 定色不弹模态：待定色的那一手交给坞，中槽整个换成四个色块，手牌全程可见（spec §3.4）。
    * `color`（变色 / +4 / 并列 4 张同数）与 `cancelColor`（洗牌③的取消牌）是同一个出口。
    */
@@ -225,6 +237,7 @@ export default function GamePage() {
     pending?.kind === "color" ?
       {
         card: pending.cards[0],
+        lockedTo: lockedTo(pending.cards[0]),
         onPick: (color: Color) =>
           commit({
             type: "playCards",
@@ -238,6 +251,7 @@ export default function GamePage() {
     : pending?.kind === "cancelColor" ?
       {
         card: snapshot.yourHand.find((c) => c.id === pending.action.cardIds![0])!,
+        lockedTo: lockedTo(snapshot.yourHand.find((c) => c.id === pending.action.cardIds![0])),
         onPick: (color: Color) => commit({ ...pending.action, chosenColor: color }),
         onCancel: () => setPending(null),
       }
@@ -285,8 +299,8 @@ export default function GamePage() {
         onAction={handleAction}
         pickColor={pickColor}
         costPick={costPick}
-        picked={pending?.kind === "multiPlay" ? pending.picked : null}
-        onPicked={(picked) => setPending(picked === null ? null : { kind: "multiPlay", picked })}
+        picked={pending?.kind === "pickMany" ? pending.picked : null}
+        onPicked={(picked) => setPending(picked === null ? null : { kind: "pickMany", picked })}
         onSkillClick={() => setView({ kind: "skill", seat: snapshot.youSeat })}
         onExpire={() =>
           snapshot.windowId &&

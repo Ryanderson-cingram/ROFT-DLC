@@ -65,7 +65,7 @@ export function engineChoices(): string[] {
  *
  * 1. 事件字面量 —— `{ type: "cardPlayed", public: { … } }`（`public` 是事件独有的字段，
  *    正好把它与同样写 `type: "…"` 的**动作**字面量分开）。中间夹注释也认。
- * 2. 开窗辅助函数的入参 —— `{ type: "shuffleDiscard", …, event: "shuffleDiscardOpened" }`
+ * 2. 开窗辅助函数的入参 —— `{ type: "shuffleCancel", …, event: "shuffleCancelWindowOpened" }`
  *    （这几条事件不在调用点拼字面量，`type` 那一格是**窗口**类型不是事件类型）。
  *
  * 与 `engineChoices` 同一个理由：读源码才有「引擎加了新事件、前端没写人话就红」这个红。
