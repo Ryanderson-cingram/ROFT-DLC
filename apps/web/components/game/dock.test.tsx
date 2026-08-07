@@ -335,10 +335,12 @@ describe("定色：中槽的四个色块", () => {
 describe("窗口选项的人话（CHOICE_LABEL 覆盖率）", () => {
   /**
    * 不进这张表的 choice，逐条有理由：
-   * - `drawn` / `stolen`：只是 `defaultChoice` 的占位，真实动作的 choice 是牌 id（点手牌，不出按钮）
+   * - `stolen`：只是 `defaultChoice` 的占位，真实动作的 choice 是牌 id（点手牌，不出按钮）
+   * - `drawn`：摸 N 弃 N 超时的哨兵，同上
+   * - `discard`：摸 N 弃 N 的提交，按钮上写的是「弃掉 2 / 3 张」（要报进度，不是一句固定人话）
    * - `show-exact` / `show-partial`：影歌①的亮牌选项自带 cardIds，标签走「亮出红 3（…）」那条分支
    */
-  const NOT_A_BUTTON = new Set(["drawn", "stolen", "show-exact", "show-partial"]);
+  const NOT_A_BUTTON = new Set(["drawn", "stolen", "discard", "show-exact", "show-partial"]);
 
   it("引擎里的每个 choice 都有人话", () => {
     const choices = engineChoices();
@@ -393,5 +395,68 @@ describe("窗口选项的人话（CHOICE_LABEL 覆盖率）", () => {
       expect(labels).not.toContain(choice);
       expect(labels.some((l) => l.includes(CHOICE_LABEL[choice]))).toBe(true);
     }
+  });
+});
+
+/**
+ * 手牌被**外力**改了一批（`2026-08-04-batch-2-ui-gaps` 的改动①，盖住缺口 A1 + A5）：
+ * 结盟互换整副、近卫收牌、洗牌重分——你没动手，手牌却变了。
+ * 判据在 `lib/use-hand-delta.ts`（那里逐条钉了边界），这里只钉「画出来了没有、画在哪」。
+ */
+describe("手牌浮报（A1 结盟互换 / A5 近卫收牌）", () => {
+  afterEach(() => vi.useRealTimers());
+
+  const toast = (root: HTMLElement) => root.querySelector(".handtoast span");
+  const other = (ids: string[]) => ids.map((id) => ({ id, color: "B" as const, face: "2" as const }));
+
+  it("首渲染不报（没有「上一次」）", () => {
+    const { container } = renderGame(makeSnapshot());
+    expect(toast(container)).toBeNull();
+  });
+
+  it("A5 近卫收了 2 张：报进了几张", () => {
+    const { container, update } = renderGame(makeSnapshot());
+    update(makeSnapshot({ yourHand: [...HAND, ...other(["in1", "in2"])] }));
+    expect(toast(container)?.textContent).toBe("刚进 2 张牌");
+  });
+
+  it("A1 结盟互换：旧手牌一张不剩 → 换一句话", () => {
+    const { container, update } = renderGame(makeSnapshot());
+    update(makeSnapshot({ yourHand: other(["s1", "s2", "s3"]) }));
+    expect(toast(container)?.textContent).toBe("整副手牌换过了");
+  });
+
+  it("只出不进不报：出牌 / 交牌 / 弃牌都是你自己点的，牌当着面离手", () => {
+    const { container, update } = renderGame(makeSnapshot());
+    update(makeSnapshot({ yourHand: HAND.slice(0, 5) }));
+    expect(toast(container)).toBeNull();
+  });
+
+  it("3 秒后自己走人", () => {
+    vi.useFakeTimers();
+    const { container, update } = renderGame(makeSnapshot());
+    update(makeSnapshot({ yourHand: [...HAND, ...other(["in1"])] }));
+    expect(toast(container)).not.toBeNull();
+
+    act(() => void vi.advanceTimersByTime(3_000));
+    expect(toast(container)).toBeNull();
+  });
+
+  it("外壳常驻且**排在一句人话之后**：aria-live 的第一顺位仍是那句话（§7.3 钉着它）", () => {
+    const { container } = renderGame(makeSnapshot());
+    const shell = container.querySelector(".handtoast")!;
+    expect(shell.getAttribute("aria-live")).toBe("polite");
+    // 空着的时候里面什么都没有，不占地方
+    expect(shell.textContent).toBe("");
+    const regions = [...container.querySelectorAll('[aria-live="polite"]')];
+    expect(regions[0].querySelector(".dock__say")).not.toBeNull();
+    expect(regions.indexOf(shell)).toBeGreaterThan(0);
+  });
+
+  it("浮报不抢 UNO 定点的位置：两块是坞里的两个兄弟节点，各贴一边（左 / 右）", () => {
+    const { container } = renderGame(makeSnapshot());
+    const dock = container.querySelector(".dockwrap__in")!;
+    expect(dock.querySelector(":scope > .unobar")).not.toBeNull();
+    expect(dock.querySelector(":scope > .handtoast")).not.toBeNull();
   });
 });

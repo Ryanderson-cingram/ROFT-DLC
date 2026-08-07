@@ -255,12 +255,12 @@ describe("U6 声明的作用域是你的这个回合", () => {
       ctx(),
     ).state;
     // 打出去那一刻手牌为 0（洗牌是功能牌，U5 不判胜），摸 1 之后是 1 张，窗口挂着
-    expect(opened.pendingWindow?.type).toBe("shuffleDiscard");
+    expect(opened.pendingWindow?.type).toBe("drawDiscard");
     expect(opened.board!.saidUno[0]).toBe(true);
 
     const done = applyAction(
       opened,
-      { type: "respond", seat: 0, windowId: wid(opened), choice: opened.board!.hands[0][0].id },
+      { type: "respond", seat: 0, windowId: wid(opened), choice: "discard", cardIds: [opened.board!.hands[0][0].id] },
       ctx(),
     ).state;
     // 弃完手牌又归 0 → U5 补摸 1 → 交回合时恰 1 张，声明一路活到这里

@@ -85,8 +85,8 @@ effects:
 | 5 | 神授 | ✅ | 仅列情形必摸；否则无牌可出可不摸结束；优先于恋战；>10可主动亮出 | — |
 | 6 | 近卫 | ✅ | 受 ≥4 惩罚时，每张 +2/+4 可交 1 张手牌给**链首** | — |
 | 7 | 极运 | ⚠️ | 拼点默认 +4；亮出牌可口述；掷骰可口述；他人≤3 摸N弃N 你可同时；**可任意时刻亮出** | — |
-| 8 | 异议 | ✅/❓ | ① 上家 +2/+4 时反转并跳过（一次性）；② 打出转获异，受罚弃异少摸；不可强制使用 | ① 是否算响应窗口非阶段1 |
-| 9 | 专精 | ✅/❓ | 亮出时底牌定色；该色 +2 无效；当前色为你的色可打任意数字；变色只能选你的色；免疫五彩 | 与古神「变色皆毒」 |
+| 8 | 异议 | ✅ | ① 上家 +2/+4 时反转并跳过（整局一次，链**反弹给上家**）；② 打出转获异，受罚**可选**弃异每枚少摸 1；不可强制使用 | — |
+| 9 | 专精 | ✅/❓ | 亮出时底牌定色；该色 +2 **打得出但你不摸**（2026-08-02，原 06-Q67；混色链的边界见 Q68）；当前色为你的色可打任意数字；变色只能选你的色；免疫五彩 | 与古神「变色皆毒」 |
 | 10 | 伤逝 | ✅ | 受罚时只按链上 +2/+4 张数掷骰摸牌；忽略贡献总和与吟游等改摸数 | — |
 | J | 回溯 | ❓ | 他人变色牌结算完掷 2 骰：0 回收 / 2 你获得 / 4 交任意人 / 1或3 无事 | Q&A 已有限制；与毒/洗牌 |
 | Q | 偏折 | ⚠️ | 即使未亮出也不用喊 UNO（质疑时可亮出）；亮出后不能被问手牌数等 | 与 V1 例外；「抽取你手牌」类技能列表 |
@@ -94,7 +94,7 @@ effects:
 
 ### 结构化标注（♥）
 
-恩惠：`−2` 落 L2、自带的「至少 1」落 L5，两层都由 [02 §7](./02-methodology.md#7-摸牌数结算层级决策层级-) 点名；「叠链时作用在贡献总和上」是 01-P11，不是额外一层。「他人技能」已裁定 = **发起者不是自己**的技能（06-Q56），自己技能让自己摸的牌不减。
+恩惠：`−2` 落 L2、自带的「至少 1」落 L5，两层都由 [02 §7](./02-methodology.md#7-摸牌数结算层级决策层级-) 点名；「叠链时作用在贡献总和上」是 01-P11，不是额外一层。「他人技能」已裁定 = **发起者不是自己**的技能（06-Q56），所以 `applies_to` 写的是 `skill_others` 而不是 `skill`——那条限定是**恩惠自己的卡面文字**，不是所有摸牌修正的通则（活泼板的「所有摸牌 +1」就不分你我）。
 
 ```yaml
 id: heart-1
@@ -107,7 +107,7 @@ effects:
     once: unlimited
     stacks_with_turn_limit: false
     values: { L2: -2, L5: 1 }
-    applies_to: [punish, skill]
+    applies_to: [punish, skill_others]
     modifies: [draw_count]
     duration: while_revealed
     layer: [L2, L5]
@@ -180,30 +180,193 @@ id: heart-7
 reveal_window: any_time
 ```
 
-异议②「弃异每张 −1」在 02 §7 的 L2；「不可强制使用」按 01-F3 = 仍可强制亮出、不能强制发动：
+专精♥9 的四条都挂在**已有的单一判定点**上，一条新判定都没建（06-Q67/Q68 已裁定）：
+
+| 卡面 | 落点 | 说明 |
+|---|---|---|
+| 亮出时**底牌定色** | 亮出钩子 + `Board.chosen` | 与吟游的歌声共用那个槽：吟游是玩家选的，专精是亮出时**定死**的 |
+| 该色 +2 **打得出但你不摸** | `punish_amount`：喂给 L0 的那个数 | Q68 **逐段**过滤：`base = Σ 不被你的色免掉的段贡献`；全免则**整个摸牌事件跳过**（同 06-Q27），链上贡献一张不减、下家照吃满 |
+| 当前色 = 你的色 → 可打**任意数字** | `play_legality`：`legal.ts::playableFor` | 出牌/并列首张/`legalActions`/U1 摸到即可打四条路本来就都问它 |
+| 变色牌**只能选你的色** | `color_rule`：`legal.ts::requiredColor` | 与五彩、行进曲共用一处——那两条要的是「维持跟色」，专精要的是「定成你的色」 |
+| **免疫五彩** | `immune` 字段 → `canGrantStatus` | 谁来赋都挡得住（八门②、寄生、狂欢…），赋状态的每条路径自动生效 |
+
+⚠️ **底牌的取法**是这里唯一的读法选择：引擎取**摸牌堆最底下那张有色的牌**（无色牌往上顺延）。
+04 原文只写「底牌定色」，若指的是开局翻开的第一张，改一处即可。
+
+```yaml
+id: heart-9
+structured: true
+effects:
+  - key: on_reveal
+    kind: on_reveal
+    targeting: self
+    once: once
+    stacks_with_turn_limit: false
+    modifies: [color_rule]
+    duration: while_revealed
+  - key: 1
+    kind: passive
+    window: on_punish_resolve
+    applies_to: [punish]
+    targeting: self
+    once: unlimited
+    stacks_with_turn_limit: false
+    modifies: [punish_amount]
+    duration: while_revealed
+  - key: 2
+    kind: meta_rule
+    window: play_phase
+    targeting: self
+    once: unlimited
+    stacks_with_turn_limit: false
+    modifies: [play_legality]
+    duration: while_revealed
+  - key: 3
+    kind: meta_rule
+    window: play_phase
+    targeting: self
+    once: unlimited
+    stacks_with_turn_limit: false
+    modifies: [color_rule]
+    duration: while_revealed
+  - key: 4
+    kind: passive
+    window: any
+    targeting: self
+    once: unlimited
+    stacks_with_turn_limit: false
+    immune: [五彩]
+    duration: while_revealed
+```
+
+神授改的是 **「哪些摸牌是强制的」**，不是摸几张——所以 `modifies` 用 `draw_obligation`，
+**不带 `layer`**（02 §7 那台机器一层都不碰）。
+
+**「一定要摸」的五种情形**（2026-08-03 规则制定人给全，已写进 01-S17b）：
+① 受到**惩罚** ② 打出**毒** ③ 受到**其他玩家技能** ④ 打出的最后一张牌为**非数字牌**（U5 补摸）
+⑤ 只剩最后一张牌**未喊 UNO**（含 U6 的虚喊罚摸）。**其余摸牌一律可以不摸**——
+无牌可出的那一张直接给「结束回合」，其他非强制的摸牌引擎会先问一句（S17b）。
+恋战在场时神授优先（S17），由同一个判据 `mustDraw` 兜住，不写成技能间的互斥。
+
+「手牌 >10 可主动亮出」是 01-V2 的**条件式亮出窗口**：`reveal_window: any_time` + `reveal_when`。
+按 V2b，例外只放宽「必须是自己的回合」，**反应窗口挂着时照样禁亮**。
+
+```yaml
+id: heart-5
+reveal_window: any_time
+reveal_when: { hand_at_least: 11 }
+structured: true
+effects:
+  - key: passive
+    kind: passive
+    window: play_phase
+    targeting: self
+    once: unlimited
+    stacks_with_turn_limit: false
+    modifies: [draw_obligation]
+    duration: while_revealed
+```
+
+近卫在 02 §7 的 **L6 后置程序**（那一行原文就写着「近卫：逐张交牌」）：不改摸牌数，只在惩罚结算之后多跑一段。
+两个数都在 `values` 里——`L6: 4` 是门槛（**链上贡献总和** ≥ 4，P11 的那个数），`give: 1` 是**每张 +2/+4** 交 1 张。
+交的是**自己手牌**、交给**链首发起者**（01-P12），链首是自己时不成立（同 P8「不封自己」的口径）。
+「可交」= 每次都可以不交（同 S14 的口径），所以引擎开一个窗口让他挑 0 ‥ N 张，超时按不交。
+
+```yaml
+id: heart-6
+notes: 门槛按链上贡献总和（P11 的那个数）；交给链首（P12）；链首是自己时不触发
+structured: true
+effects:
+  - key: passive
+    kind: passive
+    window: on_punish_resolve
+    values: { L6: 4, give: 1 }
+    applies_to: [punish]
+    targeting: self
+    once: unlimited
+    stacks_with_turn_limit: false
+    modifies: [draw_procedure]
+    procedure: hand_over
+    duration: while_revealed
+    layer: [L6]
+```
+
+异议②「弃异每张 −1」在 02 §7 的 L2；「不可强制使用」按 01-F3 = 仍可强制亮出、不能强制发动。
+
+**2026-08-02 补齐（规则制定人裁定，原 04 的「① 是否算响应窗口非阶段1」疑点）**：
+
+- **①的链去向 = 反弹给上家**。方向反转 + 跳过自己 → 反转后我的下家正是原来的上家，
+  链**原样**传过去（段与贡献总和一张不动），他自己选叠还是吃。我一张不摸。
+  例：A 打绿 +2 → B 发动异议① → 方向反转、跳过 B → A 自己面对那 2 张，可叠可吃
+- **①是纯响应窗口，不占 01-V7 的主动条**。它在**别人的回合**触发（上家刚打出 +2/+4），
+  那一刻我根本没有「我的回合」可占；同强袭②的接管窗口。`once: once` 已经是它的限流
+- **②弃几个由玩家选**（0 ‥ 持有数）。弃 0 = 不弃，异留着下次用；超时默认弃 0。
+  每弃一枚 L2 **−1**，所以 `values.L2` 是**单枚**的值，不是总额——实际 delta = −1 × 实弃数
+- **②机读层拆成两条**：`2a` 打出转获异（触发在 `after_play`），`2b` 受罚弃异少摸
+  （触发在 `on_punish_resolve`）。一条 `window` 装不下两个时机，硬塞会让其中一个静默没标。
+  「异」这个标记名走 `cost`（同司夜的 `cost: 盗`），不进 `modifies`——02 §1 的 `modifies`
+  取值表里没有 `marks`，标记从来是靠 `values.marks` + `cost` 表达的
 
 ```yaml
 id: heart-8
 force_activate_ok: false
+structured: true
 effects:
-  - key: 2
-    kind: passive
+  - key: 1
+    kind: response
     window: on_punish_resolve
     targeting: self
+    once: once
+    stacks_with_turn_limit: false
+    modifies: [turn_flow]
+    duration: instant
+  - key: 2a
+    kind: on_play
+    window: after_play
+    cost: 异
+    targeting: self
+    once: unlimited
+    stacks_with_turn_limit: false
+    values: { marks: 1 }
+    duration: while_revealed
+  - key: 2b
+    kind: passive
+    window: on_punish_resolve
+    cost: 异
+    values: { L2: -1, marks: 1 }
+    applies_to: [punish]
+    targeting: self
+    once: unlimited
+    stacks_with_turn_limit: false
     modifies: [draw_count]
+    duration: while_revealed
     layer: [L2]
 ```
 
-伤逝在 02 §7 的 L1 替换层：整体改写计算，命中即得最终值（01-P13：忽略贡献总和与吟游等一切改摸数）：
+⚠️ `2b` 的 `values.L2` 是**每枚异**的值。声明了 `values.marks`（按标记计价）的改摸数效果
+**不由 `drawModifiersFor` 自动产出**——它是纯函数，不知道玩家这次实付了几枚；
+与伤逝的 L1 同一条理由，由调用方算好走 `drawCards` 的 `mods` 传进来。
+
+伤逝在 02 §7 的 L1 替换层：整体改写计算，命中即得最终值（01-P13：忽略贡献总和与吟游等一切改摸数）。
+
+**数的是「张数」不是「贡献总和」**：链上有几张 +2/+4 就掷几颗三面骰（01-R1，每颗 0/1/2），
+点数求和即为最终摸牌数——**可以掷出 0，那就一张都不摸**（同强袭①的 0 倍）。
+`values.L1` 缺席是有意的：替换值由掷骰产生，标的是「每张掷 1 颗」那个 1（02 §6 的 L1 例外）。
 
 ```yaml
 id: heart-10
+structured: true
 effects:
   - key: passive
     kind: replacement
     window: on_punish_resolve
+    values: { dice: 1 }
     targeting: self
-    modifies: [draw_count]
+    once: unlimited
+    stacks_with_turn_limit: false
+    applies_to: [punish]
+    modifies: [draw_count, dice]
+    duration: while_revealed
     layer: [L1]
 ```
 
@@ -495,7 +658,7 @@ effects:
 | 5 | 合纵 | ✅ | 亮出时连横须立刻响应；相应则换牌+之后回合开始可换；无响应则**每张**功能牌后摸2弃2 | — |
 | 6 | 连横 | ✅ | 对称；无响应则每张功能后摸1弃1，若上回合也打出功能则该次摸3弃3 | — |
 | 7 | 窃贼 | ❓ | 拼点：胜则取对方半数手牌（上取整最多 5）再还同数；负摸 1 | — |
-| 8 | 八门 | ✅/❓ | 一次性摸 8 弃 8（不受其他技能）；回合结束获五彩且所有摸牌+1 | 「不受其他」范围 |
+| 8 | 八门 | ✅ | 一次性摸 8 弃 8（不受其他技能）；回合结束获五彩且所有摸牌+1 | — |
 | 9 | 黑白 | ❓ | ① 摸 3 扣 3；② 用扣置换判定/拼点；③ 与所有人拼点，负方亮手牌并掷骰解除 | — |
 | 10 | 毒师 | ❓ | 打毒选两人同命；打毒不摸；可摸 2 弃当前色功能视为毒；最多两名同命 | 与毒池/古神 |
 | J | 忍戒 | ✅ | 受罚时多摸一倍再弃多摸数（最多多摸 6）；结算层级属 L6 后置程序（02 §7） | — |
@@ -529,28 +692,131 @@ notes: 例外亮出已收白名单
 reveal_window: when_skipped
 ```
 
-八门②「回合结束获五彩且所有摸牌+1」在 02 §7 的 L2；①的「不受其他技能」范围仍是本条疑点，未标注：
+合纵♠5 / 连横♠6 是一对：**①亮出时的相应**（S13/S13b）与**②无相应时的摸弃**（S14）互斥，二选一。
+两边靠 `pairs_with` 认亲，任一方**先亮出**的那一刻问另一方一次，答完一锤定音（06-Q70）。
+
+- **①a 相应**：响应即亮出，两人**整副手牌互换**；此后②对双方都关掉
+- **①b 换牌**：结盟后**双方各自的回合开始**都可以再换一次，不需对方同意，**占 V7 的主动条**（06-Q70）
+- **②**：走 03 §2 的「摸 N 弃 N 是一个窗口」，且 S14 明写**每次触发都是可选**（Excel 原文「可以」），
+  所以引擎先开一个「要不要」的窗口，答应了才摸；超时 = 不要。「功能牌」按 03 §1 = **+2 / 转 / 停**
+  （+4 是变色牌，不触发）。连横的连击档按 **01-S14b** = 上一个**自己的**回合也打出过功能牌
+
+```yaml
+id: spade-5
+pairs_with: spade-6
+structured: true
+effects:
+  - key: 1a
+    kind: on_reveal
+    window: any
+    targeting: single
+    once: once
+    stacks_with_turn_limit: false
+    duration: while_revealed
+  - key: 1b
+    kind: active
+    window: turn_start
+    targeting: single
+    once: unlimited
+    stacks_with_turn_limit: true
+    duration: instant
+  - key: 2
+    kind: passive
+    window: after_play
+    values: { draws: 2 }
+    targeting: self
+    once: unlimited
+    stacks_with_turn_limit: false
+    duration: while_revealed
+```
+
+```yaml
+id: spade-6
+pairs_with: spade-5
+notes: ②的连击档见 01-S14b（上一个自己的回合也打出过功能牌）
+structured: true
+effects:
+  - key: 1a
+    kind: on_reveal
+    window: any
+    targeting: single
+    once: once
+    stacks_with_turn_limit: false
+    duration: while_revealed
+  - key: 1b
+    kind: active
+    window: turn_start
+    targeting: single
+    once: unlimited
+    stacks_with_turn_limit: true
+    duration: instant
+  - key: 2
+    kind: passive
+    window: after_play
+    values: { draws: 1, draws_combo: 3 }
+    targeting: self
+    once: unlimited
+    stacks_with_turn_limit: false
+    duration: while_revealed
+```
+
+八门①「一次性摸 8 弃 8」走 03 §2 的「摸 N 弃 N 是一个窗口」；「不受其他技能影响」按 02 §7 的
+**L1 替换**落地（`values.L1` 就是那个定值 8，命中 L1 即跳过 L2/L3/L4，连自己的②也不加）。
+范围已裁定：**摸 8、弃 8 两个数都是定值**（2026-08-07，见 06-Q69）。
+②拆成两条：2a 是回合结束获五彩（`grants`，三者互斥由 03 §4 兜底），2b 是所有摸牌 L2 +1：
 
 ```yaml
 id: spade-8
+structured: true
 effects:
-  - key: 2
-    kind: passive
+  - key: 1
+    kind: active
+    window: turn_start
+    values: { L1: 8 }
+    targeting: self
+    once: once
+    stacks_with_turn_limit: true
     modifies: [draw_count]
+    duration: instant
+    layer: [L1]
+  - key: 2a
+    kind: status_grant
+    window: turn_end
+    grants: [五彩]
+    targeting: self
+    once: unlimited
+    stacks_with_turn_limit: false
+    duration: while_revealed
+  - key: 2b
+    kind: passive
+    window: on_draw
+    values: { L2: 1 }
+    targeting: self
+    once: unlimited
+    stacks_with_turn_limit: false
+    modifies: [draw_count]
+    duration: while_revealed
     layer: [L2]
 ```
 
-忍戒在 02 §7 的 L6 后置程序——**不改数字，只改执行方式**（按最终值 N 多摸 min(N,6) 再弃等量），所以 `modifies` 用 `draw_procedure` 而不是 `draw_count`：
+忍戒在 02 §7 的 L6 后置程序——**不改数字，只改执行方式**（按最终值 N 多摸 min(N,6) 再弃等量），所以 `modifies` 用 `draw_procedure` 而不是 `draw_count`。那支程序叫 `draw_then_discard`，`values.L6` 是它的参数「多摸上限 6」（02 §6）；多摸完弃等量走 03 §2 的「摸 N 弃 N 是一个窗口」：
 
 ```yaml
 id: spade-j
 notes: ✅ 与伤逝无冲突：S2 一人一技能，二者不可能同在一名受罚者身上
+structured: true
 effects:
   - key: passive
     kind: passive
     window: on_punish_resolve
+    values: { L6: 6 }
+    applies_to: [punish]
     targeting: self
+    once: unlimited
+    stacks_with_turn_limit: false
     modifies: [draw_procedure]
+    procedure: draw_then_discard
+    duration: while_revealed
     layer: [L6]
 ```
 
@@ -628,28 +894,92 @@ effects:
     duration: instant
 ```
 
-以下是**部分标注**。吟游：选/切换歌声占主动条（01-S20）；三支被 02 §7 点名的歌声各有层级（活泼板 +1 在 L2、战争序 ×2 在 L3、樱时雨恒为 1 在 L4）。歌声全表不在 04 里，故只标注这三支：
+**2026-08-02 补齐（歌声全表，规则制定人给出原文）**：
+
+> 回合开始时若你的上家打出的不是「+2」或「+4」，则你可以选择一种歌声。
+> **战争序**：所有「惩罚」摸牌数 ×2。
+> **樱时雨**：所有「惩罚」摸牌数恒定为 1。
+> **活泼板**：所有摸牌数 +1。
+> **行进曲**：变色牌不能改变颜色。
+> （技能亮出时为无歌声）
+
+| 歌声 | 效果 | 落点 |
+|---|---|---|
+| 战争序 | 所有「惩罚」摸牌数 ×2 | 02 §7 **L3** 倍率，`applies_to: [punish]` |
+| 樱时雨 | 所有「惩罚」摸牌数恒定为 1 | 02 §7 **L4** 覆盖，`applies_to: [punish]` |
+| 活泼板 | 所有摸牌数 +1 | 02 §7 **L2** 加减，不限事件类型 |
+| 行进曲 | 变色牌不能改变颜色 | **不改摸牌数**，走 `color_rule`（故不在 02 §7 的表里） |
+
+- **无歌声是初始态**：亮出时没有歌声，要到某个回合开始才选得上；选与切换各占一次主动条（01-S20）
+- **开唱条件**是「上家这一轮打出的不是 +2/+4」——所以惩罚轮里换不了歌
+- ⚠️ 三条待裁定（作用域 / 与 05 古神的口径差 / 行进曲的确切语义）见
+  [06-open-questions.md](./06-open-questions.md) 的 Q62–Q64
+
+**三条待裁定已于 2026-08-02 全部裁完**（Q62 全场生效 / Q63 樱时雨只管惩罚且 0 也抬回 1 /
+Q64 行进曲能打有效只是不改色 / Q65 封印只压制不清空 / Q66 全场一个槽、后唱覆盖先唱），
+所以这里是**完整标注**：
+
+- 四支歌声都是①的**选项**（`option_of: 1`）：选中哪支哪支才生效，选的动作就是「发动①并报那一支的 key」，
+  因此 V7 的额度记在①头上（01-S20：选/切换各占一次主动条）
+- 四支一律 `targeting: global`——**全场生效**（Q62），对手也吃；采集口径因此不是「收自己的」
+- 行进曲不改摸牌数，走 `color_rule`，与五彩「使用变色牌时不能改变颜色」是**同一条判定**
+  （引擎里 `legal.ts::colorLocked` 一处，两个来源共用）
 
 ```yaml
 id: club-5
+structured: true
 effects:
   - key: 1
     kind: active
     window: turn_start
-    targeting: self
+    targeting: global
+    once: unlimited
     stacks_with_turn_limit: true
+    duration: instant
   - key: 活泼板
     kind: passive
+    option_of: 1
+    window: on_draw
+    values: { L2: 1 }
+    targeting: global
+    once: unlimited
+    stacks_with_turn_limit: false
     modifies: [draw_count]
+    duration: while_revealed
     layer: [L2]
   - key: 战争序
     kind: passive
+    option_of: 1
+    window: on_draw
+    values: { L3: 2 }
+    applies_to: [punish]
+    targeting: global
+    once: unlimited
+    stacks_with_turn_limit: false
     modifies: [draw_count]
+    duration: while_revealed
     layer: [L3]
   - key: 樱时雨
     kind: passive
+    option_of: 1
+    window: on_draw
+    values: { L4: 1 }
+    applies_to: [punish]
+    targeting: global
+    once: unlimited
+    stacks_with_turn_limit: false
     modifies: [draw_count]
+    duration: while_revealed
     layer: [L4]
+  - key: 行进曲
+    kind: passive
+    option_of: 1
+    window: play_phase
+    targeting: global
+    once: unlimited
+    stacks_with_turn_limit: false
+    modifies: [color_rule]
+    duration: while_revealed
 ```
 
 预兆与飞升的升级目标（02 §5 的升级链）：

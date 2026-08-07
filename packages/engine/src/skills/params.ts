@@ -8,7 +8,7 @@
  * 所以本文件只剩形状转换：层名键（L0–L6）归 `draw`，其余归 `counts`，`applies_to` 归 `appliesTo`。
  * **handler 里不该出现任何一个规则常数**——出现了就说明有个数还没进 04 的 `values`。
  */
-import type { DrawEventKind } from "./primitives/draw-modifier.ts";
+import type { DrawEventFilter } from "./primitives/draw-modifier.ts";
 import type { DrawLayer, SkillDef, SkillEffect } from "./types.ts";
 
 const LAYERS: readonly string[] = ["L0", "L1", "L2", "L3", "L4", "L5", "L6"];
@@ -20,7 +20,7 @@ export interface EffectParams {
    * 这条修正作用于哪些摸牌事件。恩惠的「因惩罚或他人技能」= `["punish", "skill"]`。
    * 缺席 = 一切摸牌。02 §3 的 `window` 表达不了这个区分（`any` 只是说时机不限）。
    */
-  appliesTo?: DrawEventKind[];
+  appliesTo?: DrawEventFilter[];
   /** 非层名的数值：`discard` / `draws` / `marks` / `dice` / `card_value` / `max`（02 §6 白名单）。 */
   counts: Readonly<Record<string, number>>;
   /**

@@ -78,14 +78,16 @@ body { display: flex; flex-direction: column; min-height: 100dvh; }
 /* 抽 3 选 1 */
 .draft { display: grid; gap: var(--sp-2); }
 @media (min-width: 620px) { .draft { grid-template-columns: repeat(3, 1fr); } }
+/* 一张候选卡 = 「点了就是选它」的那一块（`<label>`）+ 「点了只是展开说明」的细则
+   （`<details>`）。所以 `cursor: pointer` 归 label，不归整张卡——细则不是选择目标。 */
 .draft-opt {
   display: block;
   padding: var(--sp-3);
   border: 1px solid var(--edge);
   border-radius: var(--radius-panel);
   background: var(--mo-2);
-  cursor: pointer;
 }
+.draft-opt > label { display: block; cursor: pointer; }
 .draft-opt:has(input:checked) { border-color: var(--piao); background: rgba(99, 210, 195, 0.12); }
 /* 真正拿到焦点的是那个 opacity:0 的绝对定位 input，焦点框画在它身上等于没画——
    键盘用户看不见自己停在哪一张（spec §7.6）。把外框补回可见的那一块上。 */
@@ -94,5 +96,25 @@ body { display: flex; flex-direction: column; min-height: 100dvh; }
 .draft-opt .sigil { font-family: var(--font-mono); color: var(--piao); }
 .draft-opt h3 { font-family: var(--font-display); font-size: 18px; margin: 4px 0 6px; }
 .draft-opt p { margin: 0; font-size: 14px; color: var(--qingyan); }
-.draft-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); margin-top: var(--sp-4); }
+/* 细则：与百科页 `.skill details` 同一套外观（那边是同一份 `l1`，两处长得一样才认得出）。
+   `min-height: 44px` 是触屏的点击目标下限——这一栏在手机上要点得中。 */
+.draft-opt details { margin-top: var(--sp-2); border-top: 1px dashed var(--edge); }
+.draft-opt summary {
+  display: flex; align-items: center; gap: 6px;
+  min-height: 44px;
+  list-style: none;
+  font-size: 13px; color: var(--piao); cursor: pointer;
+}
+.draft-opt summary::-webkit-details-marker { display: none; }
+.draft-opt summary::after { content: "▾"; font-size: 11px; }
+.draft-opt details[open] summary::after { content: "▴"; }
+.draft-opt details p { margin: 0 0 var(--sp-2); line-height: 1.7; }
+/* 确认贴住可视区底边：候选卡现在能展开细则，内容高度不再有上限（`.modal__box` 是那个
+   滚动容器）。不钉住的话，展开两张细则就得先滚回底部才找得到确认——而这一步有 60 秒的钟。 */
+.draft-foot {
+  position: sticky; bottom: calc(var(--sp-4) * -1); z-index: 1;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+  margin-top: var(--sp-4); padding: var(--sp-2) 0;
+  background: var(--mo);
+}
 .draft-foot .btn { flex: 1; }

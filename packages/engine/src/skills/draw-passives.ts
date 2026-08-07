@@ -10,6 +10,8 @@
  */
 import { paramsOfEffect } from "./params.ts";
 import { skills } from "./registry.ts";
+import { optionLive } from "./bard.ts";
+import { PROCEDURES } from "./primitives/draw-modifier.ts";
 import { suppressionOf } from "./primitives/suppression.ts";
 import type { EffectParams } from "./params.ts";
 import type { DrawLayer, SkillDef, SkillEffect } from "./types.ts";
@@ -34,17 +36,32 @@ export const SKILL_DATA: SkillData = {
   },
 };
 
-/** 一层修正的形状。L2/L5 之外的层要 scope / procedure，`values` 还没有承载它们的槽位。 */
-function toModifier(layer: DrawLayer, source: string, n: number | undefined): DrawModifier {
+/** 一层修正的形状：`values` 里那个数按层各有各的含义（加减 / 倍率 / 覆盖 / 下限 / 程序参数）。 */
+function toModifier(layer: DrawLayer, source: string, n: number | undefined, e: SkillEffect): DrawModifier {
   // 计划 §1：数据点名了一层，引擎给不出它的值——静默失效比报错难查得多，宁可炸。
   if (n === undefined) throw new Error(`${source}: 定义声明了 ${layer}，但 values 里没有它的数值`);
   switch (layer) {
     case "L2":
       return { layer, source, delta: n };
+    case "L3":
+      return { layer, source, factor: n };
+    case "L4":
+      // 02 §7：`self` 胜过 `global`；歌声是全场的，古神那支永久樱时雨才是 self
+      return { layer, source, scope: e.targeting === "self" ? "self" : "global", value: n };
     case "L5":
       return { layer, source, min: n };
+    case "L6": {
+      // L6 不改数字，只改执行方式，所以名字才是它的全部内容（02 §6 的 `procedure`）。
+      // 认不出的名字 = 消费者会静默跳过，同上，宁可炸。
+      const procedure = e.procedure;
+      if (!procedure || !PROCEDURES.has(procedure))
+        throw new Error(`${source}: L6 的 procedure「${procedure ?? "缺席"}」引擎没有实现`);
+      // 带整张 values（02 §6）：这支程序要几个参数由它自己说，采集器不挑
+      return { layer, source, procedure, values: e.values ?? {} };
+    }
     default:
-      throw new Error(`${source}: ${layer} 的数值形状还没建（L4 要 scope、L6 要 procedure）`);
+      // L1 在上面就被跳过了（值由调用方给），L0 从来不是修正——真走到这里就是数据坏了
+      throw new Error(`${source}: ${layer} 不是修正层`);
   }
 }
 
@@ -55,9 +72,21 @@ function toModifier(layer: DrawLayer, source: string, n: number | undefined): Dr
  * 所以发起者就是摸牌者本人（含缺席 = 自己）时不生效——恒心自己弃 1 摸 1 不该被自己的恩惠减掉。
  */
 const applies = (e: SkillEffect, holder: number, req: DrawRequest, p: EffectParams) =>
-  (e.targeting !== "self" || holder === req.seat) &&
-  (!p.appliesTo || p.appliesTo.includes(req.kind)) &&
-  (req.kind !== "skill" || (req.initiator ?? req.seat) !== req.seat);
+  (e.targeting !== "self" || holder === req.seat) && matchesEvent(p.appliesTo, req);
+
+/**
+ * `applies_to` 与这次摸牌事件对不对得上（02 §6）。
+ * `skill_others` 是**限定**而不是事件类型：他人技能造成的摸牌才算（06-Q56 给恩惠♥1 的口径）。
+ * 从前这条限定写死在采集器里、套在**所有**效果上，于是活泼板的「所有摸牌 +1」
+ * 会漏掉自己发动造成的那些——限定归数据之后就没这回事了。
+ */
+const matchesEvent = (appliesTo: EffectParams["appliesTo"], req: DrawRequest) =>
+  !appliesTo ||
+  appliesTo.some((f) =>
+    f === "skill_others"
+      ? req.kind === "skill" && (req.initiator ?? req.seat) !== req.seat
+      : f === req.kind,
+  );
 
 export function drawModifiersFor(b: Board, req: DrawRequest, data: SkillData = SKILL_DATA): DrawModifier[] {
   const mods: DrawModifier[] = [];
@@ -73,10 +102,27 @@ export function drawModifiersFor(b: Board, req: DrawRequest, data: SkillData = S
     // **主动**技能，而被动照常结算（V8）——拿它压被动会让恩惠在每一次惩罚里都失效。
     if (def.sealable !== false && suppressionOf(b, seat).includes("sealed")) return;
     for (const e of def.effects ?? []) {
-      if (!e.modifies?.includes("draw_count") || !e.layer) continue;
+      // 改数字的（L0–L5，`draw_count`）与只改执行方式的（L6，`draw_procedure`）走同一条采集：
+      // 02 §7 的层级机器把两者一起算完，L6 落在 `resolution.procedures` 里交给调用方执行
+      if (!e.modifies?.some((m) => m === "draw_count" || m === "draw_procedure") || !e.layer) continue;
+      // 02 §6 的选项分支（吟游♣5 的四支歌声）：**被选中的那一支**才生效
+      if (!optionLive(b, def, e)) continue;
       const p = paramsOfEffect(e);
+      // **按标记计价的不从这里产**（异议②的弃异：`values.L2` 是每枚的值，−1 × 实弃数才是 delta）。
+      // 这个函数是纯的、也拿不到「玩家这次实付了几枚」，跟 L1 是同一条理由：由调用方算好
+      // 走 `drawCards` 的 `mods` 传进来（见 `skills/dissent.ts::payDissent`）。
+      // ponytail: 判据是「有 values.marks」。将来若出现「固定代价 + 固定改摸数」的技能会被误跳，
+      // 那时给 04 加个显式字段（如 `per_mark: true`）再改这一行即可。
+      if (p.counts.marks) continue;
       if (!applies(e, seat, req, p)) continue;
-      for (const layer of e.layer) mods.push(toModifier(layer, def.name, p.draw[layer]));
+      for (const layer of e.layer) {
+        // **L1 不从这里产**。替换层的值可能是掷出来的（伤逝按链上张数掷骰求和），
+        // 而这个函数是纯的、拿不到 rng——所以 L1 一律由调用方先算好、走 `drawCards` 的
+        // `mods` 参数传进来（见 `skills/damnation.ts` 与 draw-modifier.ts 的顶注）。
+        // 跳过而不是报错：定义里标 `layer: [L1]` 是对的，只是它的值不走这条路。
+        if (layer === "L1") continue;
+        mods.push(toModifier(layer, def.name, p.draw[layer], e));
+      }
     }
   });
   return mods;

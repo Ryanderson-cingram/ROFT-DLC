@@ -3,25 +3,24 @@
  *
  * 卡面：**三选一并决定颜色**
  *   ① 洗牌     —— 合并并打乱所有玩家手牌，从下家开始每名玩家依次获得一张牌（03 §6）
- *   ② 摸一弃一 —— 先摸后弃，弃哪张开窗口自选（裁定 洗-1）
+ *   ② 摸一弃一 —— 先摸后弃，弃哪张开窗口自选（裁定 洗-1）。它是 03 §2「摸 N 弃 N」
+ *                 的 N = 1 特例，流程整个在 `draw-discard.ts`，这里只负责起头
  *   ③ 取消     —— 取消一次其他玩家的①，取消者不进回合、从取消者下家继续（裁定 洗-3，照抄劫营 01-G5）
  *
  * ⚠️ **命名**：这里的「洗牌」= 打乱重分**全体手牌**（`redistribute`）；与「摸牌堆见底把牌河洗回
  * 摸牌堆」（01-U8，`draw.ts` 里那段 `reshuffle`）是两回事，两个名字不要混用。
  */
 import { shuffle } from "../deck.ts";
-import { drawCards, drawEvents, giveTo } from "./draw.ts";
+import { openDrawDiscard } from "./draw-discard.ts";
 // 环：play-cards（打出洗牌）→ shuffle-card（结算/开窗口）→ play-cards（窗口结完接着跑收尾）。
 // 两边点名的都是函数声明，模块实例化时就绑好了，环存在也无害（同 play-cards ↔ raid）。
 import { settleAfterFace, settleEmptyHand, settleWin } from "./play-cards.ts";
-import { commit, nextSeat, passTurn, reject, windowIdOf } from "../legal.ts";
+import { WINDOW_MS, colorLocked, commit, nextSeat, passTurn, reject, windowIdOf } from "../legal.ts";
 import { SKILL_DATA } from "../skills/draw-passives.ts";
 import type { SkillData } from "../skills/draw-passives.ts";
 import type {
   Action, ApplyResult, Board, Card, Color, Ctx, EngineEvent, GameState, ShuffleChoice, ShufflePending,
 } from "../types.ts";
-
-const WINDOW_MS = 30_000;
 
 /** 卡面三选一里能从 `playCards` 打出的两个。③是响应，只能从 `shuffleCancel` 窗口打出。 */
 export const SHUFFLE_CHOICES: readonly ShuffleChoice[] = ["shuffle", "drawDiscard"];
@@ -29,11 +28,6 @@ export const SHUFFLE_CHOICES: readonly ShuffleChoice[] = ["shuffle", "drawDiscar
 /** 取消窗口的两个响应。`pass`（含超时）= 让①照常执行。 */
 const CANCEL = "cancel";
 const PASS = "pass";
-/**
- * 弃牌窗口超时弃哪张——**哨兵而不是牌 id**：`PendingWindow` 整个进快照，
- * 写真牌 id 就等于把刚摸到什么当众念出来了（同 `nightlord.ts` 的还牌窗口）。
- */
-const DISCARD_DRAWN = "drawn";
 
 const isShuffleCard = (c: Card) => c.face === "shuffle";
 
@@ -86,22 +80,12 @@ export function playShuffleCard(
   before: EngineEvent[],
   data: SkillData,
 ): ApplyResult {
-  const card = b.playedPile[0];
-
+  // 选项②的「摸一弃一」是 03 §2「摸 N 弃 N」的 N = 1 特例，整条流程都在 draw-discard.ts。
+  // `choice` 到这里已经用完，中间态换成那边的 `drawDiscard`（摸到哪张是暗信息，它替我们收着）
   if (b.shufflePending?.choice === "drawDiscard") {
-    const r = drawCards(b, { kind: "rule", base: 1, seat }, ctx.rng);
-    const drawn = { ...r.board, hands: giveTo(r.board, seat, r.drawn) };
-    const events = [...before, ...drawEvents(seat, r.drawn, r.reshuffledOrder)];
-    // 牌堆枯竭摸到 0 张 → 没得弃（03 §2：摸到手里的牌不能少于弃牌数），不开窗口
-    if (r.drawn.length === 0) {
-      const { shufflePending: _none, ...cleared } = drawn;
-      return settleAfterFace(state, cleared, seat, card, 0, ctx, events, data);
-    }
-    return openWindow(
-      // `choice` 到这里已用完，只留超时要弃的那张
-      state, drawn, { seat, drawnId: r.drawn[0].id },
-      { type: "shuffleDiscard", actors: [seat], defaultChoice: DISCARD_DRAWN, event: "shuffleDiscardOpened" },
-      ctx, events,
+    const { shufflePending: _used, ...rest } = b;
+    return openDrawDiscard(
+      state, rest, seat, { kind: "rule", base: 1, seat }, { kind: "afterFace" }, ctx, before, data,
     );
   }
 
@@ -156,36 +140,6 @@ function redistribute(
 }
 
 /**
- * `shuffleDiscard` 窗口的结算。由 `punish.ts` 的 respond / claimTimeout 在通用校验之后转来。
- * `choice` 是要弃的那张牌的 id；哨兵 `DISCARD_DRAWN`（超时）= 弃刚摸的那张。
- */
-export function settleShuffleDiscard(state: GameState, action: { choice: string }, ctx: Ctx): ApplyResult {
-  const b = state.board!;
-  const pend = b.shufflePending;
-  if (!pend) return reject(state, "no_window");
-  const { seat } = pend;
-  const id = action.choice === DISCARD_DRAWN ? pend.drawnId : action.choice;
-  // 窗口只开给打出者自己，所以只在**他**的手牌里找——别人的牌 id 送上来一样是 not_in_hand
-  const card = b.hands[seat].find((c) => c.id === id);
-  if (!card) return reject(state, "not_in_hand");
-
-  const { shufflePending: _done, ...rest } = b;
-  const hands = rest.hands.map((h, i) => (i === seat ? h.filter((c) => c.id !== card.id) : h));
-  // U6：摸 1 弃 1 会让打出者的手牌穿过 2 张，但声明在他自己的回合内不作废（2026-08-01 改判），
-  // 所以这里什么都不用补——牌桌上那个 true 从出牌那一刻起一直在。
-  const discarded: Board = {
-    ...rest,
-    hands,
-    // 06-Q55 三堆模型：弃牌进**弃牌堆**，不改牌顶也不改跟色
-    discardPile: [...rest.discardPile, card],
-  };
-  return settleAfterFace(
-    state, discarded, seat, b.playedPile[0], 0, ctx,
-    [{ type: "cardsDiscarded", public: { seat, cards: [card] } }], SKILL_DATA,
-  );
-}
-
-/**
  * `shuffleCancel` 窗口的结算。先到先得：一人取消，窗口即关。
  * `pass`（含超时）= ①照常执行；`cancel` = 整个①作废，照抄劫营 01-G5 的收场。
  */
@@ -210,6 +164,8 @@ export function settleShuffleCancel(
   if (!isShuffleCard(cancelCard)) return reject(state, "bad_choice");
   // 三个选项都要定色（卡面「三选一并决定颜色」），取消牌也不例外
   if (!action.chosenColor) return reject(state, "color_required");
+  // 03 §4 五彩：取消牌也是无色牌，同样改不了颜色（与 playCards 同一条判定）
+  if (colorLocked(b, action.seat, action.chosenColor)) return reject(state, "color_locked");
 
   const { shufflePending: _cancelled, ...rest } = b;
   // 裁定 洗-3：取消牌压牌顶，跟色 = **取消者**定的色（照抄劫营的「打断牌成为跟牌目标」）。
@@ -255,8 +211,7 @@ export function settleShuffleCancel(
  * 取消窗口里的合法动作：每张洗牌牌各一条 + 放弃。
  * `chosenColor` 不带——定色是提交前的客户端模态，不是服务端窗口（同 playCards 的无色牌）。
  *
- * 弃牌窗口那侧没有对应函数：它的动作与司夜②还牌逐字相同（每张手牌一条 `respond`），
- * 在 `index.ts::legalActions` 里与 `swapReturn` 并作一条分支。
+ * 弃牌窗口那侧的动作在 `draw-discard.ts::drawDiscardActions`（组合不枚举，只给一条模板）。
  */
 export const shuffleCancelActions = (b: Board, seat: number, windowId: string): Action[] => [
   ...b.hands[seat]

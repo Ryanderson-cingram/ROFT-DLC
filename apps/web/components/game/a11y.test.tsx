@@ -278,6 +278,27 @@ describe("重挂重播：只换文本的地方用 key", () => {
   // 槽下面那行「为什么灰」（`.dock__note`）2026-08-02 撤了，跟着它的重挂动效也一起没了。
   // 坞里只剩「一句人话」这一处会随快照换文本，上面那条已经盯着它。
 
+  /*
+    A1 结盟互换 / 洗牌重分要的「手牌重新发一遍」不需要一行新代码：`<CardFace key={card.id}>`
+    换一批 id 就是换一批元素，`.hand .card` 上挂着的 deal 跟着 nth-child 的延迟逐张重播。
+    钉住的是**这个前提**——哪天有人把 key 换成下标，动效会静悄悄地消失（而不是报错）。
+  */
+  it("整副手牌换掉 → 每张都是新元素（deal 逐张重播）；只进两张时只有那两张重挂", () => {
+    const swapped = HAND.map((c, i) => ({ ...c, id: `swap#${i}` }));
+    const { container, update } = renderGame(makeSnapshot());
+    const cards = () => [...container.querySelectorAll(".hand > .card")];
+    const before = cards();
+
+    update(makeSnapshot({ yourHand: swapped }));
+    expect(cards().some((el) => before.includes(el))).toBe(false);
+
+    // 近卫收 2 张：原来那几张**不**重挂（整排一起闪会盖住「新来的是哪两张」）
+    const kept = cards();
+    update(makeSnapshot({ yourHand: [...swapped, { id: "in#1", color: "B" as const, face: "2" as const }] }));
+    expect(kept.every((el) => cards().includes(el))).toBe(true);
+    expect(cards()).toHaveLength(kept.length + 1);
+  });
+
   it("手牌的 DOM 顺序 = sortHand 的顺序（CSS 的 nth-child 逐张错开对得上）", () => {
     const { container } = renderGame(makeSnapshot());
     const dom = [...container.querySelectorAll(".hand > .card")].map((el) => el.getAttribute("aria-label"));

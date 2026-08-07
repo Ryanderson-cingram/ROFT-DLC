@@ -9,7 +9,7 @@
  * 比对对象是发动者**当众指定的色+数**，与牌顶无关，也不要求他手里有那张牌。
  */
 import { drawCards, drawEvents, giveTo } from "./draw.ts";
-import { commit, isNumberCard, nextSeat, reject } from "../legal.ts";
+import { WINDOW_MS, commit, isNumberCard, nextSeat, reject } from "../legal.ts";
 import { paramsOf } from "../skills/params.ts";
 import { gainMarks, markCount } from "../skills/primitives/marks.ts";
 import type { SkillData } from "../skills/draw-passives.ts";
@@ -25,7 +25,6 @@ import type {
   SoulHarvest,
 } from "../types.ts";
 
-const HARVEST_WINDOW_MS = 30_000;
 const COLORS: Color[] = ["R", "G", "B", "Y"];
 
 /** 三选一。`draw3` 是「亮不出或不愿亮」，也是超时的默认。 */
@@ -42,7 +41,7 @@ const withWindow = (state: GameState, h: SoulHarvest, now: string): GameState =>
   pendingWindow: {
     type: "soulHarvest",
     actors: [h.queue[0]],
-    deadline: new Date(Date.parse(now) + HARVEST_WINDOW_MS).toISOString(),
+    deadline: new Date(Date.parse(now) + WINDOW_MS).toISOString(),
     defaultChoice: "draw3",
     resume: "turnStart",
   },

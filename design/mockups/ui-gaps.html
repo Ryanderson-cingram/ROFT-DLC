@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>五条 UI 缺口（A1–A5）· 玄夜式盘 · ROFT-DLC</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  /* 本页只放「布局胶水 + 演示开关」，五条缺口的组件基类全部在 tokens.css
+     （`.chosen` / `.songmark` / `.songpop` / `.handtoast`），与 apps/web 的 globals.css 同源。
+     所以这一页是**真实实现的预览**，不是另画一遍：改视觉先改 tokens.css，再同步过去。
+
+     A1+A5 → `.handtoast` 浮报 + 手牌 deal 逐张重播（`<CardFace key={card.id}>` 换一批 id 即重挂）
+     A2    → `.chosen`   座位卡上的定色徽（`Board.chosen` 里非全场的那几条）
+     A3    → `.songmark` 牌桌上的全场生效牌 + `.songpop` 点开的说明
+     A4    → 一句人话带上来源（纯文案，无新组件） */
+
+  body { display: flex; flex-direction: column; min-height: 100dvh; }
+  /* 设计稿的状态切换器占了顶端，轮转轨往下让 46px；真实产品里轨贴顶 */
+  .dial { top: 46px; }
+  .dial > * { max-width: 1080px; margin-inline: auto; }
+  .table { flex: 1 0 auto; width: 100%; max-width: 1080px; margin: 0 auto; padding: var(--sp-3) 0 var(--sp-4); display: grid; gap: var(--sp-3); align-content: center; }
+  .table > * { min-width: 0; }
+  .piles { gap: clamp(var(--sp-3), 6vw, var(--sp-5)); }
+  .follow { display: flex; flex-direction: column; align-items: center; gap: 2px; margin-top: 4px; font-size: 11px; }
+  .follow .swatch { width: 34px; height: 4px; border-radius: 2px; }
+  .dockwrap { position: sticky; bottom: 0; }
+  .dockwrap__in { max-width: 1080px; margin: 0 auto; position: relative; }
+  .hand .card { cursor: pointer; }
+
+  /* A4 的两态切换（真实产品里由 pendingWindow 决定） */
+  body:not([data-ui="offer"]) .only-offer { display: none !important; }
+  body[data-ui="offer"] .only-base { display: none !important; }
+
+  @media (max-width: 640px) {
+    :root { --card-w: 48px; --card-h: 72px; --dock-h: 248px; }
+    .pile--top .pile__stack .card { --card-w: 58px; --card-h: 87px; }
+    .dock__row { grid-template-columns: 1fr 1fr; }
+    .dock__slot--main { grid-column: 1 / -1; order: -1; }
+  }
+</style>
+</head>
+<body data-turn="you" data-ui="base">
+
+<nav class="state-picker" aria-label="设计稿状态切换">
+  <button data-ui="base" aria-pressed="true">基准 · 你的回合</button>
+  <button data-ui="offer" aria-pressed="false">A4 神授问一句</button>
+  <span class="sep"></span>
+  <button data-act="swap">▶ A1 结盟互换（整副）</button>
+  <button data-act="recv">▶ A5 近卫收 2 张</button>
+  <button data-act="give">▶ 交出 2 张（应当**不**报）</button>
+  <span class="sep"></span>
+  <button data-toggle="sealed" aria-pressed="false">演示：血棘封印（A2/A3 退灰但不撤）</button>
+</nav>
+
+<div class="ambience" aria-hidden="true"></div>
+
+<nav class="dial" data-dir="cw" aria-label="出牌顺序（顺时针）">
+  <ol class="dial__track">
+    <li class="seat seat--you seat--now">
+      <span class="seat__top"><span class="seat__name">凛</span><span class="seat__you">你</span></span>
+      <span class="seat__hand">手牌 <b id="hand-count">7</b></span>
+      <button class="skillbadge"><span class="sigil">♠6</span><span class="nm">连横</span></button>
+      <span class="seat__tags"><span class="badge" data-tone="ok">已亮出</span></span>
+    </li>
+    <li class="dial__chev" aria-hidden="true"></li>
+    <li class="seat">
+      <span class="seat__top"><span class="seat__name">阿澈</span></span>
+      <span class="seat__hand">手牌 <b>6</b></span>
+      <button class="skillbadge"><span class="sigil">♠5</span><span class="nm">合纵</span></button>
+      <span class="seat__tags"><span class="badge" data-tone="ok">结盟</span></span>
+    </li>
+    <li class="dial__chev" aria-hidden="true"></li>
+    <!-- A2：专精♥9 的定色徽。色点就是 .badge 自己那颗 ::before，--dot 由组件按 key 写 -->
+    <li class="seat" id="seat-wan">
+      <span class="seat__top"><span class="seat__name">小婉</span></span>
+      <span class="seat__hand">手牌 <b>5</b></span>
+      <button class="skillbadge"><span class="sigil">♥9</span><span class="nm">专精</span></button>
+      <span class="seat__tags">
+        <span class="badge chosen" style="--dot: var(--card-red)"><span class="sr-only">专精：</span>红</span>
+      </span>
+    </li>
+    <li class="dial__chev" aria-hidden="true"></li>
+    <li class="seat" id="seat-man">
+      <span class="seat__top"><span class="seat__name">小满</span></span>
+      <span class="seat__hand">手牌 <b>4</b></span>
+      <button class="skillbadge"><span class="sigil">♣5</span><span class="nm">吟游</span></button>
+      <span class="seat__tags"></span>
+    </li>
+    <li class="dial__chev" aria-hidden="true"></li>
+    <li class="seat">
+      <span class="seat__top"><span class="seat__name">老白</span></span>
+      <span class="seat__hand">手牌 <b>9</b></span>
+      <button class="skillbadge"><span class="sigil">♥6</span><span class="nm">近卫</span></button>
+      <span class="seat__tags"></span>
+    </li>
+  </ol>
+  <div class="dial__scale" aria-hidden="true"></div>
+  <p class="ticker">
+    <span class="ticker__tag">最近</span>
+    <span id="ticker-line"><b>小满</b> 选了歌声：战争序</span>
+  </p>
+</nav>
+
+<main class="table">
+  <section class="field">
+    <span class="plate" aria-hidden="true"></span>
+    <!-- A3：全场生效的技能分支（`targeting: global`）。摆在牌桌上，不挂在谁的座位卡上 -->
+    <button class="songmark" id="songmark" aria-expanded="false"
+            aria-label="吟游：战争序，小满选的（全场生效）">
+      <span class="sigil">♣5</span>
+      <span class="nm">战争序</span>
+      <span class="who">小满</span>
+      <span class="songpop" id="songpop" role="note">
+        <span class="songpop__head">
+          <span class="sigil">♣5</span><b>吟游</b>
+          <span class="badge" data-tone="ok" id="song-state">全场生效</span>
+        </span>
+        <span class="songpop__line">唱战争序（惩罚摸牌 ×2）</span>
+        <span class="songpop__foot" id="song-foot">小满选的 · 他的回合开始可以换</span>
+      </span>
+    </button>
+
+    <div class="piles" aria-label="牌河">
+      <div class="pile" style="--depth:6" aria-label="摸牌堆 32 张">
+        <span class="pile__stack">
+          <span class="card" data-color="back" aria-hidden="true"></span>
+          <span class="pile__count">32</span>
+        </span>
+        <span class="pile__label">摸牌堆</span>
+      </div>
+      <button class="pile pile--top" style="--depth:5" aria-expanded="false">
+        <span class="pile__stack">
+          <span class="card" data-color="red" data-face="7"></span>
+          <span class="pile__count">12</span>
+        </span>
+        <span class="pile__label">出牌堆 · <b>红 7</b></span>
+        <span class="follow"><i class="swatch" style="background:var(--card-red)"></i>跟色 红 · 跟数 7</span>
+      </button>
+      <button class="pile" style="--depth:3" aria-expanded="false">
+        <span class="pile__stack">
+          <span class="card" data-color="blue" data-face="5"></span>
+          <span class="pile__count">3</span>
+        </span>
+        <span class="pile__label">弃牌堆</span>
+      </button>
+    </div>
+
+  </section>
+</main>
+
+<div class="dockwrap">
+  <div class="dockwrap__in">
+    <div class="unobar">
+      <button class="btn btn--danger">抓小满：没喊 UNO</button>
+      <button class="uno">UNO!</button>
+    </div>
+
+    <div class="hand-meta">
+      <span>你的手牌 <b id="hand-count-2">7</b></span>
+      <span class="only-base">高亮 = 现在能打</span>
+      <span class="only-offer">先回答窗口，再继续你的回合</span>
+    </div>
+
+    <div class="hand" id="hand" role="group" aria-label="你的手牌">
+      <button class="card card--legal" data-color="red" data-face="3"></button>
+      <button class="card card--legal" data-color="red" data-face="7"></button>
+      <button class="card card--legal" data-color="blue" data-face="7"></button>
+      <span class="card card--dim" data-color="yellow" data-face="+2"></span>
+      <span class="card card--dim" data-color="green" data-face="0"></span>
+      <button class="card card--legal" data-color="wild" data-face="变色"></button>
+      <button class="card card--legal" data-color="wild" data-face="+4"></button>
+    </div>
+
+    <!-- A4：来源写在句首。来源 = 被问者自己已亮出的技能，从 players[seat].skillId 取 -->
+    <div aria-live="polite">
+      <p class="dock__say only-base">你的回合：挑一张能打的牌，或者摸牌</p>
+      <p class="dock__say only-offer">神授：可以摸 2 张再弃 2 张，也可以这次不摸</p>
+    </div>
+
+    <div class="dock__row">
+      <div class="dock__slot">
+        <button class="btn only-base"><span class="sigil">♠6</span> 连横 <i class="dot"></i></button>
+        <button class="btn only-offer" disabled><span class="sigil">♠6</span> 连横</button>
+      </div>
+      <div class="dock__slot dock__slot--main">
+        <button class="btn btn--primary only-base" disabled>点高亮的牌出牌</button>
+        <button class="btn btn--primary only-offer">摸 2 张再弃 2 张</button>
+      </div>
+      <div class="dock__slot">
+        <button class="btn only-base">摸牌</button>
+        <button class="btn btn--ghost only-offer">这次不摸</button>
+      </div>
+    </div>
+
+    <!-- A1+A5：浮报。外壳常驻（aria-live 的挂点），且**排在一句人话之后** -->
+    <div class="handtoast" id="toast" aria-live="polite"></div>
+  </div>
+</div>
+
+<script>
+/* 设计稿胶水。真实产品里这几件事分别由 `lib/use-hand-delta.ts`（浮报）、
+   `<CardFace key={card.id}>` 的重挂（发牌动效）、`Board.chosen` 的投影（A2/A3）负责。 */
+const hand = document.getElementById('hand');
+const toast = document.getElementById('toast');
+const card = (color, face, cls) => `<span class="card ${cls}" data-color="${color}" data-face="${face}"></span>`;
+
+const SWAPPED = [
+  card('blue', '2', 'card--dim'), card('blue', '9', 'card--dim'),
+  card('yellow', '7', 'card--legal'), card('yellow', '停', 'card--dim'),
+  card('green', '4', 'card--dim'), card('green', '8', 'card--dim'),
+];
+
+let clear;
+function say(html) {
+  toast.innerHTML = `<span>${html}</span>`;
+  clearTimeout(clear);
+  clear = setTimeout(() => { toast.innerHTML = ''; }, 3000);
+}
+function count(n) {
+  document.getElementById('hand-count').textContent = n;
+  document.getElementById('hand-count-2').textContent = n;
+}
+const ticker = (html) => { document.getElementById('ticker-line').innerHTML = html; };
+
+const ACTS = {
+  // A1 整副互换：整排重挂 → .hand .card 的 deal 按 nth-child 逐张重播
+  swap() {
+    hand.innerHTML = SWAPPED.join('');
+    count(6);
+    say('整副手牌换过了');
+    ticker('<b>凛</b> 与 <b>阿澈</b> 交换了整副手牌（结盟）');
+  },
+  // A5 近卫收牌：只挂新的那两张，只有它们播 deal（整排一起闪会盖住「新来的是哪两张」）
+  recv() {
+    hand.insertAdjacentHTML('beforeend', card('blue', '2', 'card--dim') + card('green', '8', 'card--dim'));
+    count(hand.children.length);
+    say('刚进 <b>2</b> 张牌');
+    ticker('<b>老白</b> 交给 <b>凛</b> 2 张手牌（近卫）');
+  },
+  // 只出不进：**不报**（出牌 / 交牌 / 弃牌都是你自己点的，牌当着面离手）
+  give() {
+    for (let i = 0; i < 2 && hand.children.length; i++) hand.lastElementChild.remove();
+    count(hand.children.length);
+    ticker('<b>凛</b> 交给 <b>老白</b> 2 张手牌（近卫）');
+  },
+};
+
+document.querySelector('.state-picker').addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  if (btn.dataset.act) return ACTS[btn.dataset.act]();
+  if (btn.dataset.ui) {
+    document.body.dataset.ui = btn.dataset.ui;
+    document.querySelectorAll('.state-picker [data-ui]')
+      .forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+  }
+  if (btn.dataset.toggle === 'sealed') {
+    const on = btn.getAttribute('aria-pressed') !== 'true';
+    btn.setAttribute('aria-pressed', String(on));
+    // 01-P9 / 06-Q65 只压制不清值：两处都退灰、都**不撤**
+    document.getElementById('seat-wan').classList.toggle('seat--sealed', on);
+    document.getElementById('seat-man').classList.toggle('seat--sealed', on);
+    songmark.classList.toggle('songmark--sealed', on);
+    songmark.setAttribute('aria-label', `吟游：战争序，小满选的（${on ? '被封印，暂停生效' : '全场生效'}）`);
+    const state = document.getElementById('song-state');
+    state.textContent = on ? '被封印，暂停生效' : '全场生效';
+    state.dataset.tone = on ? 'bad' : 'ok';
+    document.getElementById('song-foot').textContent =
+      on ? '小满被封印：解封后回到这一条' : '小满选的 · 他的回合开始可以换';
+  }
+});
+
+/* 触屏点一下开/关（桌面 hover 也开，见 tokens.css 的 (hover: hover) 那一支） */
+const songmark = document.getElementById('songmark');
+songmark.addEventListener('click', () => {
+  const open = songmark.hasAttribute('data-open');
+  songmark.toggleAttribute('data-open', !open);
+  songmark.setAttribute('aria-expanded', String(!open));
+});
+</script>
+
+</body>
+</html>

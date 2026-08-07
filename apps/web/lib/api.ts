@@ -77,6 +77,8 @@ const SAYINGS: Record<string, string> = {
   bad_shape: "这几张凑不成并列：2 张同色同数 / 4 张同数 / 6 张同色，且都得是数字牌。",
   color_required: "打变色牌要先选颜色。",
   color_not_allowed: "这一手不用选颜色（有色牌自带颜色）。",
+  // 03 §4 五彩：变色牌打得出，但颜色只能维持现状
+  color_locked: "你带着「五彩」：变色牌只能定成当前的颜色。",
   shuffle_choice_required: "打洗牌牌要先挑卡面上的那一项。",
   shuffle_choice_not_allowed: "只有洗牌牌才挑卡面选项。",
   assault_unavailable: "现在用不了强袭的掷骰打法。",

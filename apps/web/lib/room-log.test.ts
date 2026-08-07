@@ -30,6 +30,17 @@ const PAYLOAD: Record<string, Record<string, unknown>> = {
   turnEnded: { seat: 0 },
   turnSkipped: { seat: 3 },
   deckReshuffled: { count: 31 },
+  statusGranted: { seat: 0, status: "五彩", skillId: "spade-8" },
+  drawOfferOpened: { seat: 1, picks: 2 },
+  allianceWindowOpened: { seat: 2, by: 0 },
+  handOverOpened: { seat: 1, target: 0, max: 2 },
+  optionChosen: { seat: 0, skillId: "club-5", key: "战争序" },
+  cardsHandedOver: { seat: 1, target: 0, count: 2 },
+  handOverKept: { seat: 1 },
+  allianceFormed: { seats: [0, 2] },
+  allianceRefused: { seat: 2 },
+  handsSwapped: { seats: [0, 2], counts: [3, 5] },
+  drawOfferDeclined: { seat: 1 },
   gameDrawn: {},
   punishWindowOpened: { actors: [2], total: 6 },
   punishStackChosen: { seat: 2 },
@@ -53,7 +64,8 @@ const PAYLOAD: Record<string, Record<string, unknown>> = {
   raidWindowOpened: { actors: [1], card: R7 },
   raided: { by: 1, card: R7, target: 3 },
   handsShuffled: { seat: 3, counts: [7, 2, 4, 11] },
-  shuffleDiscardOpened: { seat: 3 },
+  drawDiscardOpened: { seat: 3, picks: 2 },
+  dissentUsed: { seat: 1, direction: -1 },
   shuffleCancelWindowOpened: { seat: 3, actors: [0, 1] },
   shuffleCancelled: { by: 0, card: R7, color: "R", target: 3 },
   unoCalled: { seat: 1 },
@@ -78,7 +90,7 @@ describe("humanize（引擎事件 → 玩家语言）的覆盖率", () => {
     // 2026-08-02 实测 40 种。下限只为拦住「正则失灵 → 空集 → 全绿」的假阳性
     expect(types.length).toBeGreaterThanOrEqual(38);
     expect(types).toContain("cardPlayed");
-    expect(types).toContain("shuffleDiscardOpened");
+    expect(types).toContain("drawDiscardOpened");
   });
 
   it("每种事件都有人话——没写的会原样露出事件名给玩家看", () => {

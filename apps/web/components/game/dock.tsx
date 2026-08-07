@@ -9,6 +9,7 @@ import { buttonLabel, handHint, sayFor, type NameOf } from "@/lib/hud-copy";
 import { playableIds } from "@/lib/legal";
 import { skillById } from "@/lib/skills";
 import { useBump } from "@/lib/use-bump";
+import { useHandDelta } from "@/lib/use-hand-delta";
 
 type Props = {
   snapshot: ClientSnapshot;
@@ -185,13 +186,29 @@ export function Dock({
   const lastCall = useLastCall(deadline, ring?.secs ?? null);
   const ref = useDockHeight();
   const handCount = useBump(s.yourHand.length);
+  const handDelta = useHandDelta(s.yourHand);
+
+  /**
+   * 从手牌里挑几张交上去的两个窗口：**摸 N 弃 N**（03 §2，恰好 N 张）与
+   * **近卫交牌**（04 ♥6，1 ‥ max 张，可以不交）。手牌整个进多选态，凑够了再交。
+   *
+   * 组合不进 `legalActions`（八门弃 8 张就是上千条），引擎只给一条模板 respond，
+   * `cardIds` 由这里填——与并列「打出 N 张」同一个机件，只是提交口不同。
+   */
+  const pickJob =
+    !youAreActor ? null
+    : w?.type === "drawDiscard" ? { choice: "discard", need: s.drawDiscard?.picks ?? 0, max: s.drawDiscard?.picks ?? 0 }
+    : w?.type === "handOver" ? { choice: "give", need: 1, max: s.handOver?.max ?? 0 }
+    : null;
+  const picks = pickJob?.max ?? 0;
+  const picking = picks > 0 ? (picked ?? []) : picked;
 
   const you = s.players.find((p) => p.seat === s.youSeat);
   const skill = skillById(you?.skillId ?? null);
   const sealed = !!you?.statuses.includes("封印");
   // 挑代价牌是**提交前的本地态**，快照里没有，所以 `dockSlots()` 看不见它——
   // 手牌旁那句 `hint` 认得它（`handHint` 收了 costPick），坞里的状态文字就这一处，够了。
-  const hint = handHint(s, picked !== null, !!costPick);
+  const hint = handHint(s, picking !== null, !!costPick);
   const slots = dockSlots(s, nameOf);
   const say = sayFor(s, nameOf);
   const alert = !!w && w.type !== "skillDraft" && youAreActor;
@@ -220,6 +237,15 @@ export function Dock({
   const catches = s.legalActions.filter((a) => a.type === "catchUno" && a.target !== graced);
 
   const submitMany = () => onPlayMany(picked!.map((id) => s.yourHand.find((c) => c.id === id)!));
+
+  const submitPicked = () => {
+    const a = s.legalActions.find(
+      (x): x is Extract<Action, { type: "respond" }> => x.type === "respond" && x.choice === pickJob?.choice,
+    );
+    if (!a) return;
+    onAction({ ...a, cardIds: picking! });
+    onPicked(null);
+  };
 
   return (
     <>
@@ -270,9 +296,9 @@ export function Dock({
 
           <Hand
             snapshot={s}
-            picked={picked}
+            picked={picking}
             onPickToggle={(id) =>
-              onPicked(picked!.includes(id) ? picked!.filter((x) => x !== id) : [...picked!, id])
+              onPicked(picking!.includes(id) ? picking!.filter((x) => x !== id) : [...picking!, id])
             }
             onPickCost={costPick?.onPick}
             onPlay={onPlay}
@@ -307,6 +333,19 @@ export function Dock({
                 <button type="button" className="btn btn--ghost" onClick={costPick.onCancel}>
                   先不发动
                 </button>
+                // 摸 N 弃 N：弃是**必须**的（超时会替你弃刚摸的那几张），所以只有确认没有取消。
+                // 近卫交牌：不交是右槽那条 respond，所以这里同样只出确认键，凑够 1 张就能按
+              : picks > 0 ?
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  disabled={picking!.length < pickJob!.need || picking!.length > picks}
+                  onClick={submitPicked}
+                >
+                  {w?.type === "handOver" ?
+                    `交出 ${picking!.length} 张（最多 ${picks}）`
+                  : `弃掉 ${picking!.length} / ${picks} 张`}
+                </button>
                 // 并列多打：legalActions 不枚举组合（会爆炸），能不能多打由引擎的 canPlayMultiple 说了算
               : picked === null ?
                 s.canPlayMultiple &&
@@ -327,6 +366,23 @@ export function Dock({
                 </>
             }
           />
+
+          {/* 手牌进了一批：坞左上角飘一句，3 秒自己走（`useHandDelta`）。
+              位置贴着「你的手牌 N」那一格——说的就是那个数；右边留给 UNO 定点，两者不会撞。
+              **排在最后**是有意的：`aria-live` 的常驻外壳按 DOM 顺序算，一句人话那一个
+              必须还是第一个（a11y.test.tsx §7.3 钉着它），而这块是绝对定位的，位置与顺序无关。 */}
+          <div className="handtoast" aria-live="polite">
+            {handDelta && (
+              <span>
+                {handDelta.whole ?
+                  "整副手牌换过了"
+                : <>
+                    刚进 <b>{handDelta.got}</b> 张牌
+                  </>
+                }
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </>

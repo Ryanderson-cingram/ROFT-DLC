@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { CREED, CREED_FOOTNOTE, skillById } from "@/lib/skills";
+import { Emphasis } from "../emphasis";
 import { Modal } from "./modal";
 
 /** 发动按钮：0–2 条，全部由调用方从 `legalActions` 算好递进来——弹窗不判合法性。 */
@@ -124,8 +125,12 @@ export function SkillModal({
             {revealed ? "已亮出" : "未亮出"}
           </span>
         </div>
-        <p className="sk__l0">{skill?.l0 ?? "这局你没有技能。"}</p>
-        {skill && <p className="sk__l1">{skill.l1}</p>}
+        <p className="sk__l0">{skill ? <Emphasis text={skill.l0} /> : "这局你没有技能。"}</p>
+        {skill && (
+          <p className="sk__l1">
+            <Emphasis text={skill.l1} />
+          </p>
+        )}
 
         <div className="sk__meta">
           <div>
@@ -181,6 +186,14 @@ export function SkillModal({
         <p>
           {CREED_FOOTNOTE.text}
           <span className="muted">{CREED_FOOTNOTE.aside}</span>
+        </p>
+        {/* 二十个技能的全表在百科页（与这里同一份 `lib/skills.ts`，不会说两套话）。
+            **另开一页**：牌桌是活的，导航走了就把这一桌的实时连接一起带走了。
+            落在「总则」这一页而不是技能那一页：那边下半截是发动按钮，多一条出口会抢手。 */}
+        <p className="hint">
+          <a href="/encyclopedia" target="_blank" rel="noopener noreferrer">
+            查看全部技能与规则（新开一页）→
+          </a>
         </p>
       </div>
     </Modal>

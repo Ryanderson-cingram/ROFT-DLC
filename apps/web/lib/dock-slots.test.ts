@@ -230,16 +230,84 @@ const CASES: { name: string; snap: Snap; want: Record<SlotName, Want> }[] = [
     },
   },
   {
-    name: "shuffleDiscard（洗牌·摸一弃一）：同上",
+    // 摸 N 弃 N 的确认按钮要带本地选中的那几张，只有坞自己填得上（同并列的「打出 N 张」），
+    // 所以引擎给的那条模板 respond 不占中槽
+    name: "drawDiscard（摸 N 弃 N）：同上",
     snap: {
-      pendingWindow: win("shuffleDiscard"),
+      pendingWindow: win("drawDiscard"),
       currentSeat: 3,
-      legalActions: HAND.map((c) => respond(c.id)),
+      drawDiscard: { seat: 0, picks: 1 },
+      legalActions: [respond("discard")],
     },
     want: {
       skill: { disabled: "现在不能发动技能" },
-      main: { disabled: "洗牌·摸一弃一：摸完了，从手牌里挑 1 张弃掉" },
-      yield: { disabled: "洗牌·摸一弃一：摸完了，从手牌里挑 1 张弃掉" },
+      main: { disabled: "摸完了：从手牌里挑 1 张弃掉" },
+      yield: { disabled: "摸完了：从手牌里挑 1 张弃掉" },
+    },
+  },
+  {
+    // 吟游♣5：一条主动有四个选项 → 左槽一个按钮点开菜单（槽位不长高、不换位）
+    name: "吟游：四支歌声收进左槽的菜单",
+    snap: {
+      players: PLAYERS.map((p) => (p.seat === 0 ? { ...p, skillId: "club-5" } : p)),
+      legalActions: (["活泼板", "战争序", "樱时雨", "行进曲"] as const).map((k) => ({
+        type: "activateSkill" as const, seat: 0, effectKey: k,
+      })),
+    },
+    want: {
+      // 多条挤一个槽 → 按钮写组名，四条进菜单（槽位不长高、不换位）
+      skill: {
+        label: "发动技能",
+        items: [
+          "发动技能：唱活泼板（所有摸牌 +1）",
+          "发动技能：唱战争序（惩罚摸牌 ×2）",
+          "发动技能：唱樱时雨（惩罚摸牌恒为 1）",
+          "发动技能：唱行进曲（变色牌不能改色）",
+        ],
+      },
+      main: { disabled: "这一轮没有能打的牌" },
+      yield: { disabled: "你的回合：挑一张能打的牌，或者摸牌" },
+    },
+  },
+  {
+    // 神授♥5（01-S17）：无牌可出时可以不摸直接结束 → 右槽同时有「摸牌」与「结束回合」，
+    // 两条就收进同一个按钮的菜单里（槽位不长高、不换位）
+    name: "神授：无牌可出时右槽给两条（摸 / 直接结束）",
+    snap: { legalActions: [{ type: "drawCard", seat: 0 }, { type: "endTurn", seat: 0 }] },
+    want: {
+      skill: { disabled: "现在不能发动技能" },
+      main: { disabled: "这一轮没有能打的牌" },
+      yield: { label: "摸牌", items: ["摸牌", "结束回合"] },
+    },
+  },
+  {
+    // 近卫♥6：交牌那条要带本地选中的牌，所以不占中槽（同摸 N 弃 N）；「不交」进右槽
+    name: "handOver（近卫交牌）：模板不占中槽，不交进右槽",
+    snap: {
+      pendingWindow: win("handOver"),
+      currentSeat: 3,
+      handOver: { seat: 0, target: 3, max: 2 },
+      legalActions: [respond("give"), respond("keep")],
+    },
+    want: {
+      skill: { disabled: "现在不能发动技能" },
+      main: { disabled: "吃完了：可以从手牌里挑最多 2 张交给老白，也可以不交" },
+      yield: { label: "不交牌", tone: "ghost" },
+    },
+  },
+  {
+    // 合纵/连横②：要 → 中槽（推进），不要 → 右槽（退让）
+    name: "drawOffer（要不要摸 N 弃 N）：两条各归各槽",
+    snap: {
+      pendingWindow: win("drawOffer"),
+      currentSeat: 3,
+      drawOffer: { seat: 0, picks: 2 },
+      legalActions: [respond("take"), respond("decline")],
+    },
+    want: {
+      skill: { disabled: "现在不能发动技能" },
+      main: { label: "摸 2 张再弃 2 张", tone: "primary" },
+      yield: { label: "这次不摸", tone: "ghost" },
     },
   },
   {

@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { HAND, PLAYERS, makeSnapshot } from "@/test-support/snapshot";
 import { buttonLabels, cardNames, pickedCardNames, renderGame } from "@/test-support/render-game";
+import { effectLabel } from "@/lib/skills";
 
 /**
  * spec §5.3 的「十个技能各一条 UI 路径」：入口存在 + 点击后 payload 正确。
@@ -288,5 +289,144 @@ describe("司夜♣3②（花 1 盗换牌）", () => {
     ]);
     await userEvent.click(screen.getByRole("menuitem", { name: "花 1 盗与老白换 1 张" }));
     expect(onAction).toHaveBeenCalledWith({ type: "stealSwap", seat: 0, target: 3 });
+  });
+});
+
+/**
+ * 专精♥9 / 吟游♣5 —— 两条**持续改变合法性**的公开信息（`2026-08-04-batch-2-ui-gaps` 的
+ * 改动②，盖住缺口 A2 + A3）。从前它们只在亮出/切换那一刻的日志里出现过一次，之后整局隐性。
+ *
+ * 两者共用 `Board.chosen` 那一个槽，但画在牌桌的两个地方：个人的（专精的色）在他的座位卡上，
+ * 全场的（吟游的歌）在牌桌中央——判据是数据里的 `targeting`，组件不认技能 id。
+ */
+describe("专精♥9：定色徽常驻在他的座位卡上（A2）", () => {
+  const withColor = (seat: number, key: string) =>
+    makeSnapshot({
+      players: PLAYERS.map((p) => (p.seat === seat ? { ...p, skillId: "heart-9", revealed: true } : p)),
+      chosen: { "heart-9": { key, seat } },
+    });
+
+  it("色码画成色点 + 颜色名，读屏还听得见是哪个技能给的", () => {
+    const { container } = renderGame(withColor(1, "R"));
+    const badge = container.querySelectorAll(".seat")[1].querySelector(".chosen")!;
+    expect(badge.textContent).toBe("专精：红");
+    // 眼睛看到的只有「红」——「专精：」那一截是 .sr-only
+    expect(badge.querySelector(".sr-only")?.textContent).toBe("专精：");
+    // `.badge` 自己那颗点就是色点，不另加元素
+    expect(badge.getAttribute("style")).toContain("var(--card-red)");
+  });
+
+  it("徽只挂在**他自己**那张座位卡上，别人的卡上一个都没有", () => {
+    const { container } = renderGame(withColor(1, "G"));
+    const seats = [...container.querySelectorAll(".seat")];
+    expect(seats.map((s) => s.querySelector(".chosen")?.textContent ?? null)).toEqual([
+      null,
+      "专精：绿",
+      null,
+      null,
+    ]);
+  });
+
+  it("被封印时徽**不撤**（01-P9 只压制不清值，解封回到这个色），跟着座位卡一起退灰", () => {
+    // 小满（座位 2）在基准快照里就被血棘封着
+    const { container } = renderGame(withColor(2, "B"));
+    const man = container.querySelectorAll(".seat")[2];
+    expect(man.className).toContain("seat--sealed");
+    expect(man.querySelector(".chosen")?.textContent).toBe("专精：蓝");
+  });
+
+  it("没定过色（刚开局 / 没人持专精）就一个徽都不画", () => {
+    const { container } = renderGame(makeSnapshot());
+    expect(container.querySelectorAll(".chosen")).toHaveLength(0);
+  });
+});
+
+describe("吟游♣5：当前歌声画在牌桌上，点开有一句说明（A3）", () => {
+  const singing = (key: string, seat = 3) =>
+    makeSnapshot({
+      players: PLAYERS.map((p) => (p.seat === seat ? { ...p, skillId: "club-5", revealed: true } : p)),
+      chosen: { "club-5": { key, seat } },
+    });
+
+  const mark = (root: HTMLElement) => root.querySelector<HTMLButtonElement>(".songmark")!;
+
+  it("牌桌上一枚常驻的牌：沿印 + 歌名 + 谁在唱；可及名把这几样说全", () => {
+    const { container } = renderGame(singing("战争序"));
+    expect(mark(container).textContent).toContain("战争序");
+    expect(mark(container).textContent).toContain("老白");
+    expect(mark(container).getAttribute("aria-label")).toBe("吟游：战争序，老白选的（全场生效）");
+    // 它是**牌桌**上的东西，不挂在谁的座位卡上（座位卡那一档是给个人的选项留的）
+    expect(container.querySelector(".seat .songmark")).toBeNull();
+    expect(container.querySelectorAll(".chosen")).toHaveLength(0);
+  });
+
+  it("点一下浮出说明：那句话直接用发动按钮的文案，不写第二份", async () => {
+    const { container } = renderGame(singing("樱时雨"));
+    expect(mark(container).getAttribute("aria-expanded")).toBe("false");
+
+    await userEvent.click(mark(container));
+    expect(mark(container).getAttribute("aria-expanded")).toBe("true");
+    const pop = document.getElementById(mark(container).getAttribute("aria-controls")!)!;
+    expect(pop).toBe(container.querySelector(".songpop"));
+    expect(pop.querySelector(".songpop__line")?.textContent).toBe(effectLabel("club-5", "樱时雨"));
+    expect(pop.querySelector(".songpop__head")?.textContent).toContain("吟游");
+    expect(pop.querySelector(".badge")?.textContent).toBe("全场生效");
+
+    // 再点一下收起来（触屏上没有 hover 可以退出）
+    await userEvent.click(mark(container));
+    expect(mark(container).getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("四支歌各画各的名字（组件不认识歌名，key 是什么就写什么）", () => {
+    for (const song of ["活泼板", "战争序", "樱时雨", "行进曲"]) {
+      const { container, unmount } = renderGame(singing(song));
+      expect(mark(container).querySelector(".nm")?.textContent, song).toBe(song);
+      unmount();
+    }
+  });
+
+  it("唱的人被封印：牌**不撤**（06-Q65 解封回到原来那一支），改口说暂停生效", () => {
+    // 小满（座位 2）被血棘封着
+    const { container } = renderGame(singing("行进曲", 2));
+    expect(mark(container).className).toContain("songmark--sealed");
+    expect(mark(container).getAttribute("aria-label")).toContain("被封印，暂停生效");
+    expect(container.querySelector(".songpop .badge")?.getAttribute("data-tone")).toBe("bad");
+    expect(container.querySelector(".songpop__foot")?.textContent).toContain("解封后回到这一条");
+  });
+
+  it("同一时刻只浮出一层：开着牌堆的扇形时点歌声牌，扇形自己收起来", async () => {
+    const { container } = renderGame(singing("活泼板"));
+    const played = [...container.querySelectorAll<HTMLButtonElement>("button.pile")].find((b) =>
+      b.textContent?.includes("出牌堆"),
+    )!;
+    await userEvent.click(played);
+    expect(played.getAttribute("aria-expanded")).toBe("true");
+
+    await userEvent.click(mark(container));
+    expect(played.getAttribute("aria-expanded")).toBe("false");
+    expect(mark(container).getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("没人在唱（刚亮出时无歌声）就不画这枚牌", () => {
+    const { container } = renderGame(makeSnapshot());
+    expect(container.querySelector(".songmark")).toBeNull();
+  });
+
+  /*
+    位置量过才定的：摆在牌河**下面**时，320px 的机器上它会被从坞里探头的 UNO 定点压住
+    （用 playwright 在 320/375/414 五个尺寸上量的）。排在 `.field` 第一个还顺带保证了
+    骰子 / 影歌宣言那两块出现时它不会被顶下去——那两块是临时的，它是常驻的。
+  */
+  it("排在牌河**之上**（与惩罚链同一档），且骰子出现时也不被顶下去", () => {
+    const withDice = makeSnapshot({
+      ...singing("战争序"),
+      dice: { seat: 3, reason: "assault", values: [2] },
+    });
+    const { container } = renderGame(withDice);
+    const kids = [...container.querySelector(".field")!.children];
+    const at = (sel: string) => kids.findIndex((el) => el.matches(sel));
+    expect(at(".songmark")).toBeGreaterThanOrEqual(0);
+    expect(at(".songmark")).toBeLessThan(at(".piles"));
+    expect(at(".songmark")).toBeLessThan(at(".field__aside"));
   });
 });

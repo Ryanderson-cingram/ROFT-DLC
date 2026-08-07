@@ -1,3 +1,4 @@
+import type { DrawRequest } from "./skills/primitives/draw-modifier.ts";
 export type Phase = "lobby" | "dealing" | "turnStart" | "play" | "afterPlay" | "finished";
 
 export type RulePack = "base" | "gods";
@@ -104,8 +105,31 @@ export interface Board {
   swap?: PendingSwap;
   /** 并列♥4 摆到一半被劫营♦10 的窗口打断时才有；摆完或被截即删除。 */
   parallelPending?: ParallelPending;
-  /** 洗牌牌（05 §2b）结算到一半时才有；重分完 / 弃完 / 被取消即删除。 */
+  /** 洗牌牌（05 §2b）结算到一半时才有；重分完 / 开出弃牌窗口 / 被取消即删除。 */
   shufflePending?: ShufflePending;
+  /** 摸 N 弃 N（03 §2）摸完、还没弃时才有；弃完即删除。 */
+  drawDiscard?: DrawDiscardPending;
+  /** 合纵♠5 / 连横♠6②：问「这次要不要摸 N 弃 N」的窗口挂着时才有；答完即删除。 */
+  drawOffer?: DrawOfferPending;
+  /** 近卫♥6：吃完惩罚、交牌窗口挂着时才有；交完（或不交）即删除。 */
+  handOver?: HandOverPending;
+  /**
+   * 「某个技能当前选中的那个分支」（02 §6 的 `option_of`），按**技能 id** 存一份。
+   * 第一批用户是吟游♣5 的四支歌声：技能全场唯一 ⇒ 同一技能只可能有一支生效，
+   * 后选覆盖先选（06-Q66 的兜底口径）。封印只压制读取、**不清值**（06-Q65）。
+   */
+  chosen?: Record<string, { key: string; seat: number }>;
+  /**
+   * 合纵♠5 / 连横♠6① 的结盟（01-S13/S13b，语义见 06-Q70）。
+   * **缺席 = 还没问过**——一锤定音就靠这一条：任一方先亮出时问一次，答完这个字段就写死了。
+   */
+  alliance?: Alliance;
+  /**
+   * 01-S14b 的连击账：每个座位「这个回合 / 上一个自己的回合」有没有打出过功能牌。
+   * 出牌时置 `thisTurn`，交回合时轮转（见 `skills/alliance.ts`）。缺席 = 都没打过。
+   * **无条件记**，与谁亮着什么无关——连横可能中途才亮出来。
+   */
+  funcPlay?: { thisTurn: boolean; lastTurn: boolean }[];
   /** 单张出牌摆下之后、结算之前挂着劫营♦10 的窗口时才有；结算或被截即删除。 */
   playPending?: PlayPending;
   /** 缺席 + `phase: "finished"` = **平局**（U8：洗满 2 次后牌堆再度见底且无人打完）。 */
@@ -173,10 +197,58 @@ export type ShuffleChoice = "shuffle" | "drawDiscard";
 export interface ShufflePending {
   /** 打出洗牌牌的那个人 */
   seat: number;
-  /** 打出时选的那一项。摸到牌之后就用不上了，所以选项②开窗口时不再带。 */
+  /** 打出时选的那一项。选项②摸完就换成 `drawDiscard` 那个中间态了，这里随即删除。 */
   choice?: ShuffleChoice;
-  /** 选项②刚摸那张牌的 id——超时默认弃它。 */
-  drawnId?: string;
+}
+/**
+ * 摸 N 弃 N 弃完之后接着跑哪条流程（03 §2 的窗口对多个技能共用，收场各不相同）。
+ * `afterFace` = 洗牌②弃完接着跑这次出牌的收尾；`afterPunish` = 忍戒♠J 弃完把回合交出去；
+ * `afterSkill` = 八门♠8① 弃完回到自己的回合（还没出牌，回合不交）。合纵♠5 到时候加自己的一支。
+ */
+export type DrawDiscardResume = { kind: "afterFace" } | { kind: "afterPunish" } | { kind: "afterSkill" };
+/**
+ * 摸 N 弃 N（03 §2）摸完、还没弃的中间态。挂在**牌桌**上而不是 `PendingWindow` 上：
+ * `drawnIds` 是暗信息（刚摸到哪几张只有自己知道），而 `PendingWindow` 整个进快照，
+ * 写进去就等于当众念出来了（同 `PendingSwap`）。
+ */
+export interface DrawDiscardPending {
+  /** 要弃牌的那个人。窗口只开给他一个 */
+  seat: number;
+  /** 要弃几张。= 牌面写的那个 N，牌堆枯竭摸不足时按**实际摸到的张数**下调（03 §2） */
+  picks: number;
+  /** 刚摸到的那几张的 id——超时默认弃其中前 `picks` 张。绝不投影 */
+  drawnIds: string[];
+  resume: DrawDiscardResume;
+}
+/**
+ * 近卫♥6（04 ♥6 / 01-P12）吃完惩罚之后的交牌窗口。里面没有暗信息——
+ * 交给谁（链首）与最多几张（段数 × 每段张数）都由公开的惩罚链算得出来。
+ */
+export interface HandOverPending {
+  /** 交牌的那个人（刚吃下惩罚的受罚者）。窗口只开给他一个 */
+  seat: number;
+  /** 收牌的那个人 = 链首发起者（P12） */
+  target: number;
+  /** 最多交几张：链上段数 × 每段 `give` 张，手上不够则按手上有的 */
+  max: number;
+}
+/**
+ * 合纵♠5 / 连横♠6 的结盟态（01-S13b / 06-Q70）。一锤定音，所以只会被写一次：
+ * `allied: true` → 两人整副手牌已互换，此后双方回合开始都能再换（占 V7），②对双方关闭；
+ * `allied: false` → 当场没相应，此后双方各吃各的②，不再问第二次。
+ */
+export type Alliance = { allied: true; seats: [number, number] } | { allied: false };
+/**
+ * 合纵♠5 / 连横♠6② 的「要不要这次摸弃」（01-S14：每次触发都是可选）。
+ * 里面没有暗信息——他刚打出的那张功能牌人人都看见了，几张也是牌面写死的。
+ */
+export interface DrawOfferPending {
+  /** 正在被问的那个人。窗口只开给他一个 */
+  seat: number;
+  /** 答应了就照它摸（`base` 就是要摸/要弃的 N，连横的连击档在这一步已经算好） */
+  req: DrawRequest;
+  /** 答应或不答应，之后都接着跑这条收场 */
+  resume: DrawDiscardResume;
 }
 /**
  * 单张出牌被劫营♦10 截住之前的中间态（2026-07-31 裁定：任何人打出任何一张牌都可能被截）。
@@ -407,11 +479,21 @@ export interface ClientSnapshot {
    * 写进快照等于当众念出来（见 `PendingSwap` 的注释）。
    */
   swap?: { seat: number; target: number };
-  /**
-   * 洗牌牌结算到一半：打出的是①还是②。**`drawnId` 不投影**——选项②刚摸那张是暗信息
-   * （见 `ShufflePending` 的注释）。
-   */
+  /** 洗牌牌结算到一半：打出的是①还是②（卡面选择当众，所以公开）。 */
   shufflePending?: { seat: number; choice?: ShuffleChoice };
+  /**
+   * 摸 N 弃 N：**要弃几张**是公开的（UI 得画「挑 8 张弃掉」），
+   * `drawnIds` 是暗信息，绝不投影（见 `DrawDiscardPending` 的注释）。
+   */
+  drawDiscard?: { seat: number; picks: number };
+  /** 合纵/连横②的「要不要摸 N 弃 N」；里面没有暗信息，原样投。 */
+  drawOffer?: { seat: number; picks: number };
+  /** 结盟态（谁跟谁）。结盟当众成立，是公开信息；缺席 = 还没问过或没结成。 */
+  alliance?: Alliance;
+  /** 近卫♥6 的交牌窗口：交给谁、最多几张。里面没有暗信息，原样投。 */
+  handOver?: HandOverPending;
+  /** 当前选中的技能分支（吟游♣5 的歌声）。当众选的，全场公开。 */
+  chosen?: Record<string, { key: string; seat: number }>;
   windowId?: string;
   /**
    * U7b 补喊宽限：`seat` 在 `until`（ISO）之前抓不得。

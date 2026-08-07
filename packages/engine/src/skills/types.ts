@@ -4,7 +4,7 @@
 // 文档明确「未裁定」的字段为 null——两者不可混同，缺席取 §1 的文档默认值，null 等裁定。
 // 注意：这是 skills 子模块自己的类型，不是 src/types.ts 那份引擎↔前端共享契约。
 
-import type { DrawEventKind } from './primitives/draw-modifier.ts';
+import type { DrawEventFilter } from './primitives/draw-modifier.ts';
 
 export type SkillStatus = '✅' | '❓' | '⚠️' | '✅/❓';
 
@@ -59,7 +59,7 @@ export interface SkillEffect {
    */
   mark_cap?: Record<string, number> | null;
   /** 摸牌修正只作用于哪类摸牌事件；缺席 = 一切摸牌 */
-  applies_to?: DrawEventKind[];
+  applies_to?: DrawEventFilter[];
   targeting?: 'self' | 'single' | 'all_others' | 'global' | null;
   /** 一次性 / 每名玩家限一次 / 玩家人数次 / 无限 */
   once?: 'once' | 'once_per_player' | 'per_player_count' | 'unlimited' | null;
@@ -69,8 +69,20 @@ export interface SkillEffect {
   suppression_exempt?: string[] | null;
   /** 如血棘「优先其他技能」 */
   priority?: boolean | null;
+  /**
+   * 本条子效果是**哪条主动的一个选项**（写那条主动的 `key`，02 §6）。
+   * 选项**被选中时才生效**；选的动作 = 发动那条主动并报这个选项的 key，V7 额度记在父主动上。
+   * 吟游♣5 的四支歌声是第一批用户。
+   */
+  option_of?: string;
   /** 改摸数 / 改惩罚 / 改颜色规则等标签，取值表见 02-methodology §6 */
   modifies?: string[];
+  /** 仅当 `modifies` 含 `draw_procedure`：这条 L6 后置程序叫什么（忍戒 `draw_then_discard`） */
+  procedure?: string;
+  /** 仅当 `kind: status_grant`：赋予 03 §4 的哪几个状态（八门② `["五彩"]`）。互斥由 §4 兜底 */
+  grants?: string[];
+  /** **免疫**哪几个 03 §4 的状态（专精♥9 免疫五彩）：谁来赋都挡得住，判定在 `canGrantStatus` 一处 */
+  immune?: string[];
   duration?: string | null;
   /** 仅当 modifies 含 draw_count / draw_procedure 时出现（02-methodology §7） */
   layer?: DrawLayer[];
@@ -95,12 +107,16 @@ export interface SkillDef {
   notes?: string;
   /** 01-V2 白名单亮出例外；缺席 = V1 默认 own_turn */
   reveal_window?: RevealWindow | null;
+  /** 亮出窗口的条件（02 §6，缺席 = 无条件）：目前只有 `hand_at_least`（神授♥5 的 11） */
+  reveal_when?: Record<string, number>;
   force_reveal_ok?: boolean | null;
   force_activate_ok?: boolean | null;
   /** 可否被血棘♦2 封印；缺席 = 默认 true */
   sealable?: boolean | null;
   /** 升级链目标的 id（02-methodology §5） */
   upgrade_to?: string;
+  /** 成对技能另一半的 id（02 §6，双向对称）：合纵♠5 ↔ 连横♠6（01-S13） */
+  pairs_with?: string;
   /** 子效果；部分标注的条目只列已标注的那几条 */
   effects?: SkillEffect[];
   /**

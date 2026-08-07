@@ -1,9 +1,10 @@
 "use client";
 
 import type { ClientSnapshot, SnapshotPlayer } from "@roft/engine";
-import { type ReactNode, useEffect, useRef } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useRef } from "react";
+import { asColor, colorLabel, colorSwatch } from "@/lib/cards";
 import type { NameOf } from "@/lib/hud-copy";
-import { skillById } from "@/lib/skills";
+import { type ChosenPick, seatPicks, skillById } from "@/lib/skills";
 import { useBump } from "@/lib/use-bump";
 
 type Props = {
@@ -90,6 +91,12 @@ export function TurnDial({ snapshot: s, nameOf, onSkillClick, inert, children }:
               <span className="seat__tags">
                 {statusBadges(p)}
                 {markBadges(p)}
+                {/* 当前选中的技能分支里**属于这个人**的那几条（专精♥9 亮出时定死的色）。
+                    它持续改变合法性（该色 +2 罚不到他、跟色是它时他能打任意数字），
+                    这类「场上持续效果」必须常驻可见，不能只在亮出那一刻的日志里出现一次。 */}
+                {seatPicks(s, p.seat).map((pick) => (
+                  <ChosenBadge pick={pick} key={pick.skillId} />
+                ))}
                 {/* 神化只画 N 颗实心、不预留空位：01-decided-rules G4「主神在场时最多 3；
                     无主神时无此上限」，基础包没有主神，画成「2 实心 + 1 空心」是错的。 */}
                 {p.ascensions > 0 && (
@@ -147,6 +154,29 @@ function MarkBadge({ mark, n }: { mark: string; n: number }) {
       <span {...bump}>
         {mark} ×{n}
       </span>
+    </span>
+  );
+}
+
+/**
+ * 「他现在选的是哪一支」（`Board.chosen`）。**不认技能 id**：key 是颜色码就把 `.badge`
+ * 自己那颗点染成那个色（不另加元素），否则原样显示选项名——将来心火♥Q 的三选一、
+ * 宝藏★ 的四分支照样自动有徽。
+ *
+ * 封印期间（01-P9 只压制不清值）值还留着，所以徽**不撤**，只跟着 `.seat--sealed`
+ * 那层 grayscale 一起退灰——同一条视觉规则，零新判断。
+ */
+function ChosenBadge({ pick }: { pick: ChosenPick }) {
+  const color = asColor(pick.key);
+  const name = skillById(pick.skillId)?.name;
+  return (
+    <span
+      className="badge chosen"
+      style={color ? ({ "--dot": colorSwatch(color) } as CSSProperties) : undefined}
+    >
+      {/* 徽上只写得下「红」，但读屏得听见是谁给的（`title` 触屏与 AT 都拿不到，同 seat__uno） */}
+      {name && <span className="sr-only">{name}：</span>}
+      {color ? colorLabel(color) : pick.key}
     </span>
   );
 }

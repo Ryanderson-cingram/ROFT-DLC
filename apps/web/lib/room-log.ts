@@ -98,6 +98,9 @@ export function humanize(
       };
     case "diceTakeoverOpened":
       return { who: nameOf((p.actors as number[])[0]), what: "可以重掷这次骰子", kind: "skill" };
+    // 03 §4 的状态是公开的（八门♠8②的五彩、寄生的心盲…）。谁给的走 skillId
+    case "statusGranted":
+      return { who: nameOf(seat), what: `${skillName(p.skillId)}：获得「${p.status}」`, kind: "skill" };
     // 血棘♦2：封印与解封都是公开状态（03 §4）
     case "sealed":
       return { who: nameOf(seat), what: `被${nameOf(p.by as number)}封印了技能`, kind: "skill" };
@@ -134,8 +137,41 @@ export function humanize(
         who: nameOf(seat),
         what: `洗牌：全体手牌打乱重分（${(p.counts as number[]).map((n, i) => `${nameOf(i)} ${n} 张`).join("、")}）`,
       };
-    case "shuffleDiscardOpened":
-      return { who: nameOf(seat), what: "洗牌·摸一弃一：摸完了，正在挑要弃的牌" };
+    // 吟游♣5（04 ♣5 / 01-S20）：选/切换歌声是当众的（全场都吃它的效果）
+    case "optionChosen":
+      return { who: nameOf(seat), what: `${skillName(p.skillId)}：改唱「${p.key}」`, kind: "skill" };
+    // 近卫♥6（01-P12）：交的是自己手牌、给链首。交了几张公开，交的是哪几张只有两人知道
+    case "handOverOpened":
+      return { who: nameOf(seat), what: `近卫：最多可交 ${p.max} 张手牌给${nameOf(p.target as number)}`, kind: "skill" };
+    case "cardsHandedOver":
+      return { who: nameOf(seat), what: `交了 ${p.count} 张手牌给${nameOf(p.target as number)}`, kind: "skill" };
+    case "handOverKept":
+      return { who: nameOf(seat), what: "一张也不交", kind: "skill" };
+    // 合纵♠5 / 连横♠6①（01-S13/S13b）：结盟当众成立，换的是**整副手牌**（张数公开、内容不公开）
+    case "allianceWindowOpened":
+      return { who: nameOf(seat), what: `${nameOf(p.by as number)}亮出了另一半：要不要相应结盟`, kind: "skill" };
+    case "allianceFormed":
+      return {
+        who: (p.seats as number[]).map(nameOf).join("、"),
+        what: "结盟：此后各自回合开始都能互换整副手牌",
+        kind: "skill",
+      };
+    case "allianceRefused":
+      return { who: nameOf(seat), what: "不相应（这一桌从此各算各的）", kind: "skill" };
+    case "handsSwapped":
+      return {
+        who: (p.seats as number[]).map(nameOf).join("、"),
+        what: `互换整副手牌（${(p.seats as number[]).map((x, i) => `${nameOf(x)} ${(p.counts as number[])[i]} 张`).join("、")}）`,
+        kind: "skill",
+      };
+    // 「要不要摸 N 弃 N」：合纵/连横②（S14）与神授♥5（S17b）共用同一个窗口，所以不提触发者
+    case "drawOfferOpened":
+      return { who: nameOf(seat), what: `可以摸 ${p.picks} 张再弃 ${p.picks} 张（也可以不摸）`, kind: "skill" };
+    case "drawOfferDeclined":
+      return { who: nameOf(seat), what: "这次不摸弃", kind: "skill" };
+    // 摸 N 弃 N（03 §2）：摸了几张有自己的 cardsDrawn，这条只说「正在挑弃哪几张」
+    case "drawDiscardOpened":
+      return { who: nameOf(seat), what: `摸完了：正在挑要弃的 ${p.picks ?? 1} 张牌` };
     case "shuffleCancelWindowOpened":
       return {
         who: nameOf(seat),
@@ -150,6 +186,9 @@ export function humanize(
           p.target as number,
         )}的洗牌：手牌一张没动，从取消者的下家继续`,
       };
+    // 异议♥8①：反转方向 + 跳过自己，链一张不动地弹回上家
+    case "dissentUsed":
+      return { who: nameOf(seat), what: "异议：把这串惩罚原样弹回给上家", kind: "skill" };
     case "turnSkipped":
       return { who: nameOf(seat), what: "花魂跳过本回合", kind: "skill" };
     case "unoCalled":

@@ -382,6 +382,11 @@ button.card { padding: 0; border: 0; font: inherit; cursor: pointer; }
 .badge[data-tone="warn"]::before { background: var(--warn); }
 .badge[data-tone="bad"] { border-color: var(--zhu-dim); color: var(--danger-text); }
 .badge[data-tone="bad"]::before { background: var(--zhu); }
+/* 「他现在选的是哪一支」（`Board.chosen`，专精♥9 的定色）：**徽自己那颗点就是色点**，
+   不另加元素。--dot 由组件按 key 写；不是颜色的选项（将来心火那类）回落到默认的灰点。
+   封印期间值还留着（01-P9 只压制不清值），所以徽不撤，跟着 `.seat--sealed` 的 grayscale
+   一起退灰即可——同一条视觉规则，零新判断。 */
+.chosen::before { width: 8px; height: 8px; background: var(--dot, var(--muted)); }
 
 /* 标记：当前 / 上限 + 已用（03 §5 公开计数） */
 .marks { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; }
@@ -456,6 +461,54 @@ button.card { padding: 0; border: 0; font: inherit; cursor: pointer; }
   font-size: 0; color: var(--piao); cursor: pointer;
 }
 .fan__more::after { content: "⤢"; font-size: 14px; }
+
+/* ---------- 牌桌上的「全场生效」牌（吟游♣5 的歌声） ----------
+   它改的是全场的账，所以是**桌面上的一件公共物件**，不挂在谁的座位卡上。
+   形制沿用 `.skillbadge`（沿印 + 名 + ▸），点开的浮窗沿用 `.fan`（同底、同边、同影）。 */
+
+.songmark {
+  position: relative;
+  display: inline-flex; align-items: center; gap: 6px;
+  max-width: min(100%, 320px);
+  min-height: 32px; padding: 3px 12px;
+  border: 1px solid var(--piao-dim); border-radius: var(--radius-pill);
+  background: var(--sunken); color: var(--yuebai);
+  font: inherit; font-size: 13px; cursor: pointer;
+}
+.songmark:hover { border-color: var(--piao); }
+.songmark .sigil { flex: none; font-family: var(--font-mono); color: var(--piao); }
+.songmark .nm { flex: none; font-family: var(--font-display); font-size: 15px; letter-spacing: 0.04em; }
+/* 昵称多长都不许把这枚牌撑破：只有它收省略号 */
+.songmark .who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--qingyan); font-size: 12px; }
+.songmark::after { content: "▸"; flex: none; font-size: 9px; color: var(--muted); }
+/* 封印期间只是**暂停生效**，值还留着（06-Q65 解封回到原来那一支）——退成灰，不撤 */
+.songmark--sealed { border-color: var(--zhu-dim); }
+.songmark--sealed .sigil, .songmark--sealed .nm { color: var(--muted); }
+
+.songpop {
+  /* 往**下**开：这枚牌排在牌河之上，往上开会撞进贴顶的轮转轨（还得靠 z-index 压过它）；
+     往下开落在牌河那片空地上，谁也不挡，矮屏上也不会被坞截掉。 */
+  position: absolute; top: calc(100% + 10px); left: 50%; transform: translateX(-50%);
+  display: none; flex-direction: column; gap: 5px;
+  width: max-content; max-width: min(300px, calc(100vw - 32px));
+  padding: 10px 12px;
+  border: var(--line); border-radius: var(--radius-panel);
+  background: rgba(6, 8, 12, 0.97); box-shadow: var(--shadow-lift);
+  text-align: left; white-space: normal; cursor: default;
+  /* 与牌堆的扇形同一档：只需压过后面那几个牌堆（它们没有 z-index，按 DOM 顺序本来在上面），
+     不需要翻过轮转轨或底坞——往下开就够不着它们了。 */
+  z-index: 60;
+}
+/* 展开只有两条路，与牌堆的扇形同一条口径：桌面 hover / 显式 [data-open]（点击）。
+   触屏上 :hover 与 :focus-within 点一下就粘住不放，浮窗会变成一块常驻的挡视线的板。 */
+.songmark[data-open] .songpop { display: flex; }
+@media (hover: hover) {
+  .songmark:hover .songpop, .songmark:focus-within .songpop { display: flex; }
+}
+.songpop__head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.songpop__head b { font-family: var(--font-display); font-size: 15px; font-weight: 600; letter-spacing: 0.04em; }
+.songpop__line { font-size: 13px; line-height: 1.5; }
+.songpop__foot { padding-top: 5px; border-top: 1px dashed rgba(38, 49, 63, 0.7); font-size: 12px; color: var(--qingyan); }
 
 /* ---------- 惩罚叠链 ---------- */
 
@@ -579,6 +632,21 @@ body[data-turn="idle"] .hand { filter: saturate(0.65) brightness(0.8); }
   font: inherit; font-size: 13px; font-weight: 700; letter-spacing: 0.1em; cursor: pointer;
 }
 .uno[data-state="said"] { border-color: var(--piao-dim); color: var(--piao); cursor: default; }
+
+/* 手牌进了一批（结盟互换 / 近卫收牌 / 洗牌重分）：坞左上角飘一句，3 秒自己走。
+   贴着「你的手牌 N」那一格——说的就是那个数；右边整条留给 UNO 定点，两者不会撞。
+   外壳常驻（`aria-live` 的挂点得是个不动的节点），空着的时候没有任何盒子，不占地方。 */
+.handtoast { position: absolute; left: var(--sp-3); top: -24px; z-index: 2; pointer-events: none; }
+.handtoast span {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 12px;
+  border: 1px solid var(--piao-dim); border-radius: var(--radius-pill);
+  background: var(--mo); color: var(--yuebai);
+  font-size: 12px; white-space: nowrap;
+  box-shadow: var(--shadow-lift);
+  animation: toast-life 3s ease forwards;
+}
+.handtoast b { font-family: var(--font-mono); font-size: 15px; font-weight: 700; color: var(--piao); }
 
 /* ---------- 倒计时读条：贴在**操作区域顶边**（坞的上沿），不占任何布局空间 ----------
    `--dock-h` 由每页的 syncDockH() 写成坞的真实高度，所以这条线严丝合缝压在坞顶。 */
@@ -810,6 +878,10 @@ body[data-drawer="open"] .drawer-scrim { opacity: 1; pointer-events: auto; }
   .unobar { top: -17px; right: 10px; max-width: calc(100% - 20px); }
   .unobar .btn { font-size: 11px; }
   .uno { min-height: 32px; padding: 0 12px; font-size: 12px; }
+  /* 浮报跟 UNO 定点抬到同一条线上：一个贴左、一个贴右，375px 上也各占各的 */
+  .handtoast { left: 10px; top: -17px; max-width: calc(50% - 10px); }
+  .handtoast span { padding: 3px 9px; font-size: 11px; }
+  .handtoast b { font-size: 13px; }
   /* 座位卡窄屏**只收字号，不改排版**——手机与桌面同一套结构（三行），
      一致的位置感比省那几像素值钱。 */
   .seat { gap: 2px 6px; width: 124px; padding: 4px 7px 5px; }
@@ -821,6 +893,9 @@ body[data-drawer="open"] .drawer-scrim { opacity: 1; pointer-events: auto; }
   .seat__hand, .badge { font-size: 9px; }
   .badge { padding: 0 5px; }
   .badge::before { width: 4px; height: 4px; }
+  /* 定色徽那颗点是**信息**不是装饰，收得比别的点少一档（这一条排在 `.badge::before`
+     之后才压得住它——两者同特异度，靠源码顺序分胜负） */
+  .chosen::before { width: 6px; height: 6px; }
   .pip { width: 6px; height: 6px; }
   .skillbadge { min-height: 20px; padding: 1px 6px; font-size: 10px; }
   .seat--now::after { bottom: -9px; width: 7px; height: 7px; margin-left: -3.5px; }
@@ -837,6 +912,16 @@ body[data-drawer="open"] .drawer-scrim { opacity: 1; pointer-events: auto; }
     position: fixed; left: 8px; right: 8px; bottom: calc(var(--dock-h) + 8px);
     transform: none; flex-wrap: wrap; justify-content: center;
   }
+  /* 全场生效那枚牌：只收字号，位置照旧（它本来就居中，浮窗跟着居中，两边都够宽）。
+     `.songpop` 不跟着 `.fan` 改成 fixed —— 那一条是为「一排牌」写的（375px 上摆不下），
+     这里是一小块字，`max-width: calc(100vw - 32px)` 就够，被裁的风险由 z-index:80 兜住。 */
+  .songmark { min-height: 28px; padding: 2px 10px; font-size: 12px; }
+  .songmark .nm { font-size: 13px; }
+  .songmark .who { font-size: 11px; }
+  .songpop { padding: 9px 10px; }
+  .songpop__head b { font-size: 14px; }
+  .songpop__line { font-size: 12px; }
+  .songpop__foot { font-size: 11px; }
 }
 
 /* ---------- 动效：只做「有东西变了」的提示，不做表演 ----------
@@ -901,11 +986,18 @@ body[data-drawer="open"] .drawer-scrim { opacity: 1; pointer-events: auto; }
 .hand .card:nth-child(n + 9) { animation-delay: 0.24s; }
 /* 高亮的出现与消失走过渡，不是硬切 */
 .card { transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease; }
-/* 浮层：升起面板 / 弹窗 / 遮罩 / 堆的扇形 */
+/* 浮层：升起面板 / 弹窗 / 遮罩 / 堆的扇形 / 全场生效那条的说明 */
 .sheet { animation: sheet-up 0.26s ease-out; }
 .modal__box { animation: pop 0.22s ease-out; }
 .scrim, .modal, .modal::backdrop { animation: fade 0.2s ease-out; }
-.fan { animation: pop 0.18s ease-out; }
+.fan, .songpop { animation: pop 0.18s ease-out; }
+/* 手牌浮报：冒出来 → 停住 → 往上飘着淡出。3s 与 `use-hand-delta` 的 TOAST_MS 同一个数；
+   reduced-motion 下动画整个关掉（末尾那条统管），浮报照样出现、照样由定时器摘掉。 */
+@keyframes toast-life {
+  0%       { opacity: 0; transform: translateY(8px); }
+  8%, 80%  { opacity: 1; transform: none; }
+  100%     { opacity: 0; transform: translateY(-12px); }
+}
 /* 抽屉：滑入 + 遮罩淡入（已在各自的 transition 里，这里只统一缓动） */
 .drawer { transition: transform 0.24s cubic-bezier(0.32, 0.72, 0, 1); }
 .drawer-scrim { transition: opacity 0.24s ease; }

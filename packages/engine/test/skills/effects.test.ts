@@ -236,6 +236,23 @@ describe("数据驱动：改定义，行为跟着变，引擎代码一行不动"
     expect(drawModifiersFor(board(), rule, tweaked)).toHaveLength(2);
   });
 
+  // L6（忍戒♠J）：`values.L6` 是**程序的参数**（多摸上限），不是摸牌数——02 §6
+  it("忍戒的多摸上限来自定义：改 values.L6，上限跟着变", () => {
+    const b = seated("spade-j").board!;
+    expect(drawModifiersFor(b, req, SKILL_DATA)).toEqual([
+      { layer: "L6", source: "忍戒", procedure: "draw_then_discard", values: { L6: 6 } },
+    ]);
+    expect(drawModifiersFor(b, req, withEffect("spade-j", { values: { L6: 2 } }))[0]).toMatchObject({ values: { L6: 2 } });
+    // L6 只改执行方式，摸牌数一点不动（02 §7）：基数 6 进 6 出
+    expect(resolveDrawCount(req, drawModifiersFor(b, req, SKILL_DATA)).count).toBe(6);
+  });
+
+  it("定义点名了引擎没有的后置程序 → 抛，不静默什么都不做", () => {
+    const b = seated("spade-j").board!;
+    expect(() => drawModifiersFor(b, req, withEffect("spade-j", { procedure: "no_such" }))).toThrow(/没有实现/);
+    expect(() => drawModifiersFor(b, req, withEffect("spade-j", { procedure: undefined }))).toThrow(/没有实现/);
+  });
+
   it("恒心弃几张摸几张也来自定义数据，不是写死的 1", () => {
     const s = seated("spade-1", { hands: [[card("R", "3"), card("R", "4"), card("R", "5")], [], []] });
     const two = withEffect("spade-1", { values: { discard: 2, draws: 2 } });

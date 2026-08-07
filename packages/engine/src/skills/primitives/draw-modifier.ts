@@ -13,6 +13,20 @@
 /** L0 定型的前半：事件类型。惩罚 = 仅因 +2/+4 的摸牌（01-P1）。 */
 export type DrawEventKind = "punish" | "skill" | "rule";
 
+/**
+ * `applies_to` 的取值（02 §6）：事件类型，外加一个**限定**——
+ * `skill_others` = 他人技能造成的摸牌（06-Q56 给恩惠♥1 的口径）。
+ * 那条限定是恩惠**自己的卡面文字**，不是通则：活泼板的「所有摸牌 +1」就不分你我。
+ */
+export type DrawEventFilter = DrawEventKind | "skill_others";
+
+/**
+ * 这次摸牌**为什么**发生。`kind` 分不出来的那几种规则摸牌才要写它——
+ * 01-S17b（神授♥5「一定要摸」的五种情形）里的 ②打出毒 / ④末牌非数字的补摸 /
+ * ⑤UNO 罚摸，三者都是 `kind: "rule"`，光看 kind 认不出。缺席 = 普通规则摸牌（U1 那张）。
+ */
+export type DrawReason = "poison" | "lastCard" | "unoPenalty";
+
 export type DrawModifier =
   /** L1 替换：整体改写计算（伤逝按张数掷骰）。值由调用方先算好。 */
   | { layer: "L1"; source: string; value: number }
@@ -24,10 +38,24 @@ export type DrawModifier =
   | { layer: "L4"; source: string; scope: "self" | "global"; value: number }
   /** L5 钳制：效果自带下限（恩惠「至少 1」）；下限不得高于 L0 基数。 */
   | { layer: "L5"; source: string; min: number }
-  /** L6 后置程序：不改数字，只改执行方式（忍戒摸后弃、染手改来源、领域改去向…）。 */
-  | { layer: "L6"; source: string; procedure: string };
+  /**
+   * L6 后置程序：不改数字，只改执行方式（忍戒摸后弃、近卫交牌、染手改来源…）。
+   * `values` 是这条效果**整张**数值表（02 §6）：忍戒读 `L6`（多摸上限），
+   * 近卫读 `L6`（门槛）+ `give`（每段交几张）。一个数装不下第二支程序，所以带的是整张表。
+   */
+  | { layer: "L6"; source: string; procedure: string; values: Readonly<Record<string, number>> };
 
 export type DrawProcedure = Extract<DrawModifier, { layer: "L6" }>;
+
+/** 忍戒♠J：按最终值 N 多摸 min(N, 上限) 张，再弃等量（02 §7 L6 / 04 ♠J）。 */
+export const DRAW_THEN_DISCARD = "draw_then_discard";
+/** 近卫♥6：受 ≥ 门槛的惩罚时，每张 +2/+4 可交 1 张手牌给链首（02 §7 L6 / 04 ♥6 / 01-P12）。 */
+export const HAND_OVER = "hand_over";
+/**
+ * 引擎**真的会执行**的后置程序名。数据（04 的 `procedure`）点了这里没有的名字就抛——
+ * L6 的消费者是按名字分派的，认不出的名字会静默什么都不做，那正是本项目最想堵的病。
+ */
+export const PROCEDURES: ReadonlySet<string> = new Set([DRAW_THEN_DISCARD, HAND_OVER]);
 
 export interface DrawRequest {
   kind: DrawEventKind;
@@ -49,6 +77,8 @@ export interface DrawRequest {
    * 缺席视为「自己造成的」（恒心那种自摸自受的路径不必改调用）。
    */
   initiator?: number;
+  /** 见 `DrawReason`。只有 01-S17b 点名的那几种规则摸牌需要写。 */
+  reason?: DrawReason;
 }
 
 export interface DrawResolution {

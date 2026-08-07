@@ -138,6 +138,25 @@ describe("SkillModal · 技能详情", () => {
     expect(panel.querySelector("p")?.textContent).toBe(CREED_FOOTNOTE.text + CREED_FOOTNOTE.aside);
   });
 
+  /*
+    局内通往二十个技能全表的唯一一条路（hardening §3 第 4 步）。
+    钉两件事：它在「总则」页而不是技能页（那边下半截是发动按钮，多一条出口会抢手），
+    以及它**另开一页**——牌桌是活的，就地导航走会把这一桌的实时连接一起带走。
+  */
+  it("「总则」页给出通往百科的出口，且是新开一页", async () => {
+    const { container } = render(<SkillModal {...base} skillId="spade-1" />);
+    const panels = container.querySelectorAll('[role="tabpanel"]');
+    // 两个页签都常驻 DOM（不活的那个挂 hidden），所以问的是「在哪一页」而不是「在不在」
+    expect(panels[0].querySelector('a[href="/encyclopedia"]')).toBeNull();
+
+    await userEvent.click(screen.getByRole("tab", { name: "四句总则" }));
+    const link = panels[1].querySelector<HTMLAnchorElement>('a[href="/encyclopedia"]')!;
+    expect(link).toBeTruthy();
+    expect(panels[1].hasAttribute("hidden")).toBe(false);
+    expect(link.target).toBe("_blank");
+    expect(link.rel).toContain("noopener");
+  });
+
   it("aria-labelledby 指向真实存在的 id（useId，不硬编码）", () => {
     render(<SkillModal {...base} skillId="diamond-3" />);
     const dialog = screen.getByRole("dialog");

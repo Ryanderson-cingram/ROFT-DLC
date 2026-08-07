@@ -132,15 +132,27 @@ const CASES: WindowCase[] = [
     hand: ALL_CARDS,
   },
   {
-    name: "shuffleDiscard 洗牌·摸一弃一",
-    type: "shuffleDiscard",
+    name: "drawDiscard 摸 N 弃 N",
+    type: "drawDiscard",
     defaultChoice: "drawn",
-    // 与司夜②的动作逐字相同（`lib/legal.ts::handPickActionsOf` 同一条分支）
-    actions: HAND.map((c) => respond("shuffleDiscard", c.id)),
-    extra: { shufflePending: { seat: 0, choice: "drawDiscard" } },
+    // 组合不枚举：引擎只给一条模板，手牌整个进多选态（`dock.tsx` 的 picks 分支）
+    actions: [respond("drawDiscard", "discard")],
+    extra: { drawDiscard: { seat: 0, picks: 1 } },
     skill: NO_SKILL,
     main: { off: true },
     yield: { off: true },
+    hand: ALL_CARDS,
+  },
+  {
+    name: "handOver 近卫交牌",
+    type: "handOver",
+    defaultChoice: "keep",
+    // 同摸 N 弃 N：组合不枚举，手牌整个进多选态；「不交」是右槽那条
+    actions: [respond("handOver", "give"), respond("handOver", "keep")],
+    extra: { handOver: { seat: 0, target: 1, max: 2 } },
+    skill: NO_SKILL,
+    main: { off: true },
+    yield: { label: "不交牌" },
     hand: ALL_CARDS,
   },
   {
@@ -276,29 +288,42 @@ describe("旁观者也能催超时（spec §7）", () => {
 });
 
 /**
- * 三条「从手牌里挑一张」的流程（spec §3.4 的头号命题）。
+ * 三条「从手牌里挑牌交上去」的流程（spec §3.4 的头号命题）。
  * `hand.test.tsx` 逐条钉了 payload；这里钉的是三条共有的边界：
- * 不弹面板、不进多选态、牌 id 不许漏进按钮文字。
+ * 不弹面板、牌 id 不许漏进按钮文字、退路只给提交前的本地选择。
+ *
+ * 「挑一张」的（司夜②/恒心）点了就交，所以一张牌都不该带 `aria-pressed`；
+ * 摸 N 弃 N 挑的是**一组**，多选态是它的正常形态（`multi`）。
  */
-describe("从手牌里挑一张：三条流程的共同边界", () => {
+describe("从手牌里挑牌交上去：三条流程的共同边界", () => {
   const noop = () => {};
   const FLOWS = [
     {
       name: "司夜②还牌",
       render: () => renderGame(actorSnap(CASES.find((c) => c.type === "swapReturn")!)),
-      /** 窗口开着时没有退路：要么挑一张，要么等超时按 defaultChoice 结算。 */
+      /** 窗口开着时没有退路：要么挑，要么等超时按 defaultChoice 结算。 */
       cancelable: false,
+      multi: false,
     },
     {
-      name: "洗牌②弃牌",
-      render: () => renderGame(actorSnap(CASES.find((c) => c.type === "shuffleDiscard")!)),
+      name: "摸 N 弃 N 的弃牌",
+      render: () => renderGame(actorSnap(CASES.find((c) => c.type === "drawDiscard")!)),
       cancelable: false,
+      multi: true,
+    },
+    {
+      name: "近卫♥6 交牌给链首",
+      render: () => renderGame(actorSnap(CASES.find((c) => c.type === "handOver")!)),
+      // 「不交」是右槽那条 respond，不是坞里的取消键，所以这条流程本身没有退路
+      cancelable: false,
+      multi: true,
     },
     {
       name: "恒心♠1 弃 1 代价",
       // 提交前的本地选择，所以随时能反悔
       render: () => renderGame(makeSnapshot(), {}, null, { onPick: noop, onCancel: noop }),
       cancelable: true,
+      multi: false,
     },
   ];
 
@@ -310,13 +335,13 @@ describe("从手牌里挑一张：三条流程的共同边界", () => {
     expect(cardNames(container)).toEqual(ALL_CARDS);
   });
 
-  it.each(FLOWS)("$name：是挑选态不是多选态（一张牌都不带 aria-pressed）", ({ render }) => {
+  it.each(FLOWS)("$name：挑一张的不进多选态、挑一组的进（但一开始一张没选）", ({ render, multi }) => {
     const { container } = render();
-    expect(container.querySelectorAll(".hand [aria-pressed]")).toHaveLength(0);
+    expect(container.querySelectorAll(".hand [aria-pressed]")).toHaveLength(multi ? ALL_CARDS.length : 0);
     expect(pickedCardNames(container)).toEqual([]);
   });
 
-  // 前两条的 choice 就是牌 id：漏进按钮就会出现一个写着 "R3#0" 的按钮
+  // 司夜②的 choice 就是牌 id：漏进按钮就会出现一个写着 "R3#0" 的按钮
   it.each(FLOWS)("$name：牌 id 不许出现在任何按钮上", ({ render }) => {
     const { container } = render();
     expect(buttonLabels(container).join("|")).not.toContain("#");
@@ -406,6 +431,14 @@ describe("定色", () => {
     card: WILD,
     onPick: over.onPick ?? (() => {}),
     onCancel: over.onCancel ?? (() => {}),
+  });
+
+  // 03 §4 五彩：使用变色牌时不能改变颜色 —— 坞里就只画得出那一个色块
+  it("带五彩时只给当前跟色那一块（别的点了也只会被引擎拒）", () => {
+    const { container } = renderGame(makeSnapshot({ activeColor: "B" }), {}, { ...pick(), lockedTo: "B" as const });
+    const [, main] = slotsOf(container);
+    expect([...main.querySelectorAll(".colors button")].map((b) => b.textContent)).toEqual(["蓝"]);
+    expect(main.querySelector(".colors")!.getAttribute("aria-label")).toContain("五彩");
   });
 
   it("中槽整块换成四色块 + 一条退路，别的槽一动不动", () => {

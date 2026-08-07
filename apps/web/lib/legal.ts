@@ -40,14 +40,16 @@ export function costActionsOf(s: ClientSnapshot): Map<string, Respond> {
 }
 
 /**
- * 「从手牌里挑一张交上去」的两个窗口——司夜②还牌与洗牌②弃牌，动作逐字相同：
- * `respond.choice` 就是牌 id。这两个窗口里手牌本身就是操作对象（spec §3.4：无遮罩），
- * 所以它们与可打的牌走同一套高亮。
+ * 「从手牌里挑**一张**交上去」——只有司夜②还牌一个窗口：`respond.choice` 就是牌 id。
+ * 这个窗口里手牌本身就是操作对象（spec §3.4：无遮罩），所以它与可打的牌走同一套高亮。
+ *
+ * 摸 N 弃 N 不走这里：它要挑的是**一组**，引擎只给一条模板动作（组合枚举会爆炸），
+ * 手牌整个进多选态，凑齐 N 张再由坞里的按钮提交。
  */
 export function handPickActionsOf(s: ClientSnapshot): Map<string, Respond> {
   const w = s.pendingWindow;
   return new Map(
-    w?.type === "swapReturn" || w?.type === "shuffleDiscard"
+    w?.type === "swapReturn"
       ? s.legalActions.flatMap((a) => (a.type === "respond" ? [[a.choice, a] as const] : []))
       : [],
   );

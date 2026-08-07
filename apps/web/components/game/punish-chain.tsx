@@ -2,7 +2,7 @@
 
 import type { ClientSnapshot } from "@roft/engine";
 import { Fragment } from "react";
-import { colorSwatch } from "./card-river";
+import { colorSwatch } from "@/lib/cards";
 import type { NameOf } from "@/lib/hud-copy";
 import { useBump } from "@/lib/use-bump";
 

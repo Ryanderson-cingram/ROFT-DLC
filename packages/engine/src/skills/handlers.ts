@@ -10,6 +10,9 @@
  */
 import { drainRoll } from "../actions/bloodthorn.ts";
 import { drawCards, drawEvents, giveTo } from "../actions/draw.ts";
+import { openDrawDiscard } from "../actions/draw-discard.ts";
+import { swapWithAlly } from "./alliance.ts";
+import { canChooseOption, chooseOption } from "./bard.ts";
 import { openHarvest } from "../actions/soul-harvest.ts";
 import { commit, passTurn, reject } from "../legal.ts";
 import { paramsOf } from "./params.ts";
@@ -62,6 +65,26 @@ const steadfast: SkillHandler = (state, b, seat, effect, ctx, data) => {
 };
 
 /**
+ * 八门♠8①：一次性摸 8 弃 8（04 ♠8 / 03 §2「摸 N 弃 N 是**一个窗口**」）。
+ *
+ * 「不受其他技能影响」= 02 §7 的 **L1 替换**（与伤逝♥10 逐字同源的那句卡面文字）：
+ * 那 8 张是定值，命中 L1 即跳过 L2/L3/L4，别人的活泼板/狂欢改不动它，
+ * **连自己②的「所有摸牌 +1」也不加**。这句的确切范围仍未裁定，见 06-Q69。
+ *
+ * 弃那 8 张不吃层级（03 §2），所以 `openDrawDiscard` 的 `req.base` 就是它，一个数据来源。
+ */
+const eightGates: SkillHandler = (state, b, seat, effect, ctx, data) => {
+  const def = data.byId.get("spade-8")!;
+  const n = paramsOf("spade-8", effect.key, data.byId).draw.L1;
+  // 计划 §1：定义没给这个数就是数据坏了，静默摸 0 张比报错难查得多
+  if (n === undefined) throw new Error("八门①：定义声明了 L1，但 values 里没有它的数值");
+  return openDrawDiscard(
+    state, b, seat, { kind: "skill", base: n, seat }, { kind: "afterSkill" }, ctx, [], data,
+    [{ layer: "L1", source: def.name, value: n }],
+  );
+};
+
+/**
  * 影歌♦3：①指定一张「色+数」开攒魂窗口；②花魂跳过本回合（01-S15）。
  * ②在**惩罚回合**也发得出来（06-Q39 的 `suppression_exempt`），但那条路走的是惩罚窗口的
  * respond 分支（punish.ts::soulSkip），不经过这里——这里只管普通回合。
@@ -86,12 +109,37 @@ const shadowSong: SkillHandler = (state, b, seat, effect, ctx, data) => {
 const bloodthorn: SkillHandler = (state, b, seat, effect, ctx, data) =>
   drainRoll(state, b, seat, paramsOf("diamond-2", effect.key, data.byId).counts.dice ?? 0, ctx, data);
 
+/**
+ * 合纵♠5 / 连横♠6①b：结盟后回合开始与盟友**整副手牌互换**（06-Q70）。
+ * 不需对方同意、占 V7 的主动条——两条都由定义（`stacks_with_turn_limit: true`）与脊梁负责，
+ * 这里只管换。没结盟时脊梁本来就不给这条动作，硬发也会被 `swapWithAlly` 拒掉。
+ */
+const allianceSwap: SkillHandler = (state, b, seat, _effect, ctx) => swapWithAlly(state, b, seat, ctx);
+
+/**
+ * 吟游♣5①：选一支歌声（04 ♣5 / 01-S20）。玩家报的 `key` 就是那一支——
+ * 「哪一支生效」由通用的选项闸门（`option_of`）说了算，这里只记下选中的是谁。
+ * 开唱条件「上家打出的不是 +2/+4」在 `bard.ts`，与 `legalActions` 同一个判据。
+ */
+const bard: SkillHandler = (state, b, seat, effect) => {
+  if (!canChooseOption(b)) return reject(state, "skill_unavailable");
+  const id = b.skills[seat]!;
+  return {
+    state: commit(state, chooseOption(b, id, effect.key, seat)),
+    events: [{ type: "optionChosen", public: { seat, skillId: id, key: effect.key } }],
+  };
+};
+
 /** 影歌的代价：花 `n` 个魂。付不起返回 null，一个都不扣。惩罚窗口那条路也用它。 */
 export const spendSouls = (b: Board, seat: number, n: number): Board | null => spendMarks(b, seat, "魂", n);
 
 /** 按 id 注册**行为**。属性一概不在这里——那些从定义读。 */
 export const HANDLERS: Readonly<Record<string, SkillHandler>> = {
+  "club-5": bard,
   "spade-1": steadfast,
+  "spade-5": allianceSwap,
+  "spade-6": allianceSwap,
+  "spade-8": eightGates,
   "diamond-2": bloodthorn,
   "diamond-3": shadowSong,
 };

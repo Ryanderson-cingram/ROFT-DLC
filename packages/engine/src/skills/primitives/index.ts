@@ -10,6 +10,8 @@
 export const primitives: ReadonlySet<string> = new Set<string>([
   "drawModifier", // 02 §7 摸牌数结算层级
   "draw_count", //   同上，`modifies` 那一侧的名字
+  "draw_procedure", // 02 §7 的 L6 后置程序：不改数字，只改执行方式（忍戒♠J 多摸再弃）
+  "draw_obligation", // 改「要不要摸」而不是「摸几张」：U1 无牌可出必须摸 → 神授♥5 可以不摸
   "marks", //        03 §5 计数标记的获得/上限/花费
   "statuses", //     03 §4 状态的赋予/互斥/移除
   "card_value", //   改写一张牌算几点（精英♥3）
@@ -23,12 +25,14 @@ export const primitives: ReadonlySet<string> = new Set<string>([
   // 命名空间；「这个技能真的能执行吗」由 loadSkills 另外查 HANDLERS，见 registry.ts。
   "active", //       阶段 1 声明发动，占 V7 的额度
   "passive", //      条件满足即触发，不占次数（V8）
+  "replacement", //  整体改写一次摸牌的计算（伤逝♥10 的 L1；02 §7）
+  "on_reveal", //    亮出当下结算（合纵♠5 / 连横♠6①：亮出即问另一半「相应吗」，01-S13）
   "on_play", //      打出某张牌时触发（强袭♦1①：出牌动作带旗标声明）
   "response", //     他人动作后开窗口响应（强袭♦1②：掷骰接管）
   "status_grant", // 条件满足即给某人一个状态（血棘♦2 的封印；03 §4 + 02 §2 压制层消费它）
 ]);
 
-export { resolveDrawCount } from "./draw-modifier.ts";
+export { DRAW_THEN_DISCARD, PROCEDURES, resolveDrawCount } from "./draw-modifier.ts";
 export type { DrawEventKind, DrawModifier, DrawProcedure, DrawRequest, DrawResolution } from "./draw-modifier.ts";
 export { gainMarks, markCount, spendMarks } from "./marks.ts";
 export { multiPlayAllowed, valueOverrideFor } from "./playability.ts";

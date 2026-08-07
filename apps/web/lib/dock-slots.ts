@@ -45,8 +45,8 @@ const isSkillAction = (a: Action) =>
   a.type === "revealSkill" ||
   isRespond(a, "soul-skip");
 
-/** 右槽：退让与结束。 */
-const YIELD_CHOICES = ["accept", "pass", "draw3"];
+/** 右槽：退让与结束。合纵/连横②的「这次不摸」是退让（S14：每次都是可选）。 */
+const YIELD_CHOICES = ["accept", "pass", "draw3", "decline", "refuse", "keep"];
 const isYieldAction = (a: Action) =>
   a.type === "drawCard" ||
   a.type === "endTurn" ||
@@ -57,21 +57,25 @@ const isYieldAction = (a: Action) =>
  * 排除项与 `hud.tsx:80-92` 那 5 条 `&&` 过滤逐条对应：
  * 出牌一律点牌（只有强袭那条变体表达不了「同一张的两种打法」，所以单独进槽）；
  * 按牌给出的 respond（远星 / 劫营 / 洗牌③）在手牌里高亮，不占槽；
- * 还牌（司夜②）与洗牌②的弃牌 choice 是牌 id，出成按钮没法看。
+ * 还牌（司夜②）的 choice 是牌 id，出成按钮没法看；摸 N 弃 N 的确认按钮要带本地选中的
+ * 那几张，只有坞自己填得上（同并列的「打出 N 张」），所以两个都不占槽。
  */
 const isMainAction = (a: Action, s: ClientSnapshot, hasCostCards: boolean) => {
   if (isSkillAction(a) || isYieldAction(a)) return false;
   if (a.type === "playCards") return !!a.useAssault;
   if (a.type !== "respond") return false;
   const w = s.pendingWindow?.type;
-  if (w === "swapReturn" || w === "shuffleDiscard") return false;
+  if (w === "swapReturn" || w === "drawDiscard" || w === "handOver") return false;
   return !(a.cardIds && hasCostCards);
 };
 
 /** 与 `hud.tsx::buttonClass` 同一张映射表（P3 接线时那个函数随 hud 一起删）。 */
 const toneOf = (a: Action): SlotTone | undefined => {
   if (a.type === "playCards") return "primary";
-  if (a.type === "respond") return a.choice === "accept" ? "danger" : a.choice === "pass" ? "ghost" : "primary";
+  if (a.type === "respond")
+    return a.choice === "accept" ? "danger"
+      : a.choice === "pass" || a.choice === "decline" || a.choice === "refuse" || a.choice === "keep" ? "ghost"
+      : "primary";
   return undefined;
 };
 
@@ -132,7 +136,7 @@ export function dockSlots(s: ClientSnapshot, nameOf: NameOf): DockSlots {
     : !you?.skillId ? "你还没有技能"
     : "现在不能发动技能";
   // 手牌就是操作对象的两个窗口，理由用那句人话（「从手牌里挑 1 张还给对方」）比「没有能打的牌」准
-  const handPick = w?.type === "swapReturn" || w?.type === "shuffleDiscard";
+  const handPick = w?.type === "swapReturn" || w?.type === "drawDiscard" || w?.type === "handOver";
   const mainReason = handPick ? sayFor(s, nameOf) : handHint(s, false);
 
   return {

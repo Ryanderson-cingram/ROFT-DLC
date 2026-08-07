@@ -12,11 +12,13 @@
 | `name` | 中文名 | 精英 |
 | `suit_rank` | 花色与点数 | ♥3 / ★ / 神 |
 | `reveal_window` | 亮出窗口 | `own_turn` / `any_time` / `when_skipped` / `when_challenged_uno` |
+| `reveal_when` | 亮出窗口的**条件**（行内映射，缺席 = 无条件）。目前只有 `hand_at_least`：手牌至少这么多张才用得上那个窗口（神授♥5「>10 可主动亮出」= `{ hand_at_least: 11 }`） | `{ hand_at_least: 11 }` |
 | `effects[]` | 子效果列表 | 见下 |
 | `force_reveal_ok` | 可否被强制亮出 | 默认 true |
 | `force_activate_ok` | 可否被强制发动 | 默认 true；异议/夜魇等 false |
 | `sealable` | 可否被血棘封印 | 默认 true |
 | `upgrade_to` | 升级目标 | 宏伟→宝藏→古神 |
+| `pairs_with` | **成对**技能的另一半（技能 id，双向对称） | 合纵♠5 ↔ 连横♠6（01-S13） |
 | `category` | 条目分类（非普通技能时才写） | `buff`（狂欢★：非技能牌） |
 | `notes` | 裁定备注 | 指向 01 / Q&A |
 
@@ -29,13 +31,17 @@
 | `window` | 见 §3 时机窗口 |
 | `cost` | 弃牌/标记/一次性等，**自然语言，给人读**；机器要的数字见 `values` |
 | `values` | 本效果的**数值**（唯一机读落点）：改摸牌数按层给 `{ L2: -2, L5: 1 }`；代价与效果自带的张数给 `{ discard: 1, draws: 1, marks: 2 }` |
-| `applies_to` | 摸牌修正只作用于哪类摸牌事件：`punish` / `skill` / `rule`；缺席 = 一切摸牌 |
+| `applies_to` | 摸牌修正只作用于哪类摸牌事件：`punish` / `skill` / `skill_others` / `rule`；缺席 = 一切摸牌。`skill_others` = **他人**技能造成的（06-Q56 给恩惠♥1 定的那条口径），`skill` 则不分你我 |
 | `targeting` | `self` / `single` / `all_others` / `global` |
 | `once` | 一次性 / 每名玩家限一次 / 玩家人数次 / 无限 |
 | `stacks_with_turn_limit` | 是否占用「每回合一条主动」——主动 true，被动 false |
 | `suppression_exempt` | 压制例外（06-Q39）：本效果**无视**哪些压制来源，如影歌② `[punish_turn]`（S15 惩罚回合可发动）；缺席 = 所有压制照常生效。封印（`sealed`）不可例外——那由 `sealable` 管 |
 | `priority` | 如血棘「优先其他技能」 |
-| `modifies` | 改摸数、改惩罚、改颜色规则等标签 |
+| `modifies` | 改摸数、改惩罚、改颜色规则等标签。`draw_obligation` 改的是**要不要摸**（U1 的强制性，神授♥5），不是摸几张——所以它不带 `layer` |
+| `option_of` | 本条子效果是**哪条主动的一个选项**（写那条主动的 `key`）。选项**被选中时才生效**，选的动作就是「发动那条主动并报这个选项的 key」。吟游♣5 的四支歌声、心火♥Q 的三选一都是这个形状 |
+| `procedure` | 仅当 `modifies` 含 `draw_procedure`（§7 的 L6）：这条后置程序**叫什么**，如忍戒 `draw_then_discard`。L6 不改数字，光有 `layer: [L6]` 说不出它到底改了什么执行方式 |
+| `grants` | 仅当 `kind: status_grant`：赋予[03 §4](./03-glossary.md) 的哪几个状态（如八门② `[五彩]`）。互斥与不叠层由 §4 统一兜底，本字段只说「给什么」 |
+| `immune` | **免疫**哪几个 [03 §4](./03-glossary.md) 的状态（专精♥9 免疫五彩）。谁来赋都挡得住——判定在 `canGrantStatus` 一处，赋状态的每条路径自动生效 |
 | `duration` | 效果/所赋状态的生命周期：`instant`（当场结算）/ `until_event`（直到打出 +4 等，写明事件）/ `while_revealed`（技能亮出期间）/ `until_skill_replaced`（常驻至技能被替换，如宝藏分支）/ `permanent` |
 | `layer` | 若 `modifies` 含摸牌数：声明所属结算层（见 §7），如恩惠 `L2`、战争序 `L3`、伤逝 `L1` |
 
@@ -114,7 +120,7 @@ Q&A：只能指定一名玩家的技能为**单体技能**。
 
 **位置**：★ / 神条目放在该条目要点之后；花色技能放在该花色表格后的「结构化标注」小节。围栏块靠块内的 `id` 与条目配对，位置只影响可读性。
 
-**字段**：只用 §1 的字段名，逐字沿用。技能级 `id`（必填）/ `category` / `reveal_window` / `force_reveal_ok` / `force_activate_ok` / `sealable` / `upgrade_to` / `notes` / `effects[]`；子效果级 `key` / `kind` / `window` / `cost` / `values` / `mark_cap` / `applies_to` / `targeting` / `once` / `stacks_with_turn_limit` / `suppression_exempt` / `priority` / `modifies` / `duration` / `layer`。**一个技能的每条子效果都要有自己的 `key`**（`1` / `2` / `3` / `passive` / `on_reveal`，与 04 散文里的 ①②③ 对应）。
+**字段**：只用 §1 的字段名，逐字沿用。技能级 `id`（必填）/ `category` / `reveal_window` / `force_reveal_ok` / `force_activate_ok` / `sealable` / `upgrade_to` / `pairs_with` / `reveal_when` / `notes` / `effects[]`；子效果级 `key` / `kind` / `window` / `cost` / `values` / `mark_cap` / `applies_to` / `targeting` / `once` / `stacks_with_turn_limit` / `suppression_exempt` / `priority` / `option_of` / `modifies` / `procedure` / `grants` / `immune` / `duration` / `layer`。**一个技能的每条子效果都要有自己的 `key`**（`1` / `2` / `3` / `passive` / `on_reveal`，与 04 散文里的 ①②③ 对应）。
 
 **完整度**：只有当条目的**全部**子效果都标注完时才写 `structured: true`。
 
@@ -128,10 +134,14 @@ Q&A：只能指定一名玩家的技能为**单体技能**。
 |---|---|---|
 | `once` | `once` / `once_per_player` / `per_player_count` / `unlimited` | 一次性 / 每名玩家限一次 / 玩家人数次 / 无限 |
 | `targeting` | `self` / `single` / `all_others` / `global` | 见 §4 |
-| `modifies` | `draw_count` / `draw_procedure` / `punish_amount` / `card_value` / `color_rule` / `play_legality` / `turn_flow` / `dice` | 「改摸数、改惩罚、改颜色规则等标签」 |
-| `values` | 行内映射 `{ 键: 数字 }`，键取自：§7 的层名 `L0`–`L6`，或 `discard` / `draws` / `draws_partial` / `marks` / `marks_wild` / `dice` / `card_value` / `max` | 数值槽 |
+| `modifies` | `draw_count` / `draw_procedure` / `draw_obligation` / `punish_amount` / `card_value` / `color_rule` / `play_legality` / `turn_flow` / `dice` | 「改摸数、改惩罚、改颜色规则等标签」。`punish_amount` 改的是**喂给 L0 的那个数**（专精♥9 逐段免摸），不进 §7 的层级 |
+| `values` | 行内映射 `{ 键: 数字 }`，键取自：§7 的层名 `L0`–`L6`，或 `discard` / `draws` / `draws_partial` / `draws_combo` / `give` / `marks` / `marks_wild` / `dice` / `card_value` / `max` | 数值槽 |
+| `procedure` | `draw_then_discard`（忍戒♠J：多摸再弃等量）/ `hand_over`（近卫♥6：交手牌给链首）。新增一支要先加到这里 | L6 后置程序的名字 |
+| `grants` | 行内数组，取自 [03 §4](./03-glossary.md) 的状态表：`五彩` / `心盲` / `恋战` / `领域` / `同命` / `封印` | 赋予的状态 |
+| `immune` | 同上那张表 | 免疫的状态 |
 | `mark_cap` | 行内映射 `{ 标记名: 上限 }`，键是 [03 §5](./03-glossary.md) 的标记名（中文，如 `{ 魂: 6 }`） | 标记上限 |
-| `applies_to` | `punish` / `skill` / `rule`（行内数组） | 摸牌事件类型 |
+| `applies_to` | `punish` / `skill` / `skill_others` / `rule`（行内数组） | 摸牌事件类型 |
+| `option_of` | 另一条子效果的 `key`（必须是同一技能里 `kind: active` 的那条） | 选项分支 |
 
 约定（只是标注约定，不新增裁定）：
 
@@ -139,13 +149,39 @@ Q&A：只能指定一名玩家的技能为**单体技能**。
 - `values` 里的层名键必须同时出现在本效果的 `layer` 里，反之亦然
 - 键是白名单，**新增一个键要先加到上表**：拼错键名静默变成「这个数没标」，是最难查的漂移
 - 一条效果里有两档摸牌数时，第二档用 `draws_partial`（影歌①：「同色或同数」摸 1 = `draws_partial`，「不亮」摸 3 = `draws`）
+- **连击档**（同一条效果因「上一个自己的回合也做过」而升档）单独一个键 `draws_combo`（2026-08-03，为连横♠6 补）：
+  基础档照旧写 `draws`，连击档写 `draws_combo`（连横 `{ draws: 1, draws_combo: 3 }`）。
+  不复用 `draws_partial`——那个键的语义是「同一次触发的另一档匹配程度」，连击是**跨回合**的条件
 - 同理，一条效果里有两档标记数时，第二档用 `marks_wild`（司夜③：末牌为功能牌的门槛 3 = `marks`，为**无色牌**的门槛 5 = `marks_wild`）
 - **标记上限走 `mark_cap`，不走 `values.max`**（2026-08-02）。两者分工是死的：`mark_cap` 管**标记**的上限、键就是标记名（影歌①「魂至多 6」= `mark_cap: { 魂: 6 }`），`values.max` 管**数值**的上限（精英♥3「当作大 1 点，最大 9」= `values.max: 9`）。`values` 的键是 ASCII 白名单，装不下中文标记名，所以 `max` 单独一个数根本答不出「管的是哪个标记」——绑定丢了，引擎就只能把标记名写死在代码里。同一条上限**不要两处都写**：那正是这条约定要消灭的双源
 - `mark_cap` 的键是**开放集合**（03 §5 自己写着标记是「不完全列表」），所以不设白名单。但**没有上限的标记不写这个键**（司夜的「盗」）：缺席 = 无上限，写 `0` 会被读成「上限是 0」，生成器直接拒
 
 - `layer` 可写多层，如恩惠 `[L2, L5]`——L2 做 −2、L5 兜自带的「至少 1」（§7 两层都点名了恩惠）
+- **L1 的数值可以由掷骰提供**（2026-08-02，为伤逝♥10 补）：`layer: [L1]` 通常要 `values.L1`，
+  但**替换层的值本来就可能是掷出来的**——伤逝是「按链上 +2/+4 的张数掷骰，点数求和」，
+  骰数随牌桌变，没有常数可标。此时改标 `values: { dice: 1 }`（= **每张掷 1 颗**）并让
+  `modifies` 含 `dice`，`values.L1` 可以缺席。这不是网开一面：那个「1」仍然是唯一落点，
+  02 §6 要防的漂移照旧防住了。只对 **L1** 开这个口子——L2–L5 的值都是确定的数
+- **L6 的那个数是「程序的参数」**（2026-08-03，为忍戒♠J 补）：L0–L5 的数是摸牌数本身的加减/倍率/覆盖/下限，
+  L6 不改数字，所以 `values.L6` 装的是这支后置程序自己的参数——忍戒的 `values: { L6: 6 }` 是
+  **多摸的上限**（「按最终值 N 多摸 min(N, 6) 张」里的 6），不是「摸 6 张」。程序叫什么由 `procedure` 说。
+  一个数不够就照常往 `values` 里加键（近卫♥6：`{ L6: 4, give: 1 }` = 门槛 4 张、每段交 1 张）——
+  引擎拿到的是这条效果的**整张 `values`**，不是单独一个数
+- `give`：**交给别人**的张数（近卫♥6 每段交 1 张）。与 `discard` 分开：弃是进弃牌堆、公开，
+  交是进另一个人的手牌、只有收牌的人看得见
 - **摸牌类效果必须带 `layer`**：`modifies` 含 `draw_count`（L0–L5 改数字）或 `draw_procedure`（L6 只改执行方式）时 `layer` 必填；反过来 `layer` 不得出现在其他效果上。技能**自己造成**的摸牌（恒心摸 1、远星的代价摸 2、劫营让对方摸 1）不是「改摸牌数」，不带 `layer`
+  - **例外**（2026-08-03，为八门♠8 补）：自己造成的摸牌若明写**「不受其他技能影响」**，那句话本身就是
+    §7 的 L1 替换，用 `layer: [L1]` + `values.L1` 表达（八门①的 8）。缺了它，那张定值只是个
+    普通基数，别人的 L2/L3 照样能改它——那正是这句卡面文字要挡的
 - `targeting` 只描述**受影响玩家的范围**：`single` = 恰好一名其他玩家，无论由玩家指定还是由结算落点决定。§4 的「单体技能」另外要求「**可指定**」，非指定类（如血棘随惩罚落点）算不算单体尚未裁定
+- **`option_of` 指向的必须是同一技能里的一条主动**：选项本身不写 `kind: active`（它不是另一条主动，
+  V7 的额度记在**父主动**头上）。牌桌上「现在选的是哪一支」按**技能**存一份（技能全场唯一，
+  所以同一技能的选项天然只有一支生效，后选覆盖先选——06-Q66 的兜底口径正是这一条）
+- **`reveal_when` 只跟着 `reveal_window` 走**：写了条件却没写窗口 = 条件挂空档，生成器直接拒。
+  引擎的 V2 执行面按「窗口 + 条件」两步问（`skills/reveal.ts`），认不出的窗口一律**保守当作
+  `own_turn`**——白名单没建执行面时，宁可少放行，也不静默给出一个谁都没实现的例外
+- **`pairs_with` 必须双向对称**（合纵写连横、连横也要写合纵），生成器两头都查：单向写等于半张定义，
+  引擎从哪一头找都要能找到另一半（01-S13 的「亮出当下立刻决定」是**任一方**先亮出都触发）
 - `once` 只写**本技能自带的**次数上限。01-S18c「一次性 / 限次技能被重新获得时次数重置」是全局规则，不逐条重复
 - 01-V7「同一技能多条主动每回合只能选发动一条」由标注体现为：同一技能下 `kind: active` 且 `stacks_with_turn_limit: true` 的效果出现多条（如影歌 ①②）
 
@@ -168,8 +204,15 @@ L1 替换   整体改写计算的效果（伤逝：按张数掷骰，明文「�
 L2 加减   恩惠 −2 / 狂欢和2「所有摸牌+1」/ 狂欢和3「惩罚+1」/
           吟游·活泼板 +1 / 八门 +1 / 寄生 +1 / 弃「异」每张 −1 …（同层全部累加）
 L3 倍率   吟游·战争序 ×2 …
-L4 覆盖   恒定值（吟游·樱时雨 恒为 1）
+          · **L2 → L3 的先后是裁定过的**（2026-08-02，原 06-Q62）：原话「×2 是惩罚最后计算的，
+            即先计算加减」。例：链上 4 张 → 活泼板 +1 → 5 → 战争序 ×2 → **10**（不是 9）
+          · **作用域**：修正分「只作用于自己」与「全场生效」两种。吟游的四支歌声都是**全场**，
+            恩惠/伤逝/忍戒那类是自己。L4 早就有 `scope`，L2/L3 同样需要（引擎侧待补）
+L4 覆盖   恒定值（吟游·樱时雨：惩罚摸牌数恒为 1）
           → 冲突时：作用于受罚者自身的覆盖 > 全局覆盖
+          · 覆盖对 **L0 基数为 0** 同样生效（2026-08-02，原 06-Q63）：强袭掷 0 让惩罚基数
+            变 0 时，樱时雨仍把它抬回 1。与 L5「下限不得高于 L0 基数」不冲突——
+            L5 是减免的地板（不能无中生有），L4 是改写
           · 狂欢和4「被惩罚不摸」不在此层：它是**跳过整个摸牌事件**（06-Q27 裁定），
             事件不发生，任何数值修正（含 L5 下限）无从生效
 L5 钳制   效果自带下限（恩惠「至少 1」）→ 全局最终值 ≥ 0

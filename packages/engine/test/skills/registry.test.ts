@@ -88,21 +88,33 @@ describe("skill registry", () => {
     const r = loadSkills(skillDefs, primitives);
     expect(r.byId.size).toBe(60);
     // 首批 10 个：恩惠、精英、并列、强袭、血棘、影歌、劫营、远星、恒心、司夜
+    // 第二批（逐个接线，接一个加一个）：伤逝♥10、异议♥8、忍戒♠J、八门♠8、合纵♠5、连横♠6、近卫♥6、神授♥5、吟游♣5、专精♥9（第二批十个到齐）
     expect(r.pool.map((s) => s.id).sort()).toEqual([
       "club-3",
+      "club-5",
       "diamond-1",
       "diamond-10",
       "diamond-2",
       "diamond-3",
       "diamond-j",
       "heart-1",
+      "heart-10",
       "heart-3",
       "heart-4",
+      "heart-5",
+      "heart-6",
+      "heart-8",
+      "heart-9",
       "spade-1",
+      "spade-5",
+      "spade-6",
+      "spade-8",
+      "spade-j",
     ]);
     // 劫营（interrupt 窗口）建完后 04 里再没有 `unimplemented: true`，标注完整却缺机制的
     // 也一个都不剩：两个筐都空了。「缺什么怎么列」由上面的合成定义继续守着。
     expect(r.unsupported).toEqual([]);
+    // 合纵/连横的①（06-Q70 裁定后）也建完了，04 里再没有 `unimplemented`：两个筐又都空了
     expect(skillDefs.skills.filter((s) => s.unimplemented)).toEqual([]);
   });
 

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CREED, CREED_FOOTNOTE, SUITS, allSkills } from "@/lib/skills";
+import { Emphasis } from "@/components/emphasis";
 import "./encyclopedia.css";
 
 // 纯静态：没有 "use client"，展开靠原生 <details>，所以这条路由零客户端 JS。
@@ -61,10 +62,10 @@ export default function EncyclopediaPage() {
                       <h3>{s.name}</h3>
                       <span className="kind">{s.kind}</span>
                     </div>
-                    <p className="l0">{s.l0}</p>
+                    <p className="l0"><Emphasis text={s.l0} /></p>
                     <details>
                       <summary>细则</summary>
-                      <p>{s.l1}</p>
+                      <p><Emphasis text={s.l1} /></p>
                     </details>
                   </article>
                 ))}
