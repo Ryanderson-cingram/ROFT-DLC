@@ -1,19 +1,27 @@
 import { sealedTargetOf } from "./actions/bloodthorn.ts";
 import { punishDiceFor, TAKEOVER_CHOICES } from "./actions/dice.ts";
 import { drawCard, drawCards, drawEvents, endTurn, giveTo } from "./actions/draw.ts";
+import { drawDiscardActions, drawOfferActions } from "./actions/draw-discard.ts";
+import { allianceActions, allyOf } from "./skills/alliance.ts";
+import { handOverActions } from "./skills/guard.ts";
+import { canChooseOption } from "./skills/bard.ts";
+import { mustDrawWhenStuck } from "./skills/gift.ts";
+import { revealAllowedOutOfTurn } from "./skills/reveal.ts";
 import { stealSwap, swapActions } from "./actions/nightlord.ts";
 import { callUno, catchable, catchUno } from "./actions/uno.ts";
 import { playCards } from "./actions/play-cards.ts";
 import {
-  canStack, claimTimeout, farstarActions, punishFace, respond, soulSkipEffect, SOUL_SKIP, windowIdOf,
+  canStack, claimTimeout, dissentActions, farstarActions, punishFace, respond, soulSkipEffect,
+  SOUL_SKIP, windowIdOf,
 } from "./actions/punish.ts";
 import { raidActions } from "./actions/raid.ts";
 import { shuffleCancelActions, SHUFFLE_CHOICES } from "./actions/shuffle-card.ts";
 import { activateSkill, revealSkill } from "./actions/skill.ts";
 import { harvestActions } from "./actions/soul-harvest.ts";
 import { startGame } from "./actions/start-game.ts";
-import { isPlayable, stalemate } from "./legal.ts";
+import { isPlayable, playableFor, stalemate } from "./legal.ts";
 import { SKILL_DATA } from "./skills/draw-passives.ts";
+import { settleTurnEnd } from "./skills/turn-end.ts";
 import { HANDLERS, spendSouls } from "./skills/handlers.ts";
 import { paramsOfEffect } from "./skills/params.ts";
 import { multiPlayAllowed, valueOverrideFor } from "./skills/primitives/playability.ts";
@@ -137,7 +145,8 @@ function settleUnoCall(before: GameState, r: ApplyResult, ctx: Ctx): ApplyResult
   if (b1.currentSeat === seat) return r;
   if (!b0.saidUno[seat] || b1.hands[seat].length === 1) return r;
 
-  const { board, drawn, reshuffledOrder } = drawCards(b1, { kind: "rule", base: MISCALL_DRAW, seat }, ctx.rng);
+  // 01-S17b ⑤：UNO 的罚摸一定要摸（2026-08-03 裁定：虚喊那 2 张同样照罚）
+  const { board, drawn, reshuffledOrder } = drawCards(b1, { kind: "rule", base: MISCALL_DRAW, seat, reason: "unoPenalty" }, ctx.rng);
   // 罚不到就算了——这里不能像 callUno 那样整条拒收（回合已经交出去了，回滚等于卡死牌桌）。
   // 牌堆枯竭本来就会走 U8 的平局收场。
   if (drawn.length === 0) return r;
@@ -151,8 +160,9 @@ function settleUnoCall(before: GameState, r: ApplyResult, ctx: Ctx): ApplyResult
 export function applyAction(state: GameState, action: Action, ctx: Ctx): ApplyResult {
   const bad = action && typeof action === "object" ? malformed(state, action) : "unknown_action";
   if (bad) return { state, events: [], rejected: { reason: bad } };
-  // 顺序要紧：罚摸可能把牌堆抽干，平局判定得看**罚完之后**的牌堆
-  return settleStalemate(settleUnoCall(state, dispatch(state, action, ctx), ctx));
+  // 顺序要紧：罚摸可能把牌堆抽干，平局判定得看**罚完之后**的牌堆。
+  // 回合末的赋状态（八门②的五彩）不摸牌，排在最前最后都一样，摆在最里层贴着「回合刚交完」
+  return settleStalemate(settleUnoCall(state, settleTurnEnd(state, dispatch(state, action, ctx)), ctx));
 }
 
 function dispatch(state: GameState, action: Action, ctx: Ctx): ApplyResult {
@@ -176,7 +186,7 @@ function dispatch(state: GameState, action: Action, ctx: Ctx): ApplyResult {
     case "catchUno":
       return catchUno(state, action, ctx);
     case "revealSkill":
-      return revealSkill(state, action.seat);
+      return revealSkill(state, action.seat, ctx);
     case "activateSkill":
       return activateSkill(state, action, ctx);
     default:
@@ -195,6 +205,11 @@ const costPayable = (b: Board, seat: number, e: SkillEffect): boolean => {
   const marks = paramsOfEffect(e).counts.marks;
   if (marks !== undefined) return spendSouls(b, seat, marks) !== null;
   if (e.modifies?.includes("dice")) return sealedTargetOf(b, seat) !== undefined;
+  // 合纵♠5 / 连横♠6①b：没结盟就没得换（`pairs_with` = 成对技能，那条主动就是换手牌）
+  if (SKILL_DATA.byId.get(b.skills[seat] ?? "")?.pairs_with) return allyOf(b, seat) !== undefined;
+  // 吟游♣5①：开唱条件是「上家打出的不是 +2/+4」（04 ♣5）——有选项的主动才问这一条
+  if ((SKILL_DATA.byId.get(b.skills[seat] ?? "")?.effects ?? []).some((o) => o.option_of === e.key))
+    return canChooseOption(b);
   return true;
 };
 
@@ -226,13 +241,20 @@ export function legalActions(state: GameState, seat: number): Action[] {
       return (b.draftOptions?.[seat] ?? []).map((id) => ({ type: "respond", seat, windowId, choice: id }));
     // 影歌①攒魂：三选一，亮牌那两条按手牌逐张给出
     if (w.type === "soulHarvest") return [...harvestActions(b, seat, windowId), ...unoActions];
-    // 从自己现在的手牌里挑一张交出去，逐张给出。两个窗口的动作逐字相同：
-    // 司夜②还牌（含刚盲抽那张）、洗牌②弃牌（含刚摸那张）
-    if (w.type === "swapReturn" || w.type === "shuffleDiscard")
+    // 司夜②还牌：从自己现在的手牌里挑**一张**交出去（含刚盲抽那张），逐张给出
+    if (w.type === "swapReturn")
       return [
         ...b.hands[seat].map((c): Action => ({ type: "respond", seat, windowId, choice: c.id })),
         ...unoActions,
       ];
+    // 摸 N 弃 N（03 §2）：组合不枚举（会爆炸），只给一条模板，客户端凑齐 picks 张再提交
+    if (w.type === "drawDiscard") return [...drawDiscardActions(seat, windowId), ...unoActions];
+    // 合纵/连横②：要 / 不要，两条
+    if (w.type === "drawOffer") return [...drawOfferActions(seat, windowId), ...unoActions];
+    // 合纵/连横①：相应 / 不相应（S13：亮出当下立刻决定）
+    if (w.type === "alliance") return [...allianceActions(seat, windowId), ...unoActions];
+    // 近卫♥6：交几张（模板，客户端填 cardIds）/ 不交
+    if (w.type === "handOver") return [...handOverActions(seat, windowId), ...unoActions];
     // 劫营♦10 打断：截刚摆的那张（逐张给出），或放弃（04 ♦10）
     if (w.type === "interrupt") return [...raidActions(b, seat, windowId), ...unoActions];
     // 洗牌③取消：打自己的洗牌牌取消（逐张给出），或放弃（05 §2b 裁定 洗-3）
@@ -252,15 +274,21 @@ export function legalActions(state: GameState, seat: number): Action[] {
     return [
       ...choices.map((choice): Action => ({ type: "respond", seat, windowId, choice })),
       ...farstarActions(b, seat, windowId),
+      // 异议♥8：①反弹给上家（整局一次）、②吃下时弃 N 枚异（每档一条）
+      ...dissentActions(b, seat, windowId),
       ...unoActions,
     ];
   }
 
-  if (seat !== b.currentSeat) return unoActions;
-
   // V1/V6：持有未亮出就能亮，且亮出不占额度，所以它和出牌并列可选。
-  const skillActions: Action[] =
-    b.skills[seat] && !b.revealed[seat] && !isSealed(b, seat) ? [{ type: "revealSkill", seat }] : [];
+  // V2：写明例外的技能在**别人的回合**也亮得出（判据在 `skills/reveal.ts`，按定义放行）。
+  const canReveal =
+    !!b.skills[seat] && !b.revealed[seat] && !isSealed(b, seat) &&
+    (seat === b.currentSeat || revealAllowedOutOfTurn(b, seat, SKILL_DATA.byId.get(b.skills[seat]!)));
+  const skillActions: Action[] = canReveal ? [{ type: "revealSkill", seat }] : [];
+
+  // 轮不到你时，除了 UNO 那两条，就只剩 V2 的例外亮出
+  if (seat !== b.currentSeat) return [...skillActions, ...unoActions];
 
   const def = b.skills[seat] ? SKILL_DATA.byId.get(b.skills[seat]!) : undefined;
   // 可发动的主动效果，镜像 activateSkill 脊梁的校验（V7/V8、T1、压制）。
@@ -278,7 +306,13 @@ export function legalActions(state: GameState, seat: number): Action[] {
               !(e.once === "once" && b.usedOnce?.[seat]?.[e.key]) &&
               costPayable(b, seat, e),
           )
-          .map((e): Action => ({ type: "activateSkill", seat, effectKey: e.key }))
+          // 02 §6 的选项分支：一条主动有几个选项就给几条（吟游的四支歌声各一个按钮），
+          // 报的是**选项**的 key；没有选项的照旧报自己的 key
+          .flatMap((e): Action[] => {
+            const options = (def?.effects ?? []).filter((o) => o.option_of === e.key);
+            const keys = options.length ? options.map((o) => o.key) : [e.key];
+            return keys.map((effectKey) => ({ type: "activateSkill", seat, effectKey }));
+          })
       : [];
 
   // 司夜♣3②：阶段 1 花 1 盗与人盲换 1 张。不是「发动」（06-Q57），所以不受 V7 额度约束，
@@ -305,7 +339,7 @@ export function legalActions(state: GameState, seat: number): Action[] {
       ...unoActions,
     ];
   const playable = b.hands[seat].filter((c) =>
-    b.punish ? canStack(c, b.punish) : isPlayable(c, top, b.activeColor, b.activeFace),
+    b.punish ? canStack(c, b.punish) : playableFor(b, seat, c),
   );
   const plays = playable.map((c): Action => ({ type: "playCards", seat, cardIds: [c.id] }));
   const assaultPlays = assaultVariant(playable);
@@ -316,8 +350,12 @@ export function legalActions(state: GameState, seat: number): Action[] {
   // 精英♥3：本来打不出去、但当作大 1 点就能跟上牌顶的牌。带 useSkill 才合法，
   // 所以它们是**另一条**动作，不是上面那批的变体（V7：用了就占掉本回合的主动）。
   const skillPlays = b.hands[seat]
-    .filter((c) => !isPlayable(c, top, b.activeColor, b.activeFace) && String(valueOverrideFor(b, seat, c, def)?.value) === topFace)
+    .filter((c) => !playableFor(b, seat, c) && String(valueOverrideFor(b, seat, c, def)?.value) === topFace)
     .map((c): Action => ({ type: "playCards", seat, cardIds: [c.id], useSkill: true }));
+  // 神授♥5（01-S17）：无牌可出时可以**不摸直接结束**。判据与 `endTurn` 同源，
+  // 所以坞里给的与引擎认的永远一致；没有神授的人这条恒为空（U1 照旧必须摸）。
+  const passTurnAction: Action[] =
+    !mustDrawWhenStuck(b, seat) ? [{ type: "endTurn", seat }] : [];
   return [
     ...skillActions,
     ...activations,
@@ -326,6 +364,7 @@ export function legalActions(state: GameState, seat: number): Action[] {
     ...assaultPlays,
     ...skillPlays,
     { type: "drawCard", seat },
+    ...passTurnAction,
     ...unoActions,
   ];
 }
@@ -337,6 +376,8 @@ export function projectView(state: GameState, seat: number): ClientSnapshot {
   const sh = b?.soulHarvest;
   const sw = b?.swap;
   const sp = b?.shufflePending;
+  const dd = b?.drawDiscard;
+  const off = b?.drawOffer;
   return {
     version: state.version,
     phase: state.phase,
@@ -399,8 +440,19 @@ export function projectView(state: GameState, seat: number): ClientSnapshot {
     soulHarvest: sh && { seat: sh.seat, declared: sh.declared, drawn: sh.drawn },
     // 司夜②：只有「谁跟谁换」是公开的。`cardId` 是暗信息，绝不投影
     swap: sw && { seat: sw.seat, target: sw.target },
-    // 洗牌牌：打的是①还是②公开（卡面选择当众）。`drawnId` 是暗信息，不投影
+    // 洗牌牌：打的是①还是②公开（卡面选择当众）
     shufflePending: sp && { seat: sp.seat, choice: sp.choice },
+    // 摸 N 弃 N：要弃几张公开（UI 得画「挑 N 张」）。`drawnIds` 是暗信息，绝不投影
+    drawDiscard: dd && { seat: dd.seat, picks: dd.picks },
+    // 「要不要摸 N 弃 N」（合纵/连横② 与 神授♥5 共用）：只投「谁、几张」，
+    // `req`/`resume` 是引擎的续跑指令，不投
+    drawOffer: off && { seat: off.seat, picks: off.req.base },
+    // 结盟当众成立，谁跟谁是公开信息
+    alliance: b?.alliance,
+    // 近卫♥6 的交牌窗口：交给谁、最多几张。链是公开的，这两项也就没有暗信息
+    handOver: b?.handOver,
+    // 当前选中的技能分支（吟游♣5 的歌声）：当众选的，全场公开
+    chosen: b?.chosen,
     windowId: windowIdOf(state),
     // U7b：谁在补喊宽限里、到什么时候。公开（抓不抓得着本来就是全场同步的信息），
     // UI 拿它把抓按钮压到点再画；引擎侧 `catchUno` 另有一道 `uno_grace` 的硬拒

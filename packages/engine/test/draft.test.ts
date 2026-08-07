@@ -59,6 +59,36 @@ describe("openDraft", () => {
   });
 });
 
+/**
+ * 01-S2b（2026-08-02 裁定，原 06-Q66）：**技能全场唯一**——同一个技能不会被两个人同时持有。
+ *
+ * 唯一性不是靠事后去重，而是**发牌方式**保证的：`openDraft` 从同一副洗好的池里不重复地
+ * 轮流发，各人的候选集因此两两不相交，谁选什么都撞不上。这条以前只是实现的巧合，
+ * 现在是裁定，所以钉住它——池子长大、发牌改写时这条会先红。
+ *
+ * 直接后果：吟游的歌声可以做成**牌桌上的一个槽**而不是逐座位的字段（06-Q66 的兜底口径
+ * 「后唱覆盖先唱」因此永远走不到）。
+ */
+describe("S2b 技能全场唯一", () => {
+  it.each([3, 4])("%i 人局：候选集两两不相交，所以选完必然人手一个不同的技能", (n) => {
+    const opts = start(n).state.board!.draftOptions!;
+    for (let i = 0; i < n; i++)
+      for (let j = i + 1; j < n; j++)
+        expect(opts[i].filter((id) => opts[j].includes(id)), `座位 ${i} 与 ${j} 的候选撞了`).toEqual([]);
+  });
+
+  it("每人各选一个之后，全场技能互不相同", () => {
+    let s = start(4).state;
+    for (const seat of [0, 1, 2, 3]) {
+      const pick = s.board!.draftOptions![seat][0];
+      s = applyAction(s, { type: "respond", seat, windowId: wid(s), choice: pick }, ctx()).state;
+    }
+    const held = s.board!.skills.filter((x): x is string => x !== null);
+    expect(held).toHaveLength(4);
+    expect(new Set(held).size).toBe(4);
+  });
+});
+
 describe("respond(skillDraft)", () => {
   it("选自己的候选：技能到手、自己退出 actors、别人还挂着", () => {
     const s0 = start(3).state;

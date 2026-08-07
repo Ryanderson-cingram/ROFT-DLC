@@ -1,9 +1,14 @@
-import { commit, isNumberCard, isPlayable, isWild, passTurn, reject } from "../legal.ts";
+import { colorLocked, commit, isNumberCard, isWild, passTurn, playableFor, reject } from "../legal.ts";
+// 环：play-cards（打出功能牌）→ alliance（开「要不要」窗口）→ play-cards（结完接着跑收尾）。同下面几处。
+import { notePlayedFunction, offerPicksFor } from "../skills/alliance.ts";
 import { SKILL_DATA } from "../skills/draw-passives.ts";
+import { gainDissentMark } from "../skills/dissent.ts";
 import { multiPlayAllowed, valueOverrideFor } from "../skills/primitives/playability.ts";
 import { liftSeal } from "./bloodthorn.ts";
 import { punishDiceFor, rollWithTakeover } from "./dice.ts";
 import { drawCards, drawEvents, giveTo } from "./draw.ts";
+// 环：play-cards（打出功能牌 / 打出洗牌）→ draw-discard（开窗口）→ play-cards（窗口结完接着跑收尾）
+import { openDrawOffer } from "./draw-discard.ts";
 import { finalCardCost, payFinalCard, stealDiceFor } from "./nightlord.ts";
 import { canStack, extendChain, openPunishWindow, punishFace } from "./punish.ts";
 // 环：play-cards → raid（摆完一张要问「有没有人能截」）→ play-cards（窗口 pass 后接着摆）。
@@ -57,6 +62,8 @@ export function playCards(
   // 定色是**无色牌的特权**：有色牌带上它就等于打红 5 却把跟色改成蓝，牌顶与跟色当场脱钩
   if (!isWild(card) && action.chosenColor) return reject(state, "color_not_allowed");
   if (isWild(card) && !action.chosenColor) return reject(state, "color_required");
+  // 03 §4 五彩：变色牌打得出，但改不了颜色（判定在 legal.ts，出牌与洗牌③共用一条）
+  if (isWild(card) && colorLocked(b, action.seat, action.chosenColor)) return reject(state, "color_locked");
   // 三选一同理，是**洗牌牌的特权**（05 §2b）。选项③「取消」是响应，只能从 shuffleCancel
   // 窗口打出，所以从 playCards 送上来的三选一只认前两个。
   // 反过来，洗牌牌**必须**带（「非洗牌牌不许带」已在多张分派之前统一拒掉了）
@@ -76,7 +83,7 @@ export function playCards(
 
   const follow: Follow = { color: action.chosenColor ?? card.color, face: null };
   // 本来就能打的牌不走技能——带不带 useSkill 都不该白吃掉 V7 的额度
-  if (isPlayable(card, board.playedPile[0], board.activeColor, board.activeFace))
+  if (playableFor(board, action.seat, card))
     return resolvePlay(state, board, action, card, follow, ctx, before, data);
 
   const used = action.useSkill ? useValueOverride(board, action.seat, card, data) : null;
@@ -113,7 +120,7 @@ function playParallel(
   if (!follow.color) return reject(state, "color_required");
   // 04 ♥4：「三种合法多打，**首张**都必须按常规接得上牌顶」。逐张摆之后哪张先落地是
   // 可观察事实，所以校验的是 cards[0]——4 张/6 张形状里组内并不一致，别的牌接得上不算数。
-  if (!isPlayable(cards[0], b.playedPile[0], b.activeColor, b.activeFace))
+  if (!playableFor(b, action.seat, cards[0]))
     return reject(state, "illegal_card");
   // 形状**一次校验**（不成形状整组拒，一张都不摆），然后整组一次落地
   return placeParallel(state, b, action.seat, cards, follow, ctx, action.chosenColor, data);
@@ -239,6 +246,8 @@ function resolvePlay(
   const face = punishFace(card);
   // 强袭①：这一段贡献几张要等骰子（还可能被别人接管重掷）才定，所以链留到 resume 里再延长
   const dice = face && action.useAssault ? assaultDice(b, seat, data) : 0;
+  // 异议♥8②（04 ♥8）：打出「转」获 1 枚异。没有异议 / 不是转 → 标记表原样，事件为空
+  const gained = gainDissentMark(b, seat, card.face, data);
   // U6：出牌**碰不到**已喊状态（喊是另一个动作，2026-08-01 二次澄清）——已经喊过的人
   // 再出一张牌不该把自己的声明擦掉，作废与否是交回合时 passTurn 的事。
   const played: Board = {
@@ -248,21 +257,24 @@ function resolvePlay(
     activeColor: follow.color,
     activeFace: follow.face,
     direction: card.face === "rev" ? ((b.direction * -1) as 1 | -1) : b.direction,
+    marks: gained.marks,
     drawnPlayable: null,
     // 段色 = follow.color：+2 就是牌本身的色，+4 是打出者定的色（无色牌必带 chosenColor）
     punish: face && !dice ? extendChain(b.punish, seat, face, follow.color) : b.punish,
     // 洗牌的三选一随牌桌走到 settlePlay（它拿不到 action）。三条结算路径各自清掉它。
     ...(action.shuffleChoice && { shufflePending: { seat, choice: action.shuffleChoice } }),
   };
-  const events: EngineEvent[] = [...before, playedEvent(seat, [card], chosenColor)];
+  // 01-S14b 的连击账：无条件记一笔「这个回合打出过功能牌」（连横可能中途才亮出来）
+  const noted = notePlayedFunction(played, seat, card);
+  const events: EngineEvent[] = [...before, playedEvent(seat, [card], chosenColor), ...gained.events];
 
   // 2026-07-31 裁定：**任何人打出任何一张牌**落地后都给劫营♦10 一次机会（不再限于多打）。
   // 打空手牌那一张不给：要么当场终局，要么走 U5 的代价摸牌，都没有「打断当前轮」可言。
-  const actors = played.hands[seat].length === 0 ? [] : raidActors(played, seat, [card], data);
+  const actors = noted.hands[seat].length === 0 ? [] : raidActors(noted, seat, [card], data);
   if (actors.length > 0)
-    return openRaidWindow(state, { ...played, playPending: { seat, dice } }, seat, actors, [card], ctx, events);
+    return openRaidWindow(state, { ...noted, playPending: { seat, dice } }, seat, actors, [card], ctx, events);
 
-  return settlePlay(state, played, seat, card, dice, ctx, events, data);
+  return settlePlay(state, noted, seat, card, dice, ctx, events, data);
 }
 
 /** 毒（05 §2b 卡面）：打出时**打出者自己**摸 3 张。牌面常数，不是技能数值，所以不走 04 的 values。 */
@@ -311,7 +323,8 @@ const finish = (state: GameState, board: Board, seat: number, events: EngineEven
  */
 export function settleEmptyHand(b: Board, seat: number, ctx: Ctx): { board: Board; events: EngineEvent[] } {
   if (b.hands[seat].length !== 0) return { board: b, events: [] };
-  const { board, drawn, reshuffledOrder } = drawCards(b, { kind: "rule", base: 1, seat }, ctx.rng);
+  // 01-S17b ④：打出的最后一张牌是非数字牌 → 这一张是**一定要摸**的，神授也免不掉
+  const { board, drawn, reshuffledOrder } = drawCards(b, { kind: "rule", base: 1, seat, reason: "lastCard" }, ctx.rng);
   return {
     board: { ...board, hands: giveTo(board, seat, drawn) },
     events: drawEvents(seat, drawn, reshuffledOrder),
@@ -340,10 +353,20 @@ export function settlePlay(
   const win = settleWin(b, seat, card, data);
   if (win) return finish(state, win.board, seat, [...before, ...win.events]);
 
+  // 合纵♠5 / 连横♠6②（01-S14）：打出功能牌之后可以摸 N 弃 N，**每次都是可选**，
+  // 所以先问一句。窗口结完（要或不要）都回到 `settleAfterFace` 接着跑这次出牌的收尾。
+  //
+  // 手上已经空了就**不问**：那一手是确定性的空转（摸 N 张、再从这 N 张里弃 N 张，
+  // 一张也留不下），而 01-U5 的补摸排在牌面效果之后——先开窗口会把牌桌停在
+  // 「非终局却有人 0 张」上，`fuzz` 的不变式当场就红。
+  const picks = b.hands[seat].length > 0 ? offerPicksFor(b, seat, card, data) : 0;
+  if (picks > 0)
+    return openDrawOffer(state, b, seat, { kind: "skill", base: picks, seat }, { kind: "afterFace" }, ctx, before);
+
   // 毒（05 §2b）：打出者自己摸 3 张。`kind: "rule"` ——打出毒不是惩罚（01-P1），也不是技能，
   // 所以同命不响应（P1b）、恩惠不减（它只吃 punish 与他人技能）。这些都是选对 kind 的自动结果。
   if (card.face === "poison") {
-    const r = drawCards(b, { kind: "rule", base: POISON_DRAW, seat }, ctx.rng);
+    const r = drawCards(b, { kind: "rule", base: POISON_DRAW, seat, reason: "poison" }, ctx.rng);
     // 摸的这几张**不设 drawnPlayable**：U1 的「摸到可打即可打出」只针对无牌可出摸的那一张
     return settleAfterFace(
       state, { ...r.board, hands: giveTo(r.board, seat, r.drawn) }, seat, card, dice, ctx,

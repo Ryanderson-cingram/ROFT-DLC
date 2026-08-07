@@ -187,12 +187,12 @@ describe("出牌堆的投影（02 §5 / 06-Q55：牌河分堆）", () => {
 
 // 这一条是本批投影的**回归闩**：三个中间态都同时含着暗信息与公开信息，
 // 投影只许放公开的那一半出去。加字段的人删不掉这个测试就漏不了牌。
-describe("暗信息不进快照（司夜的 cardId / 洗牌的 drawnId / 掷骰的 resume）", () => {
+describe("暗信息不进快照（司夜的 cardId / 摸 N 弃 N 的 drawnIds / 掷骰的 resume）", () => {
   const stolen = card("B", "5");
   const drawn = card("G", "7");
-  const s = table([[stolen, card("R", "3")], [card("Y", "1")], [card("Y", "2")]], {
+  const s = table([[stolen, drawn, card("R", "3")], [card("Y", "1")], [card("Y", "2")]], {
     swap: { seat: 0, target: 1, cardId: stolen.id },
-    shufflePending: { seat: 0, choice: "drawDiscard", drawnId: drawn.id },
+    drawDiscard: { seat: 0, picks: 1, drawnIds: [drawn.id], resume: { kind: "afterFace" } },
   }, {
     pendingDice: {
       seat: 0,
@@ -213,13 +213,15 @@ describe("暗信息不进快照（司夜的 cardId / 洗牌的 drawnId / 掷骰�
     expect(JSON.stringify(projectView(s, 1))).not.toContain(stolen.id);
   });
 
-  it("洗牌牌：只投「谁打的、选的哪一项」，刚摸那张的 id 不投", () => {
-    for (const viewer of [0, 1, 2]) {
+  it("摸 N 弃 N：只投「谁在弃、弃几张」，刚摸那几张的 id 不投", () => {
+    for (const viewer of [1, 2]) {
       const snap = projectView(s, viewer);
-      expect(snap.shufflePending).toEqual({ seat: 0, choice: "drawDiscard" });
-      expect(JSON.stringify(snap)).not.toContain("drawnId");
+      expect(snap.drawDiscard).toEqual({ seat: 0, picks: 1 });
+      expect(JSON.stringify(snap)).not.toContain("drawnIds");
       expect(JSON.stringify(snap)).not.toContain(drawn.id);
     }
+    // 弃牌的人自己当然看得见那张（它就在他手上），但 drawnIds 这个字段一样不投给他
+    expect(JSON.stringify(projectView(s, 0))).not.toContain("drawnIds");
   });
 
   it("掷骰：点数与受害者公开，续跑指令 resume 整个不进快照", () => {

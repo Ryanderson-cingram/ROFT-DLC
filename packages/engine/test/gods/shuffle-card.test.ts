@@ -189,14 +189,14 @@ describe("洗牌·选项② 摸一弃一（裁定 洗-1）", () => {
       s, { type: "playCards", seat: 0, cardIds: [c.id], chosenColor: "B", shuffleChoice: "drawDiscard" }, ctx(),
     );
 
-    expect(opened.state.pendingWindow?.type).toBe("shuffleDiscard");
+    expect(opened.state.pendingWindow?.type).toBe("drawDiscard");
     expect(opened.state.pendingWindow?.actors).toEqual([0]);
     // 摸到的牌 id 绝不进公开的窗口（哨兵）
     expect(opened.state.pendingWindow?.defaultChoice).toBe("drawn");
     expect(opened.state.board!.hands[0]).toHaveLength(2); // keep + 刚摸的
 
-    const windowId = `w${opened.state.version}:shuffleDiscard`;
-    const done = applyAction(opened.state, { type: "respond", seat: 0, windowId, choice: keep.id }, ctx());
+    const windowId = `w${opened.state.version}:drawDiscard`;
+    const done = applyAction(opened.state, { type: "respond", seat: 0, windowId, choice: "discard", cardIds: [keep.id] }, ctx());
 
     expect(done.rejected).toBeUndefined();
     const b = done.state.board!;
@@ -216,7 +216,7 @@ describe("洗牌·选项② 摸一弃一（裁定 洗-1）", () => {
     const opened = applyAction(
       s, { type: "playCards", seat: 0, cardIds: [c.id], chosenColor: "B", shuffleChoice: "drawDiscard" }, ctx(),
     );
-    const windowId = `w${opened.state.version}:shuffleDiscard`;
+    const windowId = `w${opened.state.version}:drawDiscard`;
     const late = ctx(lcg(1), "2026-07-28T12:01:00.000Z");
     const done = applyAction(opened.state, { type: "claimTimeout", seat: 1, windowId }, late);
 
@@ -234,8 +234,8 @@ describe("洗牌·选项② 摸一弃一（裁定 洗-1）", () => {
     const opened = applyAction(
       s, { type: "playCards", seat: 0, cardIds: [c.id], chosenColor: "B", shuffleChoice: "drawDiscard" }, ctx(),
     );
-    const windowId = `w${opened.state.version}:shuffleDiscard`;
-    expect(applyAction(opened.state, { type: "respond", seat: 0, windowId, choice: "nope" }, ctx()).rejected?.reason)
+    const windowId = `w${opened.state.version}:drawDiscard`;
+    expect(applyAction(opened.state, { type: "respond", seat: 0, windowId, choice: "discard", cardIds: ["nope"] }, ctx()).rejected?.reason)
       .toBe("not_in_hand");
   });
 
@@ -246,8 +246,8 @@ describe("洗牌·选项② 摸一弃一（裁定 洗-1）", () => {
       s, { type: "playCards", seat: 0, cardIds: [c.id], chosenColor: "B", shuffleChoice: "drawDiscard" }, ctx(),
     );
     const drawnId = opened.state.board!.hands[0][0].id;
-    const windowId = `w${opened.state.version}:shuffleDiscard`;
-    const done = applyAction(opened.state, { type: "respond", seat: 0, windowId, choice: drawnId }, ctx());
+    const windowId = `w${opened.state.version}:drawDiscard`;
+    const done = applyAction(opened.state, { type: "respond", seat: 0, windowId, choice: "discard", cardIds: [drawnId] }, ctx());
 
     const b = done.state.board!;
     expect(b.winner).toBeUndefined();
@@ -489,8 +489,8 @@ describe("洗牌·选项③ 取消（裁定 洗-3，照抄劫营 01-G5）", () =
     // 打出洗牌后手上 1 张，窗口期又摸了 1 张 → 2 张：这中间点喊都是虚喊
     expect(opened.state.board!.hands[0]).toHaveLength(2);
 
-    const windowId = `w${opened.state.version}:shuffleDiscard`;
-    const done = applyAction(opened.state, { type: "respond", seat: 0, windowId, choice: keep.id }, ctx());
+    const windowId = `w${opened.state.version}:drawDiscard`;
+    const done = applyAction(opened.state, { type: "respond", seat: 0, windowId, choice: "discard", cardIds: [keep.id] }, ctx());
     expect(done.state.board!.hands[0]).toHaveLength(1);
 
     const said = applyAction(done.state, { type: "callUno", seat: 0 }, ctx());
@@ -507,8 +507,8 @@ describe("洗牌·选项③ 取消（裁定 洗-3，照抄劫营 01-G5）", () =
     const opened = applyAction(
       s, { type: "playCards", seat: 0, cardIds: [c.id], chosenColor: "B", shuffleChoice: "drawDiscard" }, ctx(),
     );
-    const windowId = `w${opened.state.version}:shuffleDiscard`;
-    const done = applyAction(opened.state, { type: "respond", seat: 0, windowId, choice: keep.id }, ctx());
+    const windowId = `w${opened.state.version}:drawDiscard`;
+    const done = applyAction(opened.state, { type: "respond", seat: 0, windowId, choice: "discard", cardIds: [keep.id] }, ctx());
 
     expect(done.state.board!.saidUno[0]).toBe(false);
     expect(legalActions(done.state, 1)).toContainEqual({ type: "catchUno", seat: 1, target: 0 });
@@ -536,7 +536,7 @@ describe("洗牌·选项③ 取消（裁定 洗-3，照抄劫营 01-G5）", () =
     const r = applyAction(
       s, { type: "playCards", seat: 0, cardIds: [a.id], chosenColor: "B", shuffleChoice: "drawDiscard" }, ctx(),
     );
-    expect(r.state.pendingWindow?.type).toBe("shuffleDiscard");
+    expect(r.state.pendingWindow?.type).toBe("drawDiscard");
   });
 });
 

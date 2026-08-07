@@ -12,7 +12,7 @@
  */
 import { sealedOff } from "./dice.ts";
 import { openPunishWindow } from "./punish.ts";
-import { commit, isWild, passTurn, reject, windowIdOf } from "../legal.ts";
+import { WINDOW_MS, commit, isWild, passTurn, reject, windowIdOf } from "../legal.ts";
 import { SKILL_DATA } from "../skills/draw-passives.ts";
 import { paramsOfEffect } from "../skills/params.ts";
 import { gainMarks, markCount, spendMarks } from "../skills/primitives/marks.ts";
@@ -20,7 +20,6 @@ import type { SkillData } from "../skills/draw-passives.ts";
 import type { SkillDef, SkillEffect } from "../skills/types.ts";
 import type { Action, ApplyResult, Board, Card, Ctx, EngineEvent, GameState } from "../types.ts";
 
-const WINDOW_MS = 30_000;
 /**
  * 03 §5 的标记名。司夜攒的是「盗」。
  *

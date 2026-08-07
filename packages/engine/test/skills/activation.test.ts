@@ -19,9 +19,10 @@ describe("revealSkill", () => {
     expect(r.events.map((e) => e.type)).toContain("skillRevealed");
   });
 
-  it("V1：不是自己的回合就不能亮出", () => {
-    const r = applyAction(withSkill("spade-1"), { type: "revealSkill", seat: 1 }, ctx());
-    expect(r.rejected?.reason).toBe("not_your_turn");
+  // V2 之后这条要用**持有技能**的座位来问：没技能的人先被 `no_skill` 拦下，测不到 V1
+  it("V1：不是自己的回合就不能亮出（技能没写例外时）", () => {
+    const s = withSkill("spade-1", { skills: ["spade-1", "spade-1", null] });
+    expect(applyAction(s, { type: "revealSkill", seat: 1 }, ctx()).rejected?.reason).toBe("not_your_turn");
   });
 
   it("没持有技能就没得亮", () => {

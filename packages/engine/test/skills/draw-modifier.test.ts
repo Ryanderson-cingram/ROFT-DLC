@@ -156,8 +156,8 @@ describe("02 §7 摸牌数结算层级", () => {
   describe("L6 后置程序", () => {
     it("不改数字，只改执行方式——最终摸牌数不受 L6 影响", () => {
       const l6: DrawModifier[] = [
-        { layer: "L6", source: "忍戒", procedure: "drawThenDiscard" },
-        { layer: "L6", source: "染手", procedure: "fromDiscardPile" },
+        { layer: "L6", source: "忍戒", procedure: "draw_then_discard", values: { L6: 6 } },
+        { layer: "L6", source: "染手", procedure: "from_discard_pile", values: { L6: 2 } },
       ];
       const mods: DrawModifier[] = [{ layer: "L2", source: "恩惠", delta: -2 }];
       expect(n({ kind: "punish", base: 6 }, mods)).toBe(4);
@@ -166,9 +166,9 @@ describe("02 §7 摸牌数结算层级", () => {
 
     it("L6 原样交给调用方去执行", () => {
       const r = resolveDrawCount({ kind: "punish", base: 6, seat: 0 }, [
-        { layer: "L6", source: "忍戒", procedure: "drawThenDiscard" },
+        { layer: "L6", source: "忍戒", procedure: "draw_then_discard", values: { L6: 6 } },
       ]);
-      expect(r.procedures.map((p) => p.procedure)).toEqual(["drawThenDiscard"]);
+      expect(r.procedures.map((p) => p.procedure)).toEqual(["draw_then_discard"]);
       expect(resolveDrawCount({ kind: "rule", base: 1, seat: 0 }, []).procedures).toEqual([]);
     });
   });

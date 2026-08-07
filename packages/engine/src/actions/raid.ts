@@ -14,14 +14,13 @@
 import { sealedOff } from "./dice.ts";
 import { drawCards, drawEvents, giveTo } from "./draw.ts";
 import { settlePlay } from "./play-cards.ts";
-import { commit, isNumberCard, passTurn, reject, windowIdOf } from "../legal.ts";
+import { WINDOW_MS, commit, isNumberCard, passTurn, reject, windowIdOf } from "../legal.ts";
 import { SKILL_DATA } from "../skills/draw-passives.ts";
 import { paramsOfEffect } from "../skills/params.ts";
 import type { SkillData } from "../skills/draw-passives.ts";
 import type { SkillEffect } from "../skills/types.ts";
 import type { Action, ApplyResult, Board, Card, Ctx, EngineEvent, GameState } from "../types.ts";
 
-const WINDOW_MS = 30_000;
 /** 打断（要带那张牌）与放弃。后者也是超时的默认。 */
 export const RAID = "raid";
 export const PASS = "pass";

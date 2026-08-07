@@ -47,6 +47,11 @@ const MVP_IDS = [
   'diamond-j', // 远星
   'spade-1', // 恒心
   'club-3', // 司夜
+  // 第二批（spec 2026-08-02，接一个加一个）
+  'heart-10', // 伤逝
+  'heart-8', // 异议
+  'spade-j', // 忍戒
+  'spade-8', // 八门
 ] as const;
 
 describe('MVP 技能子集的结构化覆盖', () => {
@@ -112,5 +117,68 @@ describe('摸牌层级（02-methodology §7）', () => {
     for (const [id, e] of effects) {
       if (touchesDraw(e)) expect(e.layer?.length, `${id}/${e.key} 改摸牌却没声明 layer`).toBeGreaterThan(0);
     }
+  });
+
+  // L6 是后置程序：不改数字，所以「改了什么执行方式」全靠 `procedure` 那个名字（02 §6）
+  it('procedure 与 draw_procedure 同进同出', () => {
+    for (const [id, e] of effects) {
+      const isProc = !!e.modifies?.includes('draw_procedure');
+      expect(!!e.procedure, `${id}/${e.key}: procedure 与 draw_procedure 对不上`).toBe(isProc);
+    }
+  });
+});
+
+// 状态是**闭集**（03 §4 就是那张表），所以拼错一个状态名要在生成时红——
+// 引擎赋一个谁都不认识的状态，牌桌上什么都不会发生。
+describe('赋予状态（02-methodology §6 的 grants）', () => {
+  const fence = (effect: string, structured = true) =>
+    parseFence(`id: spade-8\n${structured ? 'structured: true\n' : ''}effects:\n  - key: 2a\n${effect}`, '围栏块');
+  const toEffects = (effect: string, structured = true) => {
+    const doc = fence(effect, structured);
+    return (doc.effects as Record<string, unknown>[]).map((e) => toEffect(e, '围栏块', structured));
+  };
+
+  it('03 §4 表里的状态原样透传', () => {
+    expect(toEffects('    kind: status_grant\n    grants: [五彩]')[0].grants).toEqual(['五彩']);
+  });
+
+  it('表里没有的状态名不放行', () => {
+    expect(() => toEffects('    kind: status_grant\n    grants: [五采]')).toThrow(/没有的状态/);
+  });
+
+  it('grants 只能写在 status_grant 上（被动改摸数不该顺手赋状态）', () => {
+    expect(() => toEffects('    kind: passive\n    grants: [五彩]')).toThrow(/只能写在/);
+  });
+
+  it('完整标注里 grants 不能是空数组（赋予什么？）', () => {
+    expect(() => toEffects('    kind: status_grant\n    grants: []')).toThrow(/赋予什么状态/);
+  });
+});
+
+// 拼错一支程序的名字、或声明了 draw_procedure 却不说是哪支，都会静默变成「什么都不做」。
+describe('L6 后置程序的名字（02-methodology §6 的 procedure）', () => {
+  const fence = (effect: string, structured = true) =>
+    parseFence(`id: spade-j\n${structured ? 'structured: true\n' : ''}effects:\n  - key: passive\n${effect}`, '围栏块');
+  const toEffects = (effect: string, structured = true) => {
+    const doc = fence(effect, structured);
+    return (doc.effects as Record<string, unknown>[]).map((e) => toEffect(e, '围栏块', structured));
+  };
+  const L6 = '    modifies: [draw_procedure]\n    layer: [L6]\n    values: { L6: 6 }';
+
+  it('认得已注册的那支', () => {
+    expect(toEffects(`${L6}\n    procedure: draw_then_discard`)[0].procedure).toBe('draw_then_discard');
+  });
+
+  it('没登记的名字不放行（引擎按名字分派，认不出就静默跳过）', () => {
+    expect(() => toEffects(`${L6}\n    procedure: draw_then_dicsard`)).toThrow(/取值表/);
+  });
+
+  it('完整标注声明了 draw_procedure 就必须说是哪支', () => {
+    expect(() => toEffects(L6)).toThrow(/没写是哪支/);
+  });
+
+  it('写了 procedure 却没在 modifies 里点名 draw_procedure，也红', () => {
+    expect(() => toEffects('    modifies: [draw_count]\n    layer: [L2]\n    values: { L2: 1 }\n    procedure: draw_then_discard'))
+      .toThrow(/没在 modifies 里点名/);
   });
 });

@@ -36,6 +36,8 @@ const SKILL_KEYS = new Set([
   'force_activate_ok',
   'sealable',
   'upgrade_to',
+  'pairs_with',
+  'reveal_when',
   'notes',
   'structured',
   'unimplemented',
@@ -56,7 +58,11 @@ const EFFECT_KEYS = new Set([
   'stacks_with_turn_limit',
   'suppression_exempt',
   'priority',
+  'option_of',
   'modifies',
+  'procedure',
+  'grants',
+  'immune',
   'duration',
   'layer',
 ]);
@@ -75,7 +81,9 @@ const SKILL_ORDER = [
   'force_reveal_ok',
   'force_activate_ok',
   'sealable',
+  'reveal_when',
   'upgrade_to',
+  'pairs_with',
   'effects',
   'structured',
   'unimplemented',
@@ -113,6 +121,9 @@ const ENUMS: Record<string, Set<string>> = {
     'permanent',
   ]),
   reveal_window: new Set(['own_turn', 'any_time', 'when_skipped', 'when_challenged_uno']),
+  // L6 后置程序的名字（02 §6）。新增一支要同时在引擎的 `PROCEDURES` 里注册，
+  // 否则数据点名了一支引擎没有的程序 = 静默什么都不做。
+  procedure: new Set(['draw_then_discard', 'hand_over']),
 };
 const LAYERS = new Set(['L0', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6']);
 /** 02 §6 `values` 的键白名单：§7 的层名 + 代价/张数名。拼错键名 = 这个数静默没标。 */
@@ -121,16 +132,26 @@ const VALUE_KEYS = new Set([
   'discard',
   'draws',
   'draws_partial',
+  'draws_combo',
+  'give',
   'marks',
   'marks_wild',
   'dice',
   'card_value',
   'max',
 ]);
-const DRAW_EVENTS = new Set(['punish', 'skill', 'rule']);
+// `skill_others` = **他人**技能造成的摸牌（06-Q56 给恩惠♥1 的口径）；`skill` 不分你我
+const DRAW_EVENTS = new Set(['punish', 'skill', 'skill_others', 'rule']);
+/**
+ * 03 §4 的状态表 + 封印（血棘♦2 赋予、压制层消费）。
+ * 与 `mark_cap` 的键不同，状态是**闭集**（§4 就是那张表），所以查白名单：
+ * 拼错一个状态名 = 引擎赋一个谁都不认识的状态，静默什么都不发生。
+ */
+const STATUS_NAMES = new Set(['五彩', '心盲', '恋战', '领域', '同命', '封印']);
 const MODIFIES = new Set([
   'draw_count',
   'draw_procedure',
+  'draw_obligation',
   'punish_amount',
   'card_value',
   'color_rule',
@@ -244,7 +265,12 @@ function checkValues(raw: Record<string, unknown>, at: string, structured: boole
     if (LAYERS.has(k) && !layers.includes(k)) throw new Error(`${at}: values 给了 ${k} 的数，但 layer 里没有 ${k}`);
   }
   if (structured) {
-    for (const l of layers) if (!keys.includes(l)) throw new Error(`${at}: layer 声明了 ${l}，但 values 里没有它的数`);
+    for (const l of layers) {
+      // L1（替换层）的值可以是**掷出来的**：伤逝按链上张数掷骰求和，骰数随牌桌变，
+      // 没有常数可标。带了 `dice` 就算标全了（02 §6 的这条例外只给 L1 开）。
+      if (l === 'L1' && keys.includes('dice')) continue;
+      if (!keys.includes(l)) throw new Error(`${at}: layer 声明了 ${l}，但 values 里没有它的数`);
+    }
   }
 }
 
@@ -261,12 +287,64 @@ function checkMarkCap(v: unknown, at: string) {
   }
 }
 
+/**
+ * `procedure` 与 `modifies: [draw_procedure]` 必须同进同出（02 §6）。
+ * L6 不改数字，光有 `layer: [L6]` 说不出改的是哪种执行方式——少了名字引擎只能静默跳过。
+ */
+function checkProcedure(raw: Record<string, unknown>, at: string, structured: boolean) {
+  const isProc = Array.isArray(raw.modifies) && raw.modifies.includes('draw_procedure');
+  if (raw.procedure !== undefined && raw.procedure !== null && !isProc) {
+    throw new Error(`${at}: 写了 procedure 却没在 modifies 里点名 draw_procedure`);
+  }
+  if (structured && isProc && !raw.procedure) throw new Error(`${at}: modifies 含 draw_procedure，但没写是哪支 procedure`);
+}
+
+/**
+ * `reveal_when`（02 §6）：亮出窗口的条件。键是白名单，且**必须**跟着一个 `reveal_window`——
+ * 条件挂空档等于写了个谁都不会读的数。
+ */
+const REVEAL_CONDITIONS = new Set(['hand_at_least']);
+function checkRevealWhen(doc: Record<string, unknown>, at: string) {
+  const v = doc.reveal_when;
+  if (v === undefined || v === null) return;
+  if (typeof v !== 'object' || Array.isArray(v)) throw new Error(`${at}: reveal_when 必须写成行内映射`);
+  if (!doc.reveal_window) throw new Error(`${at}: 写了 reveal_when 却没有 reveal_window——条件挂在空档上`);
+  for (const k of Object.keys(v as Record<string, number>)) {
+    if (!REVEAL_CONDITIONS.has(k)) throw new Error(`${at}: reveal_when 含未登记的条件「${k}」`);
+  }
+}
+
+/**
+ * `grants` 与 `kind: status_grant` 同进同出（02 §6），状态名查 03 §4 的闭集。
+ * 血棘♦2 的封印是**结算副产物**（吃下惩罚即封印），赋予写在 `actions/bloodthorn.ts` 里，
+ * 所以它虽然是 `status_grant` 却不带 `grants`——完整标注时才要求写。
+ */
+function checkGrants(raw: Record<string, unknown>, at: string, structured: boolean) {
+  const v = raw.grants;
+  if (v === undefined || v === null) return;
+  if (!Array.isArray(v)) throw new Error(`${at}: grants 必须写成行内数组`);
+  if (raw.kind !== 'status_grant') throw new Error(`${at}: grants 只能写在 kind: status_grant 上`);
+  if (structured && v.length === 0) throw new Error(`${at}: grants 是空的——赋予什么状态？`);
+  for (const s of v) if (!STATUS_NAMES.has(s)) throw new Error(`${at}: grants 含 03 §4 没有的状态「${s}」`);
+}
+
+/** `immune`：免疫哪几个状态（02 §6）。状态名查 03 §4 的同一张闭集表。 */
+function checkImmune(raw: Record<string, unknown>, at: string) {
+  const v = raw.immune;
+  if (v === undefined || v === null) return;
+  if (!Array.isArray(v)) throw new Error(`${at}: immune 必须写成行内数组`);
+  for (const s of v) if (!STATUS_NAMES.has(s)) throw new Error(`${at}: immune 含 03 §4 没有的状态「${s}」`);
+}
+
 export function toEffect(raw: Record<string, unknown>, at: string, structured: boolean): SkillEffect {
   if (typeof raw.key !== 'string' || raw.key === '') {
     throw new Error(`${at}: 每条子效果都要有非空的 key（02-methodology §6）`);
   }
-  for (const f of ['kind', 'window', 'targeting', 'once', 'duration']) checkEnum(f, raw[f], at);
+  for (const f of ['kind', 'window', 'targeting', 'once', 'duration', 'procedure']) checkEnum(f, raw[f], at);
   checkValues(raw, at, structured);
+  checkProcedure(raw, at, structured);
+  checkGrants(raw, at, structured);
+  checkImmune(raw, at);
   checkMarkCap(raw.mark_cap, at);
   for (const [f, allowed] of [
     ['modifies', MODIFIES],
@@ -303,13 +381,24 @@ function applyFences(md: string, skills: SkillDef[]) {
     for (const k of ['reveal_window', 'force_reveal_ok', 'force_activate_ok', 'sealable'] as const) {
       if (k in doc) (skill as unknown as Record<string, unknown>)[k] = doc[k];
     }
+    checkRevealWhen(doc, at);
+    if ('reveal_when' in doc) (skill as unknown as Record<string, unknown>).reveal_when = doc.reveal_when;
     if ('upgrade_to' in doc) skill.upgrade_to = doc.upgrade_to as string;
+    if ('pairs_with' in doc) skill.pairs_with = doc.pairs_with as string;
     if ('notes' in doc) {
       skill.notes = [skill.notes, doc.notes].filter(Boolean).join('；');
     }
     if ('effects' in doc) {
       const structured = doc.structured === true;
       skill.effects = (doc.effects as Record<string, unknown>[]).map((e) => toEffect(e, at, structured));
+      // 02 §6：`option_of` 必须指向**同一技能里的一条主动**（选项本身不是另一条主动）
+      const actives = new Set(skill.effects.filter((e) => e.kind === 'active').map((e) => e.key));
+      for (const e of skill.effects) {
+        const parent = (e as unknown as Record<string, unknown>).option_of;
+        if (parent === undefined || parent === null) continue;
+        if (!actives.has(parent as string)) throw new Error(`${at}: option_of「${parent}」不是本技能的一条主动`);
+        if (e.kind === 'active') throw new Error(`${at}: 选项「${e.key}」不该自己也标成 active（额度记在父主动上）`);
+      }
     }
     if ('structured' in doc) {
       if (doc.structured !== true) throw new Error(`${at}: structured 只在完整标注时写 true`);
@@ -327,6 +416,13 @@ function applyFences(md: string, skills: SkillDef[]) {
   for (const s of skills) {
     if (s.upgrade_to && !byId.has(s.upgrade_to)) {
       throw new Error(`${s.id}: upgrade_to「${s.upgrade_to}」不是已知条目`);
+    }
+    // 02 §6：成对技能必须**双向**写（合纵写连横、连横也要写合纵）。单向 = 半张定义，
+    // 而 01-S13 是「任一方先亮出都触发」，引擎从哪一头找都得找得到另一半。
+    if (s.pairs_with) {
+      const other = byId.get(s.pairs_with);
+      if (!other) throw new Error(`${s.id}: pairs_with「${s.pairs_with}」不是已知条目`);
+      if (other.pairs_with !== s.id) throw new Error(`${s.id}: pairs_with 不对称——${other.id} 没写回 ${s.id}`);
     }
   }
 }

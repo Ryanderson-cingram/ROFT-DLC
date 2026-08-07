@@ -78,7 +78,9 @@ export function catchUno(state: GameState, action: { seat: number; target: numbe
   // U7b：交回合后的 1 秒是他的补喊时间，谁都抓不得（防秒抓）
   if (inUnoGrace(b, target, ctx.now)) return reject(state, "uno_grace");
 
-  const { board, drawn, reshuffledOrder } = drawCards(b, { kind: "rule", base: CATCH_DRAW, seat: target }, ctx.rng);
+  // 01-S17b ⑤：只剩最后一张没喊 UNO 被抓 → 这 2 张一定要摸，神授也免不掉
+  const { board, drawn, reshuffledOrder } =
+    drawCards(b, { kind: "rule", base: CATCH_DRAW, seat: target, reason: "unoPenalty" }, ctx.rng);
   // 一张都摸不到时局面纹丝不动，而目标仍然「持 1 张未喊」——放行等于给了一条可以无限
   // 重复、每次都涨 version 的动作。罚不到就不受理（牌堆枯竭本身会走 U8 的平局收场）。
   if (drawn.length === 0) return reject(state, "deck_empty");

@@ -1,6 +1,7 @@
 import { shuffle } from "../deck.ts";
-import { commit, isPlayable, MAX_RESHUFFLES, passTurn, reject } from "../legal.ts";
+import { commit, MAX_RESHUFFLES, passTurn, playableFor, reject } from "../legal.ts";
 import { drawModifiersFor } from "../skills/draw-passives.ts";
+import { mustDrawWhenStuck } from "../skills/gift.ts";
 import { resolveDrawCount } from "../skills/primitives/draw-modifier.ts";
 import type { DrawModifier, DrawRequest, DrawResolution } from "../skills/primitives/draw-modifier.ts";
 import type { ApplyResult, Board, Card, Ctx, EngineEvent, GameState } from "../types.ts";
@@ -49,14 +50,29 @@ export function drawCards(
   return { board: { ...b, drawPile, playedPile, discardPile, reshuffles }, drawn, reshuffledOrder, resolution };
 }
 
-/** 摸牌事件：公开只说谁摸了几张，具体牌面走 private 投影（spec §4）。 */
-export function drawEvents(seat: number, drawn: Card[], reshuffledOrder: string[] | null): EngineEvent[] {
+/**
+ * 摸牌事件：公开只说谁摸了几张，具体牌面走 private 投影（spec §4）。
+ *
+ * `replacedBy` = `DrawResolution.replacedBy`，L1 命中时是谁改写了这次计算（伤逝）。
+ * 走 public：技能亮着，牌桌上人人看得见他摸了几张，只是不知道为什么少——
+ * 补上这个名字，前端才说得出「伤逝：掷出 1」而不是干巴巴一个数。
+ */
+export function drawEvents(
+  seat: number,
+  drawn: Card[],
+  reshuffledOrder: string[] | null,
+  replacedBy?: string,
+): EngineEvent[] {
   return [
     // public 只说「洗过了」与洗回多少张；牌序进 audit，谁都不发
     ...(reshuffledOrder
       ? [{ type: "deckReshuffled", public: { count: reshuffledOrder.length }, audit: { order: reshuffledOrder } }]
       : []),
-    { type: "cardsDrawn", public: { seat, count: drawn.length }, private: { seat, payload: { cards: drawn } } },
+    {
+      type: "cardsDrawn",
+      public: { seat, count: drawn.length, ...(replacedBy && { replacedBy }) },
+      private: { seat, payload: { cards: drawn } },
+    },
   ];
 }
 
@@ -79,7 +95,7 @@ export function drawCard(state: GameState, seat: number, ctx: Ctx): ApplyResult 
   const withCard: Board = { ...board, hands: giveTo(board, seat, drawn) };
   const events = drawEvents(seat, drawn, reshuffledOrder);
 
-  const playable = drawn[0] && isPlayable(drawn[0], withCard.playedPile[0], withCard.activeColor, withCard.activeFace);
+  const playable = drawn[0] && playableFor(withCard, seat, drawn[0]);
   if (playable) return { state: commit(state, { ...withCard, drawnPlayable: drawn[0] }, "play"), events };
   // 摸到的牌打不出去 → 回合直接结束，不必再点一次
   return {
@@ -88,13 +104,19 @@ export function drawCard(state: GameState, seat: number, ctx: Ctx): ApplyResult 
   };
 }
 
-/** U1：摸到可打的牌但选择不打 → 结束回合。没摸过牌不能空过。 */
+/**
+ * U1：摸到可打的牌但选择不打 → 结束回合。没摸过牌**默认**不能空过——
+ * 唯一的例外是神授♥5（01-S17：无牌可出时可以不摸直接结束），判据走 `mustDrawWhenStuck`，
+ * 与 `legalActions` 给不给这条动作是同一个出处。
+ */
 export function endTurn(state: GameState, seat: number, ctx: Ctx): ApplyResult {
   const b = state.board;
   if (!b) return reject(state, "not_started");
   if (state.pendingWindow) return reject(state, "pending_window");
   if (seat !== b.currentSeat) return reject(state, "not_your_turn");
-  if (!b.drawnPlayable) return reject(state, "must_draw_first");
+  // P3：选了叠就得叠，不能改成空过（同 drawCard 那一条）
+  if (b.punish) return reject(state, "must_stack");
+  if (!b.drawnPlayable && mustDrawWhenStuck(b, seat)) return reject(state, "must_draw_first");
   return {
     state: commit(state, { ...b, drawnPlayable: null, ...passTurn(b, ctx.now, seat) }, "turnStart"),
     events: [{ type: "turnEnded", public: { seat } }],

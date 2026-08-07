@@ -14,15 +14,13 @@
 import { resumeBloodthorn } from "./bloodthorn.ts";
 import { resumeNightlord } from "./nightlord.ts";
 import { resumeAssault } from "./punish.ts";
-import { commit, reject, windowIdOf } from "../legal.ts";
+import { WINDOW_MS, commit, reject, windowIdOf } from "../legal.ts";
 import { SKILL_DATA } from "../skills/draw-passives.ts";
 import { paramsOfEffect } from "../skills/params.ts";
 import { suppressionOf } from "../skills/primitives/suppression.ts";
 import type { SkillData } from "../skills/draw-passives.ts";
 import type { SkillDef, SkillEffect } from "../skills/types.ts";
 import type { ApplyResult, Board, Ctx, EngineEvent, GameState, PendingDice, ResumeSpec } from "../types.ts";
-
-const WINDOW_MS = 30_000;
 
 /** 01-R1：三面骰，每颗 0/1/2。随机只来自注入的 `rng`。 */
 export function rollDice(rng: () => number, n: number): number[] {

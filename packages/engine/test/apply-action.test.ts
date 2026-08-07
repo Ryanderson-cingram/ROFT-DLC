@@ -39,6 +39,10 @@ describe("applyAction", () => {
         const c = s.board!.hands[seat].find((x) => x.id === next.cardIds[0])!;
         if (c.color === null) next.chosenColor = "R";
       }
+      // 摸 N 弃 N：legalActions 只给一条模板（组合会爆炸），弃哪几张同样是客户端填的
+      if (next.type === "respond" && next.choice === "discard" && s.board!.drawDiscard) {
+        next.cardIds = s.board!.hands[seat].slice(0, s.board!.drawDiscard.picks).map((c) => c.id);
+      }
       if (next.type === "activateSkill") {
         next.cardIds = [s.board!.hands[seat][0].id];
         // 影歌①还要当众指定一张「色+数」（不要求自己手里有），同样是提交前的选择

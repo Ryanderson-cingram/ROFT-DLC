@@ -102,7 +102,7 @@ export const skillDefs: SkillDefsDoc = {
           },
           "applies_to": [
             "punish",
-            "skill"
+            "skill_others"
           ],
           "targeting": "self",
           "once": "unlimited",
@@ -186,7 +186,25 @@ export const skillDefs: SkillDefsDoc = {
       "status": "✅",
       "summary": "仅列情形必摸；否则无牌可出可不摸结束；优先于恋战；>10可主动亮出",
       "caveats": null,
-      "structured": false
+      "reveal_window": "any_time",
+      "reveal_when": {
+        "hand_at_least": 11
+      },
+      "effects": [
+        {
+          "key": "passive",
+          "kind": "passive",
+          "window": "play_phase",
+          "targeting": "self",
+          "once": "unlimited",
+          "stacks_with_turn_limit": false,
+          "modifies": [
+            "draw_obligation"
+          ],
+          "duration": "while_revealed"
+        }
+      ],
+      "structured": true
     },
     {
       "id": "heart-6",
@@ -195,7 +213,33 @@ export const skillDefs: SkillDefsDoc = {
       "status": "✅",
       "summary": "受 ≥4 惩罚时，每张 +2/+4 可交 1 张手牌给**链首**",
       "caveats": null,
-      "structured": false
+      "notes": "门槛按链上贡献总和（P11 的那个数）；交给链首（P12）；链首是自己时不触发",
+      "effects": [
+        {
+          "key": "passive",
+          "kind": "passive",
+          "window": "on_punish_resolve",
+          "values": {
+            "L6": 4,
+            "give": 1
+          },
+          "applies_to": [
+            "punish"
+          ],
+          "targeting": "self",
+          "once": "unlimited",
+          "stacks_with_turn_limit": false,
+          "modifies": [
+            "draw_procedure"
+          ],
+          "procedure": "hand_over",
+          "duration": "while_revealed",
+          "layer": [
+            "L6"
+          ]
+        }
+      ],
+      "structured": true
     },
     {
       "id": "heart-7",
@@ -211,34 +255,134 @@ export const skillDefs: SkillDefsDoc = {
       "id": "heart-8",
       "name": "异议",
       "suit_rank": "♥8",
-      "status": "✅/❓",
-      "summary": "① 上家 +2/+4 时反转并跳过（一次性）；② 打出转获异，受罚弃异少摸；不可强制使用",
-      "caveats": "① 是否算响应窗口非阶段1",
+      "status": "✅",
+      "summary": "① 上家 +2/+4 时反转并跳过（整局一次，链**反弹给上家**）；② 打出转获异，受罚**可选**弃异每枚少摸 1；不可强制使用",
+      "caveats": null,
       "force_activate_ok": false,
       "effects": [
         {
-          "key": "2",
-          "kind": "passive",
+          "key": "1",
+          "kind": "response",
           "window": "on_punish_resolve",
           "targeting": "self",
+          "once": "once",
+          "stacks_with_turn_limit": false,
+          "modifies": [
+            "turn_flow"
+          ],
+          "duration": "instant"
+        },
+        {
+          "key": "2a",
+          "kind": "on_play",
+          "window": "after_play",
+          "cost": "异",
+          "values": {
+            "marks": 1
+          },
+          "targeting": "self",
+          "once": "unlimited",
+          "stacks_with_turn_limit": false,
+          "duration": "while_revealed"
+        },
+        {
+          "key": "2b",
+          "kind": "passive",
+          "window": "on_punish_resolve",
+          "cost": "异",
+          "values": {
+            "L2": -1,
+            "marks": 1
+          },
+          "applies_to": [
+            "punish"
+          ],
+          "targeting": "self",
+          "once": "unlimited",
+          "stacks_with_turn_limit": false,
           "modifies": [
             "draw_count"
           ],
+          "duration": "while_revealed",
           "layer": [
             "L2"
           ]
         }
       ],
-      "structured": false
+      "structured": true
     },
     {
       "id": "heart-9",
       "name": "专精",
       "suit_rank": "♥9",
       "status": "✅/❓",
-      "summary": "亮出时底牌定色；该色 +2 无效；当前色为你的色可打任意数字；变色只能选你的色；免疫五彩",
+      "summary": "亮出时底牌定色；该色 +2 **打得出但你不摸**（2026-08-02，原 06-Q67；混色链的边界见 Q68）；当前色为你的色可打任意数字；变色只能选你的色；免疫五彩",
       "caveats": "与古神「变色皆毒」",
-      "structured": false
+      "effects": [
+        {
+          "key": "on_reveal",
+          "kind": "on_reveal",
+          "targeting": "self",
+          "once": "once",
+          "stacks_with_turn_limit": false,
+          "modifies": [
+            "color_rule"
+          ],
+          "duration": "while_revealed"
+        },
+        {
+          "key": "1",
+          "kind": "passive",
+          "window": "on_punish_resolve",
+          "applies_to": [
+            "punish"
+          ],
+          "targeting": "self",
+          "once": "unlimited",
+          "stacks_with_turn_limit": false,
+          "modifies": [
+            "punish_amount"
+          ],
+          "duration": "while_revealed"
+        },
+        {
+          "key": "2",
+          "kind": "meta_rule",
+          "window": "play_phase",
+          "targeting": "self",
+          "once": "unlimited",
+          "stacks_with_turn_limit": false,
+          "modifies": [
+            "play_legality"
+          ],
+          "duration": "while_revealed"
+        },
+        {
+          "key": "3",
+          "kind": "meta_rule",
+          "window": "play_phase",
+          "targeting": "self",
+          "once": "unlimited",
+          "stacks_with_turn_limit": false,
+          "modifies": [
+            "color_rule"
+          ],
+          "duration": "while_revealed"
+        },
+        {
+          "key": "4",
+          "kind": "passive",
+          "window": "any",
+          "targeting": "self",
+          "once": "unlimited",
+          "stacks_with_turn_limit": false,
+          "immune": [
+            "五彩"
+          ],
+          "duration": "while_revealed"
+        }
+      ],
+      "structured": true
     },
     {
       "id": "heart-10",
@@ -252,16 +396,26 @@ export const skillDefs: SkillDefsDoc = {
           "key": "passive",
           "kind": "replacement",
           "window": "on_punish_resolve",
-          "targeting": "self",
-          "modifies": [
-            "draw_count"
+          "values": {
+            "dice": 1
+          },
+          "applies_to": [
+            "punish"
           ],
+          "targeting": "self",
+          "once": "unlimited",
+          "stacks_with_turn_limit": false,
+          "modifies": [
+            "draw_count",
+            "dice"
+          ],
+          "duration": "while_revealed",
           "layer": [
             "L1"
           ]
         }
       ],
-      "structured": false
+      "structured": true
     },
     {
       "id": "heart-j",
@@ -619,7 +773,40 @@ export const skillDefs: SkillDefsDoc = {
       "status": "✅",
       "summary": "亮出时连横须立刻响应；相应则换牌+之后回合开始可换；无响应则**每张**功能牌后摸2弃2",
       "caveats": null,
-      "structured": false
+      "pairs_with": "spade-6",
+      "effects": [
+        {
+          "key": "1a",
+          "kind": "on_reveal",
+          "window": "any",
+          "targeting": "single",
+          "once": "once",
+          "stacks_with_turn_limit": false,
+          "duration": "while_revealed"
+        },
+        {
+          "key": "1b",
+          "kind": "active",
+          "window": "turn_start",
+          "targeting": "single",
+          "once": "unlimited",
+          "stacks_with_turn_limit": true,
+          "duration": "instant"
+        },
+        {
+          "key": "2",
+          "kind": "passive",
+          "window": "after_play",
+          "values": {
+            "draws": 2
+          },
+          "targeting": "self",
+          "once": "unlimited",
+          "stacks_with_turn_limit": false,
+          "duration": "while_revealed"
+        }
+      ],
+      "structured": true
     },
     {
       "id": "spade-6",
@@ -628,7 +815,42 @@ export const skillDefs: SkillDefsDoc = {
       "status": "✅",
       "summary": "对称；无响应则每张功能后摸1弃1，若上回合也打出功能则该次摸3弃3",
       "caveats": null,
-      "structured": false
+      "notes": "②的连击档见 01-S14b（上一个自己的回合也打出过功能牌）",
+      "pairs_with": "spade-5",
+      "effects": [
+        {
+          "key": "1a",
+          "kind": "on_reveal",
+          "window": "any",
+          "targeting": "single",
+          "once": "once",
+          "stacks_with_turn_limit": false,
+          "duration": "while_revealed"
+        },
+        {
+          "key": "1b",
+          "kind": "active",
+          "window": "turn_start",
+          "targeting": "single",
+          "once": "unlimited",
+          "stacks_with_turn_limit": true,
+          "duration": "instant"
+        },
+        {
+          "key": "2",
+          "kind": "passive",
+          "window": "after_play",
+          "values": {
+            "draws": 1,
+            "draws_combo": 3
+          },
+          "targeting": "self",
+          "once": "unlimited",
+          "stacks_with_turn_limit": false,
+          "duration": "while_revealed"
+        }
+      ],
+      "structured": true
     },
     {
       "id": "spade-7",
@@ -643,22 +865,60 @@ export const skillDefs: SkillDefsDoc = {
       "id": "spade-8",
       "name": "八门",
       "suit_rank": "♠8",
-      "status": "✅/❓",
+      "status": "✅",
       "summary": "一次性摸 8 弃 8（不受其他技能）；回合结束获五彩且所有摸牌+1",
-      "caveats": "「不受其他」范围",
+      "caveats": null,
       "effects": [
         {
-          "key": "2",
-          "kind": "passive",
+          "key": "1",
+          "kind": "active",
+          "window": "turn_start",
+          "values": {
+            "L1": 8
+          },
+          "targeting": "self",
+          "once": "once",
+          "stacks_with_turn_limit": true,
           "modifies": [
             "draw_count"
           ],
+          "duration": "instant",
+          "layer": [
+            "L1"
+          ]
+        },
+        {
+          "key": "2a",
+          "kind": "status_grant",
+          "window": "turn_end",
+          "targeting": "self",
+          "once": "unlimited",
+          "stacks_with_turn_limit": false,
+          "grants": [
+            "五彩"
+          ],
+          "duration": "while_revealed"
+        },
+        {
+          "key": "2b",
+          "kind": "passive",
+          "window": "on_draw",
+          "values": {
+            "L2": 1
+          },
+          "targeting": "self",
+          "once": "unlimited",
+          "stacks_with_turn_limit": false,
+          "modifies": [
+            "draw_count"
+          ],
+          "duration": "while_revealed",
           "layer": [
             "L2"
           ]
         }
       ],
-      "structured": false
+      "structured": true
     },
     {
       "id": "spade-9",
@@ -691,16 +951,26 @@ export const skillDefs: SkillDefsDoc = {
           "key": "passive",
           "kind": "passive",
           "window": "on_punish_resolve",
+          "values": {
+            "L6": 6
+          },
+          "applies_to": [
+            "punish"
+          ],
           "targeting": "self",
+          "once": "unlimited",
+          "stacks_with_turn_limit": false,
           "modifies": [
             "draw_procedure"
           ],
+          "procedure": "draw_then_discard",
+          "duration": "while_revealed",
           "layer": [
             "L6"
           ]
         }
       ],
-      "structured": false
+      "structured": true
     },
     {
       "id": "spade-q",
@@ -815,15 +1085,26 @@ export const skillDefs: SkillDefsDoc = {
           "key": "1",
           "kind": "active",
           "window": "turn_start",
-          "targeting": "self",
-          "stacks_with_turn_limit": true
+          "targeting": "global",
+          "once": "unlimited",
+          "stacks_with_turn_limit": true,
+          "duration": "instant"
         },
         {
           "key": "活泼板",
           "kind": "passive",
+          "window": "on_draw",
+          "values": {
+            "L2": 1
+          },
+          "targeting": "global",
+          "once": "unlimited",
+          "stacks_with_turn_limit": false,
+          "option_of": "1",
           "modifies": [
             "draw_count"
           ],
+          "duration": "while_revealed",
           "layer": [
             "L2"
           ]
@@ -831,9 +1112,21 @@ export const skillDefs: SkillDefsDoc = {
         {
           "key": "战争序",
           "kind": "passive",
+          "window": "on_draw",
+          "values": {
+            "L3": 2
+          },
+          "applies_to": [
+            "punish"
+          ],
+          "targeting": "global",
+          "once": "unlimited",
+          "stacks_with_turn_limit": false,
+          "option_of": "1",
           "modifies": [
             "draw_count"
           ],
+          "duration": "while_revealed",
           "layer": [
             "L3"
           ]
@@ -841,15 +1134,40 @@ export const skillDefs: SkillDefsDoc = {
         {
           "key": "樱时雨",
           "kind": "passive",
+          "window": "on_draw",
+          "values": {
+            "L4": 1
+          },
+          "applies_to": [
+            "punish"
+          ],
+          "targeting": "global",
+          "once": "unlimited",
+          "stacks_with_turn_limit": false,
+          "option_of": "1",
           "modifies": [
             "draw_count"
           ],
+          "duration": "while_revealed",
           "layer": [
             "L4"
           ]
+        },
+        {
+          "key": "行进曲",
+          "kind": "passive",
+          "window": "play_phase",
+          "targeting": "global",
+          "once": "unlimited",
+          "stacks_with_turn_limit": false,
+          "option_of": "1",
+          "modifies": [
+            "color_rule"
+          ],
+          "duration": "while_revealed"
         }
       ],
-      "structured": false
+      "structured": true
     },
     {
       "id": "club-6",

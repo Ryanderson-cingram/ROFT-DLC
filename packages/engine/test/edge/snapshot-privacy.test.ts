@@ -63,6 +63,7 @@ function won(): GameState {
 
 const stolen = card("B", "5");
 const drawnSecret = card("G", "7");
+const drawnSecret2 = card("B", "9");
 
 /** 场景表。每一项都要有非空的摸牌堆与至少两个人的手牌，否则反向白名单没得搜。 */
 const SCENARIOS: { name: string; state: GameState }[] = [
@@ -76,11 +77,16 @@ const SCENARIOS: { name: string; state: GameState }[] = [
     }),
   },
   {
-    name: "洗牌②弃牌窗口（drawnId 是暗信息）",
-    state: table([[drawnSecret, card("R", "3")], [card("Y", "1"), card("Y", "7")], [card("Y", "2"), card("B", "8")]], {
-      drawPile: filler(20),
-      shufflePending: { seat: 0, choice: "drawDiscard", drawnId: drawnSecret.id },
-    }),
+    name: "摸 N 弃 N 的弃牌窗口（drawnIds 是暗信息）",
+    state: table(
+      [[drawnSecret, drawnSecret2, card("R", "3")], [card("Y", "1"), card("Y", "7")], [card("Y", "2"), card("B", "8")]],
+      {
+        drawPile: filler(20),
+        drawDiscard: {
+          seat: 0, picks: 2, drawnIds: [drawnSecret.id, drawnSecret2.id], resume: { kind: "afterFace" },
+        },
+      },
+    ),
   },
   {
     name: "影歌①攒魂窗口（queue/effectKey 是内部记账）",
@@ -113,7 +119,7 @@ describe("反向白名单：别人的手牌一个字节都不进快照", () => {
     expect(at("开局").board!.draftOptions).toBeDefined();
     expect(at("惩罚").pendingWindow!.type).toBe("punishStack");
     expect(at("司夜").board!.swap!.cardId).toBe(stolen.id);
-    expect(at("洗牌").board!.shufflePending!.drawnId).toBe(drawnSecret.id);
+    expect(at("摸 N").board!.drawDiscard!.drawnIds).toEqual([drawnSecret.id, drawnSecret2.id]);
     expect(at("影歌").board!.soulHarvest!.queue).toEqual([1, 2]);
     expect(at("掷骰").pendingDice!.resume).toBeDefined();
     expect(at("并列").board!.parallelPending!.cards).toHaveLength(2);
@@ -152,7 +158,7 @@ describe("中间态只投公开的那一半（字段白名单）", () => {
   const s = table(three(), {
     drawPile: filler(20),
     swap: { seat: 0, target: 1, cardId: stolen.id },
-    shufflePending: { seat: 0, choice: "drawDiscard", drawnId: drawnSecret.id },
+    drawDiscard: { seat: 0, picks: 1, drawnIds: [drawnSecret.id], resume: { kind: "afterFace" } },
     soulHarvest: { seat: 0, declared: { color: "R", face: "5" }, queue: [1, 2], drawn: 3, effectKey: "1" },
   }, {
     pendingDice: { seat: 0, reason: "bloodthorn-drain", values: [2], resume: { kind: "bloodthorn", seat: 0, target: 2 } },
@@ -160,7 +166,7 @@ describe("中间态只投公开的那一半（字段白名单）", () => {
 
   it.each([
     { field: "swap", keys: ["seat", "target"], hidden: ["cardId"] },
-    { field: "shufflePending", keys: ["seat", "choice"], hidden: ["drawnId"] },
+    { field: "drawDiscard", keys: ["seat", "picks"], hidden: ["drawnIds", "resume"] },
     { field: "soulHarvest", keys: ["seat", "declared", "drawn"], hidden: ["queue", "effectKey"] },
     { field: "dice", keys: ["seat", "reason", "values", "target"], hidden: ["resume"] },
   ] as const)("$field 只有 $keys，$hidden 一律不投", ({ field, keys, hidden }) => {

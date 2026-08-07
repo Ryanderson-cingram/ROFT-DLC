@@ -41,7 +41,12 @@ function enrich(state: GameState, a: Action, rand: () => number): Action {
   if (a.type === "playCards") {
     const cards = a.cardIds.map((id) => b.hands[a.seat].find((c) => c.id === id)!).filter(Boolean);
     const needColor = cards.some((c) => c && c.color === null) || a.cardIds.length === 4;
-    const out: Action = needColor ? { ...a, chosenColor: COLORS[Math.floor(rand() * 4)] } : { ...a };
+    // 03 §4 五彩：变色牌的色只能维持现状，随便挑一个只会被拒（那条路由单测钉，这里要跑通）
+    const locked = cards.some((c) => c?.color === null) && b.statuses[a.seat]?.includes("五彩")
+      ? b.activeColor : null;
+    const out: Action = needColor
+      ? { ...a, chosenColor: locked ?? COLORS[Math.floor(rand() * 4)] }
+      : { ...a };
     // 洗牌牌的卡面三选一（05 §2b）。选项③是响应，不从 playCards 走
     if (out.type === "playCards" && cards.some((c) => c?.face === "shuffle"))
       out.shuffleChoice = rand() < 0.5 ? "shuffle" : "drawDiscard";
@@ -50,6 +55,21 @@ function enrich(state: GameState, a: Action, rand: () => number): Action {
   // 洗牌③的取消牌同样要定色
   if (a.type === "respond" && a.choice === "cancel")
     return { ...a, chosenColor: COLORS[Math.floor(rand() * 4)] };
+  // 近卫♥6 的交牌：同样只给一条模板，交哪几张（1 ‥ max）由跑测器现挑
+  if (a.type === "respond" && a.choice === "give" && b.handOver) {
+    const hand = b.hands[a.seat];
+    const n = 1 + Math.floor(rand() * b.handOver.max);
+    return { ...a, cardIds: hand.slice(0, n).map((c) => c.id) };
+  }
+  // 摸 N 弃 N：legalActions 只给一条模板（组合会爆炸），要弃哪 N 张由跑测器现挑
+  if (a.type === "respond" && a.choice === "discard" && b.drawDiscard) {
+    const hand = b.hands[a.seat];
+    const start = Math.floor(rand() * hand.length);
+    return {
+      ...a,
+      cardIds: Array.from({ length: b.drawDiscard.picks }, (_x, i) => hand[(start + i) % hand.length].id),
+    };
+  }
   if (a.type === "activateSkill") {
     const def = SKILL_DATA.byId.get(b.skills[a.seat]!);
     const e = def?.effects?.find((x) => x.key === a.effectKey);
@@ -133,13 +153,30 @@ function invariants(
     return `parallelPending 挂着但窗口是 ${w?.type ?? "无"}`;
   if (b.playPending && w?.type !== "interrupt") return `playPending 挂着但窗口是 ${w?.type ?? "无"}`;
   if (b.parallelPending && b.playPending) return "并列与单张的中间态同时挂着";
-  // 洗牌牌的两个窗口（05 §2b）：中间态与窗口同生共死
-  if (b.shufflePending && w?.type !== "shuffleDiscard" && w?.type !== "shuffleCancel")
+  // 洗牌牌的取消窗口（05 §2b）：中间态与窗口同生共死。选项②摸完就换成 drawDiscard 那个中间态了
+  if (b.shufflePending && w?.type !== "shuffleCancel")
     return `shufflePending 挂着但窗口是 ${w?.type ?? "无"}`;
-  if ((w?.type === "shuffleDiscard" || w?.type === "shuffleCancel") && !b.shufflePending)
-    return `${w.type} 窗口没有 shufflePending`;
-  if (w?.type === "shuffleDiscard" && b.shufflePending && !b.shufflePending.drawnId)
-    return "shuffleDiscard 窗口没记住刚摸那张（超时无从默认）";
+  if (w?.type === "shuffleCancel" && !b.shufflePending) return "shuffleCancel 窗口没有 shufflePending";
+  // 摸 N 弃 N（03 §2）：同上，且必须记得住刚摸的那几张（超时无从默认）
+  if (b.drawDiscard && w?.type !== "drawDiscard") return `drawDiscard 挂着但窗口是 ${w?.type ?? "无"}`;
+  if (w?.type === "drawDiscard" && !b.drawDiscard) return "drawDiscard 窗口没有中间态";
+  if (b.drawDiscard) {
+    const { picks, drawnIds, seat } = b.drawDiscard;
+    // 弃不了那么多就不该开这个窗口（03 §2：摸到手里的不能少于弃的）
+    if (picks <= 0 || picks > drawnIds.length) return `drawDiscard 的 picks=${picks} 与摸到的 ${drawnIds.length} 张对不上`;
+    if (b.hands[seat].length < picks) return "drawDiscard 要弃的比手上的还多";
+  }
+  // 合纵/连横②的「要不要摸 N 弃 N」：同上，中间态与窗口同生共死
+  if (b.drawOffer && w?.type !== "drawOffer") return `drawOffer 挂着但窗口是 ${w?.type ?? "无"}`;
+  if (w?.type === "drawOffer" && !b.drawOffer) return "drawOffer 窗口没有中间态";
+  if (b.drawOffer && b.drawOffer.req.base <= 0) return `drawOffer 的 picks=${b.drawOffer.req.base}`;
+  // 近卫♥6 的交牌窗口：中间态与窗口同生共死，且上限不能超过他手上有的
+  if (b.handOver && w?.type !== "handOver") return `handOver 挂着但窗口是 ${w?.type ?? "无"}`;
+  if (w?.type === "handOver" && !b.handOver) return "handOver 窗口没有中间态";
+  if (b.handOver && (b.handOver.max <= 0 || b.handOver.max > b.hands[b.handOver.seat].length))
+    return `handOver 的 max=${b.handOver.max} 与手牌 ${b.hands[b.handOver.seat].length} 张对不上`;
+  // 结盟（S13）：一锤定音——`alliance` 一旦写上就不该再被改动，窗口也只开在它还缺席的时候
+  if (w?.type === "alliance" && b.alliance) return "结盟窗口挂着，但 alliance 已经写死了";
   // 打断窗口总要有一个中间态：并列摆到一半，或单张落地待结算
   if (w?.type === "interrupt" && !b.parallelPending && !b.playPending) return "interrupt 窗口没有中间态";
   if (w?.type === "punishStack" && !b.punish) return "punishStack 窗口没有惩罚链";
@@ -308,8 +345,12 @@ const report = (found: Violation[]) =>
 const GAMES = Number(process.env.FUZZ_GAMES ?? 200);
 const SEED0 = Number(process.env.FUZZ_SEED0 ?? 1);
 
-/** 10 个 MVP 技能，用来搭「罕见但合法」的同桌组合。 */
-const ALL = ["heart-1", "heart-3", "heart-4", "diamond-1", "diamond-2", "diamond-3", "diamond-10", "diamond-j", "spade-1", "club-3"];
+/** 已接线的技能，用来搭「罕见但合法」的同桌组合。接一个加一个（spec §5.3）。 */
+const ALL = [
+  "heart-1", "heart-3", "heart-4", "diamond-1", "diamond-2", "diamond-3", "diamond-10", "diamond-j", "spade-1", "club-3",
+  // 第二批：伤逝♥10（L1 替换）、异议♥8（弹链 + 弃异）、忍戒♠J（L6 多摸再弃）、八门♠8（摸 8 弃 8 + 五彩）
+  "heart-10", "heart-8", "spade-j", "spade-8", "spade-5", "spade-6", "heart-6", "heart-5", "club-5", "heart-9",
+];
 /** 互相咬得最紧的几桌：并列 × 劫营、强袭 × 掷骰系、血棘 × 恩惠、影歌 × 司夜… */
 const COMBOS: string[][] = [
   ["heart-4", "diamond-10", "diamond-1", "diamond-j"],
@@ -322,6 +363,23 @@ const COMBOS: string[][] = [
   ["spade-1", "diamond-3", "diamond-2", "diamond-j"],
   ["heart-3", "heart-4", "diamond-10", "club-3"],
   ["diamond-j", "diamond-1", "diamond-2", "diamond-3"],
+  // 惩罚链上咬得最紧的一桌：忍戒（吃完多摸再弃）× 异议（把链弹回去）× 伤逝（改写摸几张）
+  // × 血棘（吃下即封印，把前三支关掉）
+  ["spade-j", "heart-8", "heart-10", "diamond-2"],
+  ["spade-j", "diamond-1", "heart-1", "diamond-j"],
+  // 八门的五彩会把「只靠颜色接上」的牌全锁掉，配并列/精英正好压出牌那条路
+  ["spade-8", "heart-4", "heart-3", "diamond-10"],
+  // 合纵/连横：打出功能牌就问一次「要不要摸弃」，配惩罚系正好压住「窗口套窗口」那条路
+  ["spade-5", "spade-6", "diamond-1", "heart-8"],
+  ["spade-6", "spade-6", "spade-5", "diamond-2"],
+  // 近卫（吃 ≥4 的惩罚就交牌给链首）配惩罚系：链越长越容易压到它
+  ["heart-6", "diamond-1", "diamond-j", "heart-8"],
+  // 神授（无牌可出可以不摸）：牌堆见底那一带最容易压到它与 U8 平局的交界
+  ["heart-5", "heart-5", "spade-8", "club-3"],
+  // 吟游的歌声全场生效：活泼板让人人多摸、战争序把惩罚翻倍，配惩罚系最容易压出极端牌局
+  ["club-5", "diamond-1", "heart-1", "heart-10"],
+  // 专精：逐段免摸 + 放宽出牌 + 定色三条一起压惩罚链与出牌合法性
+  ["heart-9", "diamond-1", "diamond-j", "spade-8"],
 ];
 
 describe("随机对局不变式", () => {
@@ -411,7 +469,7 @@ describe("随机对局不变式", () => {
 
     // 关键路径的下限：只写 `> 0`，不写实测值——随机数一动实测值就飘，假红比没断言更糟。
     // 这几条一旦归零，说明某条分支被改死了而上面那些不变式**根本没跑到**。
-    for (const w of ["interrupt", "diceTakeover", "soulHarvest", "swapReturn"])
+    for (const w of ["interrupt", "diceTakeover", "soulHarvest", "swapReturn", "drawDiscard"])
       expect(COVER.windows.get(w) ?? 0, `窗口 ${w} 一次都没开到`).toBeGreaterThan(0);
     // unoMiscalled：跑测器会在任意手牌数下按那颗常亮的按钮，虚喊本来就该大量出现
     for (const e of ["farstarUsed", "sealed", "unoCalled", "unoCaught", "unoMiscalled"])
