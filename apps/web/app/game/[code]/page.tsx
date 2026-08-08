@@ -178,6 +178,13 @@ export default function GamePage() {
     router.push(`/room/${code}`);
   };
 
+  /** 返回大厅 = 退出房间：座位交还服务端（防幽灵座位），成功才导航。此刻 status 是 finished，退得掉。 */
+  const leaveRoom = async () => {
+    const res = await callEdge("leave-room", { roomId });
+    if (!res.ok) throw new Error(humanReason(res.reason));
+    router.push("/");
+  };
+
   /** 提交并归零——每条待补完的提交都以这一句收场。 */
   const commit = (a: Action) => {
     setPending(null);
@@ -389,7 +396,13 @@ export default function GamePage() {
       )}
       {/* 收场弹窗压在最后：它不给 onClose，开着就没得关，别的弹窗留在底下也无所谓 */}
       {snapshot.phase === "finished" && (
-        <GameOver snapshot={snapshot} nameOf={nameOf} onRestart={restartGame} />
+        <GameOver
+          snapshot={snapshot}
+          nameOf={nameOf}
+          onRestart={restartGame}
+          onLeave={leaveRoom}
+          roomHref={`/room/${code}`}
+        />
       )}
 
       {view?.kind === "pile" && (

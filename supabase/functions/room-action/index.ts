@@ -1,4 +1,5 @@
 import { applyAction, type Action, type GameState } from "../../../packages/engine/src/index.ts";
+import { compactSeats } from "../_shared/db.ts";
 import { json, serveAuthed } from "../_shared/http.ts";
 
 serveAuthed(async ({ body, user, svc }) => {
@@ -39,13 +40,15 @@ serveAuthed(async ({ body, user, svc }) => {
   */
   if (action.type === "restartGame") {
     if (room.status !== "finished") return json({ reason: "game_not_finished" }, 400);
+    // 打完之后有人退出（leave-room）会留下座位号的洞——洞在对局里是错位（room-action 拿
+    // `room_seats.seat` 当引擎座位下标），所以回大厅前先压回 0‥n-1。终局快照即将被覆盖，不怕错位。
+    const seats = await compactSeats(svc, roomId);
     // 全新的 lobby state，形状与 create-room 那份逐字一致（GameState 归引擎，不在 SQL 里拼）
-    const { data: seats } = await svc.from("room_seats").select("user_id").eq("room_id", roomId).order("seat");
     const fresh: GameState = {
       // version 由 restart_room 用 CAS 之后的真值盖掉（`p_state || {version}`），这里写什么都不算数
       version: 0,
       phase: "lobby",
-      seats: (seats ?? []).map((s) => ({ userId: s.user_id })),
+      seats: seats.map((s) => ({ userId: s.user_id })),
       config: room.config as GameState["config"],
     };
     const { data: restarted, error: restartError } = await svc.rpc("restart_room", {

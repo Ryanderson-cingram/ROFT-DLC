@@ -49,25 +49,32 @@ export function GameOver({
   snapshot: s,
   nameOf,
   onRestart,
+  onLeave,
+  roomHref,
 }: {
   snapshot: ClientSnapshot;
   nameOf: NameOf;
   /** 原房间重开（房间号不变、人不动、上一局的记录清空）。缺席 = 只留「回大厅」那条路。 */
   onRestart?: () => void | Promise<void>;
+  /** 返回大厅 = **退出房间**（座位交还服务端，防幽灵座位），然后由它自己导航。缺席 = 退化成纯导航。 */
+  onLeave?: () => void | Promise<void>;
+  /** 返回房间（等候室）的链接。缺席 = 不给这条路。 */
+  roomHref?: string;
 }) {
   const draw = s.winner == null;
   const youWon = s.winner === s.youSeat;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const restart = async () => {
+  // 重开与退出共用一套 busy/error：两个都是「打一次服务端再走」，同时只会点一个
+  const run = (fn?: () => void | Promise<void>, failText = "没成功，再试一次。") => async () => {
     setBusy(true);
     setError(null);
     try {
-      await onRestart?.();
+      await fn?.();
     } catch (e) {
-      // 按钮不锁死：重开失败还能再点，也还能走「回大厅」
-      setError(e instanceof Error ? e.message : "重开没成功，再试一次或者回大厅。");
+      // 按钮不锁死：失败还能再点，也还能走别的出口
+      setError(e instanceof Error ? e.message : failText);
       setBusy(false);
     }
   };
@@ -86,14 +93,31 @@ export function GameOver({
           : "手牌被清空的是别人，下一局再说。"}
         </p>
         {onRestart && (
-          <button type="button" className="btn btn--primary btn--block" disabled={busy} onClick={restart}>
-            {busy ? "正在重开…" : "再开一局（本房间）"}
+          <button
+            type="button"
+            className="btn btn--primary btn--block"
+            disabled={busy}
+            onClick={run(onRestart, "重开没成功，再试一次或者回大厅。")}
+          >
+            再开一局（本房间）
           </button>
         )}
-        {/* 回大厅是次要出口：同一桌人多半想接着打，换人才需要回大厅重开房间 */}
-        <Link className="btn btn--ghost btn--block" href="/">
-          回大厅
-        </Link>
+        {/* 返回房间 = 回等候室但**座位不动**：等别人决定重开，或在那边自己点重开 */}
+        {roomHref && (
+          <Link className="btn btn--ghost btn--block" href={roomHref}>
+            返回房间（等候室）
+          </Link>
+        )}
+        {/* 返回大厅 = 退出房间：座位交还服务端，防幽灵座位 */}
+        {onLeave ? (
+          <button type="button" className="btn btn--ghost btn--block" disabled={busy} onClick={run(onLeave)}>
+            返回大厅（退出房间）
+          </button>
+        ) : (
+          <Link className="btn btn--ghost btn--block" href="/">
+            回大厅
+          </Link>
+        )}
         {error && (
           <p className="hint" role="alert" style={{ color: "var(--danger-text)" }}>
             {error}
