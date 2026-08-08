@@ -59,6 +59,7 @@ const SAYINGS: Record<string, string> = {
   not_the_host: "只有房主能开桌。",
   bad_seat_count: "3–4 人才能开桌。",
   not_in_lobby: "这一桌已经开过局了。",
+  game_in_progress: "对局还没结束，现在不能退出房间。",
   version_conflict: "桌面刚变过，重新看一眼再操作。",
   network: "网络没通，检查一下再试。",
   unauthenticated: "登录过期了，重新进一次。",
@@ -104,6 +105,8 @@ const SAYINGS: Record<string, string> = {
 
   // —— 技能 ——
   no_skill: "你还没有技能。",
+  // V2b（2026-08-08）：`reveal_when` 是主动亮出的门槛（目前只有神授♥5 的手牌 ≥10）
+  reveal_condition_unmet: "还没到亮出条件（手牌要有 10 张）。",
   not_revealed: "技能要先亮出来才能用。",
   already_revealed: "技能已经亮出来了。",
   not_active: "这条是被动，不用发动。",

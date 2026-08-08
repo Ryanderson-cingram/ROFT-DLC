@@ -5,9 +5,18 @@ import { GameOver } from "./game-over";
 import { FIXTURE_NAMES, makeSnapshot } from "@/test-support/snapshot";
 
 const nameOf = (seat: number) => FIXTURE_NAMES[makeSnapshot().players[seat]?.userId ?? ""] ?? `座位 ${seat + 1}`;
-const over = (extra: Parameters<typeof makeSnapshot>[0], onRestart?: () => void | Promise<void>) =>
+const over = (
+  extra: Parameters<typeof makeSnapshot>[0],
+  onRestart?: () => void | Promise<void>,
+  more: { onLeave?: () => void | Promise<void>; roomHref?: string } = {},
+) =>
   render(
-    <GameOver snapshot={makeSnapshot({ phase: "finished", ...extra })} nameOf={nameOf} onRestart={onRestart} />,
+    <GameOver
+      snapshot={makeSnapshot({ phase: "finished", ...extra })}
+      nameOf={nameOf}
+      onRestart={onRestart}
+      {...more}
+    />,
   );
 
 describe("一局收场（U8）", () => {
@@ -74,5 +83,34 @@ describe("再来一局（spec 2026-08-02-rematch-and-retention）", () => {
     await userEvent.click(btn);
     expect(screen.getByRole("alert").textContent).toBe("桌面刚变过，看一眼再重来。");
     expect(btn.disabled).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------- 退出房间（防幽灵座位）
+
+describe("返回大厅 = 退出房间；返回房间 = 回等候室座位不动", () => {
+  it("给了 onLeave → 「返回大厅」是按钮（先打服务端），不再是纯导航", async () => {
+    const onLeave = vi.fn(() => Promise.resolve());
+    over({ winner: 0 }, () => {}, { onLeave, roomHref: "/room/ABC123" });
+    expect(screen.queryByRole("link", { name: "回大厅" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: /返回大厅/ }));
+    expect(onLeave).toHaveBeenCalledTimes(1);
+    // 返回房间是普通链接：座位不动，回等候室等重开
+    expect(screen.getByRole("link", { name: /返回房间/ }).getAttribute("href")).toBe("/room/ABC123");
+  });
+
+  it("退出失败 → 出人话，按钮解禁还能再点（也还能走别的出口）", async () => {
+    const onLeave = vi.fn(() => Promise.reject(new Error("对局还没结束，现在不能退出房间。")));
+    over({ winner: 0 }, undefined, { onLeave });
+    const btn = screen.getByRole("button", { name: /返回大厅/ }) as HTMLButtonElement;
+    await userEvent.click(btn);
+    expect(screen.getByRole("alert").textContent).toBe("对局还没结束，现在不能退出房间。");
+    expect(btn.disabled).toBe(false);
+  });
+
+  it("没给 onLeave / roomHref → 退化成原来的「回大厅」纯导航（兼容旧用法）", () => {
+    over({ winner: 0 });
+    expect(screen.getByRole("link", { name: "回大厅" }).getAttribute("href")).toBe("/");
+    expect(screen.queryByRole("link", { name: /返回房间/ })).toBeNull();
   });
 });

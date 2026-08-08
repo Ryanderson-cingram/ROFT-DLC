@@ -10,6 +10,16 @@
   border-bottom: var(--line);
 }
 .topbar a { text-decoration: none; font-size: 14px; }
+/* 退出房间：长得像原来的返回链接，但它是个要先打服务端的按钮 */
+.topbar .leave {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 14px;
+  color: var(--link, inherit);
+  cursor: pointer;
+}
 .topbar b { font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.22em; color: var(--brass); }
 
 /* 房间码：本页唯一的大字，其他一切让位 */

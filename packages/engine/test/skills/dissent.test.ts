@@ -130,6 +130,12 @@ describe("异议①：亮出与封印这两道门（V3 / P9）", () => {
   it("没有异议的人发它照样被拒（不是「谁都能反弹」）", () => {
     expect(respond(opened(), 1, "dissent").rejected?.reason).toBe("skill_unavailable");
   });
+
+  it("持劫营的人没有这个选项（同为 response + turn_flow，靠 window 分开）", () => {
+    const s = opened({ skills: [null, "diamond-10", null] });
+    expect(choicesOf(s, 1)).not.toContain("dissent");
+    expect(respond(s, 1, "dissent").rejected?.reason).toBe("skill_unavailable");
+  });
 });
 
 // ───────────────────────────── ② 打出转获异

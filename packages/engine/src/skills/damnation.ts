@@ -5,9 +5,9 @@
  *
  * 两个要点，都容易写错：
  *
- * 1. **张数 ≠ 贡献总和**。`PunishChain.segments.length` 才是「链上几张」，`total` 是
- *    加总后的贡献（强袭×点数、远星视为的那张都已经计进 total）。01-P13 明写伤逝
- *    忽略 total，所以这里数的是 `segments`。
+ * 1. **张数 ≠ 贡献总和**。骰数按**每一段的牌面**数：`+2` 一颗、`+4` 两颗（2026-08-08 裁定）。
+ *    `total` 是加总后的贡献（强袭×点数、远星视为的那张都已经计进 total），01-P13 明写伤逝
+ *    忽略 total——所以强袭把一张 +2 掷成 4 点，骰数仍是那一段该给的颗数，与 `draw` 无关。
  * 2. **随机在组装修正之前做完**。`drawModifiersFor` 是纯函数、拿不到 rng
  *    （`draw-modifier.ts` 顶注：「掷骰之类的随机在组装修正之前由调用方用注入的 rng 做完，
  *    落到 L1 的 `value` 上」）。所以伤逝不走那条数据驱动的路，而是由**吃下**那一步
@@ -31,7 +31,7 @@ const isReplacement = (e: SkillEffect) =>
  * 吃下惩罚的人身上有没有伤逝；有就掷好骰、给出那条 L1 修正。
  * 返回空数组 = 没有（绝大多数情况），调用方原样把它摊进 `mods`。
  *
- * 掷 `segments.length` 颗三面骰（01-R1，每颗 0/1/2）并求和——**可以掷出 0**，
+ * 每段 `+2` 掷 1 颗、`+4` 掷 2 颗三面骰（01-R1，每颗 0/1/2）并求和——**可以掷出 0**，
  * 那就是一张都不摸，赌的就是这个（同强袭①的 0 倍）。
  */
 export function damnationModifier(
@@ -47,6 +47,7 @@ export function damnationModifier(
   if (!def || def.structured !== true || sealedOff(b, seat, def)) return [];
   const effect = (def.effects ?? []).find(isReplacement);
   if (!effect) return [];
-  const values = rollDice(rng, chain.segments.length);
+  const dice = chain.segments.reduce((n, s) => n + (s.face === "+4" ? 2 : 1), 0);
+  const values = rollDice(rng, dice);
   return [{ layer: "L1", source: def.name, value: values.reduce((a, n) => a + n, 0) }];
 }

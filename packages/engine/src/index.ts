@@ -6,7 +6,7 @@ import { allianceActions, allyOf } from "./skills/alliance.ts";
 import { handOverActions } from "./skills/guard.ts";
 import { canChooseOption } from "./skills/bard.ts";
 import { mustDrawWhenStuck } from "./skills/gift.ts";
-import { revealAllowedOutOfTurn } from "./skills/reveal.ts";
+import { revealAllowedOutOfTurn, revealConditionsMet } from "./skills/reveal.ts";
 import { stealSwap, swapActions } from "./actions/nightlord.ts";
 import { callUno, catchable, catchUno } from "./actions/uno.ts";
 import { playCards } from "./actions/play-cards.ts";
@@ -284,6 +284,8 @@ export function legalActions(state: GameState, seat: number): Action[] {
   // V2：写明例外的技能在**别人的回合**也亮得出（判据在 `skills/reveal.ts`，按定义放行）。
   const canReveal =
     !!b.skills[seat] && !b.revealed[seat] && !isSealed(b, seat) &&
+    // V2b（2026-08-08）：`reveal_when` 是主动亮出的门槛，己方回合也要过
+    revealConditionsMet(b, seat, SKILL_DATA.byId.get(b.skills[seat]!)) &&
     (seat === b.currentSeat || revealAllowedOutOfTurn(b, seat, SKILL_DATA.byId.get(b.skills[seat]!)));
   const skillActions: Action[] = canReveal ? [{ type: "revealSkill", seat }] : [];
 

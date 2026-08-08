@@ -2,7 +2,7 @@
 // 这里只管「能不能亮 / 能不能发动」与次数账，具体技能干什么由各自的原语负责。
 import { commit, reject } from "../legal.ts";
 import { openAllianceWindow } from "../skills/alliance.ts";
-import { revealAllowedOutOfTurn, settleOnReveal } from "../skills/reveal.ts";
+import { revealAllowedOutOfTurn, revealConditionsMet, settleOnReveal } from "../skills/reveal.ts";
 import { SKILL_DATA } from "../skills/draw-passives.ts";
 import { HANDLERS } from "../skills/handlers.ts";
 import { isSealed, suppressesEffect } from "../skills/primitives/suppression.ts";
@@ -24,8 +24,11 @@ export function revealSkill(state: GameState, seat: number, ctx: Ctx, data: Skil
   // 01-P14：血棘封印含「未亮出也不能亮出」。**只查封印**：01 §3「可亮出技能；可发动主动技能
   // （非惩罚回合）」——括号只修饰「发动」，惩罚回合照样亮得出（V6 亮出也不占额度）。
   if (isSealed(b, seat)) return reject(state, "suppressed");
+  const def = data.byId.get(b.skills[seat]!);
+  // V2b（2026-08-08）：`reveal_when` 是主动亮出的门槛——条件不满足时连己方回合也不可亮
+  if (!revealConditionsMet(b, seat, def)) return reject(state, "reveal_condition_unmet");
   // V1 / V2：轮不到你时，只有定义写明例外的技能亮得出（判据按定义，不认技能 id）
-  if (seat !== b.currentSeat && !revealAllowedOutOfTurn(b, seat, data.byId.get(b.skills[seat]!)))
+  if (seat !== b.currentSeat && !revealAllowedOutOfTurn(b, seat, def))
     return reject(state, "not_your_turn");
 
   // V6：亮出不占「每回合一条主动」的额度，所以这里不碰 activatedThisTurn

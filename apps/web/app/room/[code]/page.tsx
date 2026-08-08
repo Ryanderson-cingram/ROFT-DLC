@@ -86,7 +86,8 @@ export default function RoomPage() {
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "rooms", filter: `id=eq.${roomId}` },
         ({ new: row }) => {
           const next = row as Room;
-          setRoom((prev) => (prev ? { ...prev, status: next.status } : prev));
+          // version 也要跟着走：重开会把它推进，拿旧值去 startGame 只会撞乐观锁
+          setRoom((prev) => (prev ? { ...prev, status: next.status, version: next.version, created_by: next.created_by } : prev));
           if (next.status === "playing") router.push(`/game/${code}`);
         })
       .on("presence", { event: "sync" }, () => setOnline(Object.keys(channel.presenceState())))
@@ -127,6 +128,31 @@ export default function RoomPage() {
     else router.push(`/game/${code}`);
   }
 
+  /** 退出房间：座位交还服务端（防幽灵座位），成功才回大厅。本来就不在座也算退成功（幂等）。 */
+  async function leaveRoom() {
+    setError(null);
+    const res = await callEdge("leave-room", { roomId: room!.id });
+    if (!res.ok) {
+      setError(humanReason(res.reason));
+      return;
+    }
+    router.replace("/");
+  }
+
+  /** 打完之后从等候室重开（任何在座玩家都能点，2026-08-02 拍板）。409 = 别人抢先，结果一致。 */
+  async function restartHere() {
+    setError(null);
+    // version 重读一次：finished 状态下别的页面可能已经推进过它
+    const { data } = await supabase.from("rooms").select("version").eq("id", room!.id).single();
+    const res = await callEdge("room-action", {
+      roomId: room!.id,
+      expectedVersion: (data as { version: number } | null)?.version ?? room!.version,
+      idempotencyKey: newIdempotencyKey(),
+      action: { type: "restartGame", seat: mySeat?.seat ?? 0 },
+    });
+    if (!res.ok && res.status !== 409) setError(humanReason(res.reason));
+  }
+
   /**
    * 剪贴板 API **只在安全上下文里存在**：手机连局域网 IP 调试走的是 http，
    * `navigator.clipboard` 直接是 undefined，原来那句会抛出去变成未捕获的 rejection。
@@ -158,7 +184,8 @@ export default function RoomPage() {
   return (
     <div className="room-page">
       <header className="topbar">
-        <Link href="/">← 大厅</Link>
+        {/* 不是纯导航：先把座位交还服务端再走，防幽灵座位 */}
+        <button className="leave" onClick={leaveRoom}>← 退出房间</button>
         <b>等候室</b>
         <span className="hint">{seats.length} 人在座</span>
       </header>
@@ -234,7 +261,14 @@ export default function RoomPage() {
 
       <div className="actionbar">
         <div className="inner">
-          {isHost ? (
+          {room.status === "finished" ? (
+            <>
+              <button className="btn btn--primary" onClick={restartHere}>
+                再开一局（本房间）
+              </button>
+              <p className="hint">上一局已经打完。重开后房间号不变、人不动，谁点都行。</p>
+            </>
+          ) : isHost ? (
             <>
               <button className="btn btn--primary" disabled={!canStart} onClick={startGame}>
                 开始游戏（{readyCount}/{seats.length} 已准备）

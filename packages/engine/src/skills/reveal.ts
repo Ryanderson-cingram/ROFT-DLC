@@ -23,19 +23,26 @@ const OUT_OF_TURN: ReadonlySet<string> = new Set(["any_time"]);
 
 /**
  * 条件表（02 §6 的 `reveal_when`）。键不认识 = 条件不成立，同样是保守的那一侧。
- * 目前只有一条：神授♥5「手牌 >10 可主动亮出」= `{ hand_at_least: 11 }`。
+ * 目前只有一条：神授♥5「手牌多时可主动亮出」= `{ hand_at_least: 10 }`（2026-08-08 裁定：10 张即可）。
  */
 const CONDITIONS: Record<string, (b: Board, seat: number, n: number) => boolean> = {
   hand_at_least: (b, seat, n) => b.hands[seat].length >= n,
 };
 
 /**
+ * `reveal_when` 的条件此刻成不成立。2026-08-08 裁定（01-V2b）：这是主动亮出的**门槛**，
+ * 不满足时**连己方回合也不可亮**——不只是关掉「任意时刻」例外。没写条件的技能恒成立。
+ */
+export function revealConditionsMet(b: Board, seat: number, def?: SkillDef): boolean {
+  return Object.entries(def?.reveal_when ?? {}).every(([k, n]) => CONDITIONS[k]?.(b, seat, n) ?? false);
+}
+
+/**
  * `seat` 此刻能不能在**别人的回合**亮出这张技能（V2 的白名单例外）。
  * `false` = 只能等自己的回合（V1 默认）。反应窗口那一条不在这里，见文件顶注。
  */
 export function revealAllowedOutOfTurn(b: Board, seat: number, def?: SkillDef): boolean {
-  if (!def?.reveal_window || !OUT_OF_TURN.has(def.reveal_window)) return false;
-  return Object.entries(def.reveal_when ?? {}).every(([k, n]) => CONDITIONS[k]?.(b, seat, n) ?? false);
+  return !!def?.reveal_window && OUT_OF_TURN.has(def.reveal_window);
 }
 
 /**
