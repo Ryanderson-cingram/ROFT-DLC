@@ -3,7 +3,7 @@
  * spec：`docs/superpowers/specs/2026-08-02-skills-batch-2.md` 第 1 步。
  *
  * 三条要害，逐条钉：
- * 1. 数的是**链上张数**（`segments.length`），不是**贡献总和**（`chain.total`）
+ * 1. 数的是**链上牌面**（+2 一颗 / +4 两颗，2026-08-08 裁定），不是**贡献总和**（`chain.total`）
  * 2. L1 命中即得最终值，**跳过 L2/L3/L4**——恩惠的 −2、吟游的活泼板都不作数（P13）
  * 3. 可以掷出 0 → 一张都不摸
  */
@@ -16,8 +16,8 @@ const R7 = card("R", "7");
 const filler = (n: number) => Array.from({ length: n }, () => card("G", "9"));
 
 /**
- * 链上 **2 张**（+2 与 +4），贡献总和 **6**——两个数故意不相等，
- * 才测得出伤逝数的到底是 `segments.length` 还是 `total`。
+ * 链上 **2 张**（+2 与 +4）→ 骰数 **3**（1 + 2），贡献总和 **6**——三个数故意两两不等，
+ * 才测得出伤逝数的到底是骰数、`segments.length` 还是 `total`。
  */
 const CHAIN = {
   initiator: 0,
@@ -59,15 +59,15 @@ const openWindow = (s: GameState): GameState => ({
   },
 });
 
-describe("伤逝♥10：按链上张数掷骰，不看贡献总和", () => {
-  it("链上 2 张（总和 6）→ 掷 2 颗骰求和；掷 2/2 → 摸 4 而不是 6", () => {
-    const r = eat(openWindow(seated([null, "heart-10", null])), 2, 2);
+describe("伤逝♥10：按链上牌面掷骰，不看贡献总和", () => {
+  it("链上 +2 与 +4（总和 6）→ 掷 1+2 = 3 颗骰求和；掷 2/1/1 → 摸 4 而不是 6", () => {
+    const r = eat(openWindow(seated([null, "heart-10", null])), 2, 1, 1);
     expect(r.rejected).toBeUndefined();
     expect(r.state.board!.hands[1]).toHaveLength(1 + 4);
   });
 
-  it("同一条链掷 1/0 → 摸 1（张数 2 颗骰，点数才是结果）", () => {
-    const r = eat(openWindow(seated([null, "heart-10", null])), 1, 0);
+  it("同一条链掷 1/0/0 → 摸 1（骰数固定 3 颗，点数才是结果）", () => {
+    const r = eat(openWindow(seated([null, "heart-10", null])), 1, 0, 0);
     expect(r.state.board!.hands[1]).toHaveLength(1 + 1);
   });
 
@@ -91,10 +91,10 @@ describe("伤逝：L1 命中即得最终值，跳过后面所有改摸数（01-P
     const withMercy = eat(openWindow(seated([null, "heart-1", null])));
     expect(withMercy.state.board!.hands[1]).toHaveLength(1 + 4); // 6 − 2
 
-    const withDamnation = eat(openWindow(seated([null, "heart-10", null])), 2, 2);
-    expect(withDamnation.state.board!.hands[1]).toHaveLength(1 + 4); // 掷 2+2，**不是** 6−2
+    const withDamnation = eat(openWindow(seated([null, "heart-10", null])), 2, 1, 1);
+    expect(withDamnation.state.board!.hands[1]).toHaveLength(1 + 4); // 掷 2+1+1，**不是** 6−2
     // 数值撞巧一样，所以再换一组骰点确认它跟着骰子走、不跟着 −2 走
-    const other = eat(openWindow(seated([null, "heart-10", null])), 0, 1);
+    const other = eat(openWindow(seated([null, "heart-10", null])), 0, 1, 0);
     expect(other.state.board!.hands[1]).toHaveLength(1 + 1);
   });
 
@@ -109,22 +109,28 @@ describe("伤逝：L1 命中即得最终值，跳过后面所有改摸数（01-P
   });
 });
 
-describe("伤逝：骰数严格等于链上张数", () => {
+describe("伤逝：骰数 = 每张 +2 一颗 + 每张 +4 两颗（2026-08-08）", () => {
   /** `roll(...)` 是循环的：给一颗骰的点数，掷几颗都是那个数，所以「摸了几张」直接读出骰数。 */
-  const chainOf = (n: number) => ({
+  const chainOf = (faces: ("+2" | "+4")[]) => ({
     initiator: 0,
-    segments: Array.from({ length: n }, () => ({ seat: 0, face: "+2" as const, draw: 2 })),
-    total: n * 2,
+    segments: faces.map((face) => ({ seat: 0, face, draw: face === "+2" ? 2 : 4 })),
+    total: faces.reduce((n, f) => n + (f === "+2" ? 2 : 4), 0),
   });
 
-  it.each([1, 2, 3, 5])("%i 张的链 → 掷 %i 颗骰（每颗定为 1，故摸到的张数 = 骰数）", (n) => {
-    const s = openWindow(seated([null, "heart-10", null], { punish: chainOf(n) }));
-    expect(eat(s, 1).state.board!.hands[1]).toHaveLength(1 + n);
+  it.each([
+    [["+2"], 1],
+    [["+2", "+2"], 2],
+    [["+4"], 2],
+    [["+4", "+4"], 4],
+    [["+2", "+4", "+2"], 4],
+  ] as const)("%s 的链 → 掷 %i 颗骰（每颗定为 1，故摸到的张数 = 骰数）", (faces, dice) => {
+    const s = openWindow(seated([null, "heart-10", null], { punish: chainOf([...faces]) }));
+    expect(eat(s, 1).state.board!.hands[1]).toHaveLength(1 + dice);
   });
 
-  it("一段的贡献被强袭掷成 4，链上仍只算 1 张 → 掷 1 颗骰（P13 忽略贡献总和的最狠一例）", () => {
+  it("一段的贡献被强袭掷成 4，牌面仍是 +2 → 掷 1 颗骰（P13 忽略贡献总和的最狠一例）", () => {
     // 单段：牌面 +2，但强袭把它掷成了 ×2，`draw` 是 4、`total` 也是 4。
-    // 若实现误用 total 就会掷 4 颗（这里每颗 2 点 → 8 张），用 segments.length 才是 1 颗 → 2 张。
+    // 若实现误用 total 就会掷 4 颗（这里每颗 2 点 → 8 张），按牌面才是 1 颗 → 2 张。
     const boosted = { initiator: 0, segments: [{ seat: 0, face: "+2" as const, draw: 4 }], total: 4 };
     const s = openWindow(seated([null, "heart-10", null], { punish: boosted }));
     expect(eat(s, 2).state.board!.hands[1]).toHaveLength(1 + 2);
@@ -152,7 +158,7 @@ describe("伤逝：replacedBy 进事件（前端要说得出「为什么只摸�
     r.events.find((e) => e.type === "cardsDrawn")!.public!;
 
   it("命中 → cardsDrawn.public 带上技能名与真实张数", () => {
-    expect(drawn(eat(openWindow(seated([null, "heart-10", null])), 1, 0)))
+    expect(drawn(eat(openWindow(seated([null, "heart-10", null])), 1, 0, 0)))
       .toEqual({ seat: 1, count: 1, replacedBy: "伤逝" });
   });
 

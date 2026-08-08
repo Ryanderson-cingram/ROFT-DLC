@@ -107,7 +107,7 @@ export interface SkillDef {
   notes?: string;
   /** 01-V2 白名单亮出例外；缺席 = V1 默认 own_turn */
   reveal_window?: RevealWindow | null;
-  /** 亮出窗口的条件（02 §6，缺席 = 无条件）：目前只有 `hand_at_least`（神授♥5 的 11） */
+  /** 亮出窗口的条件（02 §6，缺席 = 无条件）：目前只有 `hand_at_least`（神授♥5 的 10） */
   reveal_when?: Record<string, number>;
   force_reveal_ok?: boolean | null;
   force_activate_ok?: boolean | null;

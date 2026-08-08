@@ -137,6 +137,8 @@ const VALUE_KEYS = new Set([
   'marks',
   'marks_wild',
   'dice',
+  // 每张 +4 掷几颗（伤逝♥10，2026-08-08）。缺席 = 与 `dice` 同数，即牌面不分档
+  'dice_plus4',
   'card_value',
   'max',
 ]);

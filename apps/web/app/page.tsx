@@ -48,7 +48,7 @@ export default async function LobbyPage() {
           <span>
             玩家百科
             <small className="opt-note" style={{ margin: 0 }}>
-              四句总则、10 个技能的细则与例子。
+              四句总则、20 个技能的细则与例子。
             </small>
           </span>
           <span className="arrow">→</span>

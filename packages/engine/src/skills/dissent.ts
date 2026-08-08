@@ -42,11 +42,14 @@ function liveDef(b: Board, seat: number, data: SkillData) {
  * ①此刻发得出来吗：按定义找 `kind: response` + 改 `turn_flow` 的那一条，
  * 再查 `once: once` 用掉没有。返回 undefined = 这个人这一刻没有这个选项。
  *
- * 与远星（同为 `kind: response`）靠 `modifies` 分开：远星改 `color_rule`，异议改 `turn_flow`。
+ * 与远星（同为 `kind: response`）靠 `modifies` 分开：远星改 `color_rule`，异议改 `turn_flow`；
+ * 与劫营（同为 `response` + `turn_flow`）靠 `window` 分开：劫营开 `interrupt`，异议开 `on_punish_resolve`。
  */
 export function dissentEffect(b: Board, seat: number, data: SkillData = SKILL_DATA): SkillEffect | undefined {
   const def = liveDef(b, seat, data);
-  const e = def?.effects?.find((x) => x.kind === "response" && !!x.modifies?.includes("turn_flow"));
+  const e = def?.effects?.find(
+    (x) => x.kind === "response" && x.window === "on_punish_resolve" && !!x.modifies?.includes("turn_flow"),
+  );
   // S15：一次性效果整局只发得出一次（S18c 的「重获则重置」到时候清 usedOnce 即可）
   return e && !(e.once === "once" && b.usedOnce?.[seat]?.[e.key]) ? e : undefined;
 }

@@ -181,11 +181,11 @@ with doc as (select $skill_defs${
       "name": "神授",
       "suit_rank": "♥5",
       "status": "✅",
-      "summary": "仅列情形必摸；否则无牌可出可不摸结束；优先于恋战；>10可主动亮出",
+      "summary": "仅列情形必摸；否则无牌可出可不摸结束；优先于恋战；己方回合且手牌**≥10** 才可亮出",
       "caveats": null,
-      "reveal_window": "any_time",
+      "reveal_window": "own_turn",
       "reveal_when": {
-        "hand_at_least": 11
+        "hand_at_least": 10
       },
       "effects": [
         {
@@ -386,7 +386,7 @@ with doc as (select $skill_defs${
       "name": "伤逝",
       "suit_rank": "♥10",
       "status": "✅",
-      "summary": "受罚时只按链上 +2/+4 张数掷骰摸牌；忽略贡献总和与吟游等改摸数",
+      "summary": "受罚时按链上牌面掷骰摸牌（**+2 掷 1 颗、+4 掷 2 颗**，点数求和）；忽略贡献总和与吟游等改摸数",
       "caveats": null,
       "effects": [
         {
@@ -394,7 +394,8 @@ with doc as (select $skill_defs${
           "kind": "replacement",
           "window": "on_punish_resolve",
           "values": {
-            "dice": 1
+            "dice": 1,
+            "dice_plus4": 2
           },
           "applies_to": [
             "punish"
@@ -1262,9 +1263,10 @@ with doc as (select $skill_defs${
       "id": "god-fade",
       "name": "❂时神 Fade",
       "suit_rank": "神",
-      "status": "❓",
-      "summary": "成神时按掷骰点数解锁能力（≥5 / ≥6 / ≥7 / =8）；失去神技能时获得灾难★。",
-      "caveats": "05 §1 只写了四档门槛，**四档各自解锁什么能力没有落进任何文档**；01-S6 只说失神后按 Excel 例。",
+      "status": "✅",
+      "summary": "成神时按掷骰点数解锁能力（阈值累进，掷高点同时满足低档；2026-07-30 补齐，原 06-Q42）：**≥5** 永久樱时雨（**惩罚**摸牌数恒定为 1，02 §7 L4，`scope: self`；规则摸牌与技能摸牌不受影响，基数 0 的惩罚也抬回 1，见 06-Q63）+ 不需要喊「UNO」；**≥6** 其他玩家摸 N 弃 N（N ≤ 5）时你可以同时摸 N 弃 N；**≥7** 免疫「五彩」「心盲」「恋战」；**=8** 其他非神玩家亮出手牌。失去神技能时获得灾难★（01-S6）。",
+      "caveats": null,
+      "notes": "注：≥5 那支樱时雨是**永久且只作用于时神本人**，不占场上那个全局歌声槽，与吟游♣5 的歌声并存（06-Q66）。",
       "structured": false
     },
     {

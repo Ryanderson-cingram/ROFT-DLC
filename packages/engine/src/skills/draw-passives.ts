@@ -46,7 +46,7 @@ function toModifier(layer: DrawLayer, source: string, n: number | undefined, e: 
     case "L3":
       return { layer, source, factor: n };
     case "L4":
-      // 02 §7：`self` 胜过 `global`；歌声是全场的，古神那支永久樱时雨才是 self
+      // 02 §7：`self` 胜过 `global`；歌声是全场的，时神那支永久樱时雨才是 self
       return { layer, source, scope: e.targeting === "self" ? "self" : "global", value: n };
     case "L5":
       return { layer, source, min: n };

@@ -57,7 +57,7 @@ export default function LobbyForms() {
                 onChange={() => setRulePack("base")}
               />
               <span className="opt-title">基础包</span>
-              <small className="opt-note">UNO 牌 + 首批 10 个技能。</small>
+              <small className="opt-note">UNO 牌 + 已接线的 20 个技能。</small>
             </label>
             {/*
               诸神包开放（2026-08-01）：`rulePack: "gods"` 今天**只多出 8 张牌**——毒 5 张 + 洗牌 3 张
