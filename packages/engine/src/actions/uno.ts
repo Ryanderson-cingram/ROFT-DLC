@@ -5,7 +5,7 @@
  * 窗口期间也可以（U7）。这里手动 version+1、保留 pendingWindow。
  * 声明的存续（回合内不清、回合外离开 1 张即作废）由 legal.ts 的 syncUno 统一执行。
  */
-import { syncUno, windowIdOf } from "../legal.ts";
+import { calledThisTurn, syncUno, windowIdOf } from "../legal.ts";
 import { reject } from "../legal.ts";
 import { drawCards, drawEvents, giveTo } from "./draw.ts";
 import type { ApplyResult, Board, Ctx, GameState } from "../types.ts";
@@ -41,7 +41,12 @@ export function callUno(state: GameState, seat: number, ctx: Ctx): ApplyResult {
   // 已喊再按没有代价：UI 那时显示的是徽记而不是按钮
   if (b.saidUno[seat]) return reject(state, "already_said");
   return {
-    state: bump(state, { ...b, saidUno: b.saidUno.map((v, i) => (i === seat ? true : v)) }),
+    state: bump(state, {
+      ...b,
+      saidUno: b.saidUno.map((v, i) => (i === seat ? true : v)),
+      // 「本回合按过」——回合内的豁免与交回合的虚喊结算都只认这一格，不认结转来的声明
+      unoThisTurn: b.saidUno.map((_, i) => (i === seat ? true : calledThisTurn(b, i))),
+    }),
     events: [{ type: "unoCalled", public: { seat } }],
   };
 }

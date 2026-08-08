@@ -70,7 +70,9 @@ describe("洗牌·选项① 合并重分（03 §6）", () => {
     const s = table([[c, ...hand(1, "R")], hand(1, "B"), hand(1, "Y")], {
       playedPile: [R7],
       drawPile: pile(),
+      // 座位 0 是本回合按的（所以享受回合内的豁免）；座位 1 那声是上一轮结转来的
       saidUno: [true, true, false],
+      unoThisTurn: [true, false, false],
     });
     const r = applyAction(
       s, { type: "playCards", seat: 0, cardIds: [c.id], chosenColor: "B", shuffleChoice: "shuffle" }, ctx(lcg(5)),

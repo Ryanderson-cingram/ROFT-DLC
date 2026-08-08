@@ -237,6 +237,7 @@ describe("忍戒 × 交回合：那一整套账在**弃完之后**才结（U6/U7
     const s = opened({
       hands: [[card("R", "3"), card("R", "4")], HAND1(), [card("Y", "2")]],
       saidUno: [true, false, false],
+      unoThisTurn: [true, false, false], // 本回合按的 → 虚喊结算认它
     });
     const r = eat(s);
     expect(r.events.some((e) => e.type === "unoMiscalled")).toBe(false); // 回合还没交，还没到结算时点

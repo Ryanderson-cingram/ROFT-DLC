@@ -15,7 +15,7 @@ import { openDrawDiscard } from "./draw-discard.ts";
 // 环：play-cards（打出洗牌）→ shuffle-card（结算/开窗口）→ play-cards（窗口结完接着跑收尾）。
 // 两边点名的都是函数声明，模块实例化时就绑好了，环存在也无害（同 play-cards ↔ raid）。
 import { settleAfterFace, settleEmptyHand, settleWin } from "./play-cards.ts";
-import { WINDOW_MS, colorLocked, commit, nextSeat, passTurn, reject, windowIdOf } from "../legal.ts";
+import { WINDOW_MS, calledThisTurn, colorLocked, commit, nextSeat, passTurn, reject, windowIdOf } from "../legal.ts";
 import { SKILL_DATA } from "../skills/draw-passives.ts";
 import type { SkillData } from "../skills/draw-passives.ts";
 import type {
@@ -124,8 +124,9 @@ function redistribute(
     hands,
     // U6：合并的那一刻人人手牌为 0，**回合外**的「手牌一离开 1 张即作废」当场成立——
     // 分到 1 张的人须重喊，他人可抓。打出者本人在自己的回合内不作废（2026-08-01 改判），
-    // 他的声明留到交回合时由 passTurn 结算。
-    saidUno: b.saidUno.map((v, i) => v && i === seat),
+    // 他的声明留到交回合时由 passTurn 结算——但只限**本回合按过按钮**的那一份，
+    // 结转来的声明跟别人一样，手牌一离开 1 张就作废（2026-08-08 澄清）。
+    saidUno: b.saidUno.map((v, i) => v && i === seat && calledThisTurn(b, i)),
   };
   const event: EngineEvent = {
     type: "handsShuffled",
