@@ -20,7 +20,14 @@ export interface LogEvent {
   public_payload: Record<string, unknown>;
 }
 
-const asCard = (v: unknown) => cardLabel(v as Card);
+/**
+ * 一整条日志的渲染共用它。**缺字段时给一句占位、绝不抛**：`humanize` 在 `<LogDrawer>` 与
+ * `<Ticker>` 的 render 里跑，抛一次就是整页白屏（引擎把 `raidWindowOpened` 的 `card`
+ * 改名成 `cards` 那次正是这样炸的，服务端一条错都不会有）。
+ */
+const asCard = (v: unknown) => (v ? cardLabel(v as Card) : "某张牌");
+/** 同上：payload 里那一格不是数组（改名了、老事件没有）也不许把 `.map` 抛到 render 里。 */
+const asList = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
 
 /**
  * 事件 → 人话 + 分类（分类只管左缘颜色）。返回 null = 不值得进日志（handDealt 等）。
@@ -45,7 +52,7 @@ export function humanize(
     case "cardPlayed": {
       const color = p.chosenColor ? `，定色${{ R: "红", B: "蓝", Y: "黄", G: "绿" }[p.chosenColor as string] ?? ""}` : "";
       // 并列♥4 起改成了整组 `cards`；`card` 是它之前的单张写法，老事件还留在库里
-      const cards = (p.cards as Card[] | undefined) ?? [p.card as Card];
+      const cards = asList<Card>(p.cards ?? [p.card]);
       return { who: nameOf(seat), what: `打出 ${cards.map(asCard).join("、")}${color}` };
     }
     case "cardsDrawn":
@@ -58,7 +65,7 @@ export function humanize(
     case "gameDrawn":
       return { who: "牌桌", what: "牌堆用尽，本局平局", kind: "system" };
     case "punishWindowOpened":
-      return { who: nameOf((p.actors as number[])[0]), what: `被惩罚指向（累计 ${p.total} 张）：叠或吃`, kind: "punish" };
+      return { who: nameOf(asList<number>(p.actors)[0]), what: `被惩罚指向（累计 ${p.total} 张）：叠或吃`, kind: "punish" };
     case "punishStackChosen":
       return { who: nameOf(seat), what: "选择接着叠", kind: "punish" };
     case "punishAccepted":
@@ -67,7 +74,7 @@ export function humanize(
     case "farstarUsed":
       return {
         who: nameOf(seat),
-        what: `远星：弃 ${(p.discarded as Card[]).map(cardLabel).join("、")}，视为跟着叠了一张${
+        what: `远星：弃 ${asList<Card>(p.discarded).map(asCard).join("、")}，视为跟着叠了一张${
           colorLabel(p.color as Color)
         } ${faceLabel(p.as as Card["face"])}`,
         kind: "skill",
@@ -77,7 +84,7 @@ export function humanize(
     case "skillActivated":
       return { who: nameOf(seat), what: `发动 ${skillName(p.skillId)}`, kind: "skill" };
     case "cardsDiscarded":
-      return { who: nameOf(seat), what: `弃了 ${(p.cards as Card[]).map(cardLabel).join("、")}`, kind: "skill" };
+      return { who: nameOf(seat), what: `弃了 ${asList<Card>(p.cards).map(asCard).join("、")}`, kind: "skill" };
     // 影歌♦3：宣言是当众的，所以它只在日志里露面（快照不需要它——可点性由 legalActions 给）
     case "soulHarvestStarted":
       return { who: nameOf(seat), what: `指定 ${asCard(p.declared)}：其他人依次亮牌或摸牌`, kind: "skill" };
@@ -93,11 +100,11 @@ export function humanize(
     case "diceRolled":
       return {
         who: nameOf(seat),
-        what: `${String(p.reason).endsWith("-takeover") ? "重掷" : "掷骰"} ${(p.values as number[]).join("、")}`,
+        what: `${String(p.reason).endsWith("-takeover") ? "重掷" : "掷骰"} ${asList<number>(p.values).join("、")}`,
         kind: "skill",
       };
     case "diceTakeoverOpened":
-      return { who: nameOf((p.actors as number[])[0]), what: "可以重掷这次骰子", kind: "skill" };
+      return { who: nameOf(asList<number>(p.actors)[0]), what: "可以重掷这次骰子", kind: "skill" };
     // 03 §4 的状态是公开的（八门♠8②的五彩、寄生的心盲…）。谁给的走 skillId
     case "statusGranted":
       return { who: nameOf(seat), what: `${skillName(p.skillId)}：获得「${p.status}」`, kind: "skill" };
@@ -122,9 +129,16 @@ export function humanize(
     // 抽到/还了哪张只有双方知道：那两条事件只有 private，公开侧没有内容可写
     case "stealSwapPeek":
       return null;
-    // 劫营♦10：并列是一张张摆的，每张落地都可能给出一次打断机会（01-G5）
-    case "raidWindowOpened":
-      return { who: nameOf((p.actors as number[])[0]), what: `可以用同色同数的牌打断${asCard(p.card)}`, kind: "skill" };
+    // 劫营♦10：窗口针对刚落地的**那几张**（并列 = 整组，单张 = 牌顶）。
+    // `card` 是 2026-08-02「并列整组落地」之前的单张写法，老事件还留在库里（同 cardPlayed）
+    case "raidWindowOpened": {
+      const cards = asList<Card>(p.cards ?? [p.card]);
+      return {
+        who: nameOf(asList<number>(p.actors)[0]),
+        what: `可以用同色同数的牌打断${cards.map(asCard).join("、")}`,
+        kind: "skill",
+      };
+    }
     case "raided":
       return {
         who: nameOf(p.by as number),
@@ -135,7 +149,7 @@ export function humanize(
     case "handsShuffled":
       return {
         who: nameOf(seat),
-        what: `洗牌：全体手牌打乱重分（${(p.counts as number[]).map((n, i) => `${nameOf(i)} ${n} 张`).join("、")}）`,
+        what: `洗牌：全体手牌打乱重分（${asList<number>(p.counts).map((n, i) => `${nameOf(i)} ${n} 张`).join("、")}）`,
       };
     // 吟游♣5（04 ♣5 / 01-S20）：选/切换歌声是当众的（全场都吃它的效果）
     case "optionChosen":
@@ -152,7 +166,7 @@ export function humanize(
       return { who: nameOf(seat), what: `${nameOf(p.by as number)}亮出了另一半：要不要相应结盟`, kind: "skill" };
     case "allianceFormed":
       return {
-        who: (p.seats as number[]).map(nameOf).join("、"),
+        who: asList<number>(p.seats).map(nameOf).join("、"),
         what: "结盟：此后各自回合开始都能互换整副手牌",
         kind: "skill",
       };
@@ -160,8 +174,8 @@ export function humanize(
       return { who: nameOf(seat), what: "不相应（这一桌从此各算各的）", kind: "skill" };
     case "handsSwapped":
       return {
-        who: (p.seats as number[]).map(nameOf).join("、"),
-        what: `互换整副手牌（${(p.seats as number[]).map((x, i) => `${nameOf(x)} ${(p.counts as number[])[i]} 张`).join("、")}）`,
+        who: asList<number>(p.seats).map(nameOf).join("、"),
+        what: `互换整副手牌（${asList<number>(p.seats).map((x, i) => `${nameOf(x)} ${asList<number>(p.counts)[i]} 张`).join("、")}）`,
         kind: "skill",
       };
     // 「要不要摸 N 弃 N」：合纵/连横②（S14）与神授♥5（S17b）共用同一个窗口，所以不提触发者

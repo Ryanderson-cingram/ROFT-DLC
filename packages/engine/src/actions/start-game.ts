@@ -47,6 +47,7 @@ export function startGame(state: GameState, ctx: Ctx): ApplyResult {
     currentSeat: 0,
     direction: 1,
     saidUno: hands.map(() => false),
+    unoThisTurn: hands.map(() => false),
     skills: hands.map(() => null),
     revealed: hands.map(() => false),
     activatedThisTurn: hands.map(() => false),

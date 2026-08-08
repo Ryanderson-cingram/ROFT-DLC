@@ -61,7 +61,7 @@ const PAYLOAD: Record<string, Record<string, unknown>> = {
   stealSwapDrawn: { seat: 0, target: 1 },
   stealSwapReturned: { seat: 0, target: 1 },
   stealSwapPeek: { seat: 0 },
-  raidWindowOpened: { actors: [1], card: R7 },
+  raidWindowOpened: { actors: [1], seat: 0, cards: [R7] },
   raided: { by: 1, card: R7, target: 3 },
   handsShuffled: { seat: 3, counts: [7, 2, 4, 11] },
   drawDiscardOpened: { seat: 3, picks: 2 },
@@ -115,6 +115,17 @@ describe("humanize（引擎事件 → 玩家语言）的覆盖率", () => {
     }
   });
 
+  /*
+    payload 表是**手抄**的，所以它跟引擎一起腐烂过一次：引擎把 `raidWindowOpened` 的
+    `card` 改名成 `cards`，表里也还写着 `card`，上面那几条断言全绿——线上开一次劫营窗口
+    就白屏（`humanize` 在 render 里跑，抛一次整棵树就没了，服务端一条错都不会有）。
+    所以再钉一条**不依赖那张表**的：字段全缺时可以说得难听，但绝不许抛。
+  */
+  it("payload 全缺也不许抛——翻译层抛一次就是整页白屏", () => {
+    for (const t of types)
+      expect(() => humanize({ id: 1, seq: 1, type: t, public_payload: {} }, nameOf), t).not.toThrow();
+  });
+
   it("认不出的事件类型有保底：原样显示，不炸也不留空行", () => {
     expect(humanize(event("somethingBrandNew"), nameOf)).toEqual({
       who: "牌桌",
@@ -128,6 +139,9 @@ describe("humanize（引擎事件 → 玩家语言）的覆盖率", () => {
     expect(humanize(event("sealed"), nameOf)?.what).toBe("被老白封印了技能");
     // 远星：代价牌与「视为的那一段」都是公开的，摸的 2 张另有 cardsDrawn 事件
     expect(humanize(event("farstarUsed"), nameOf)?.what).toBe("远星：弃 黄 +2，视为跟着叠了一张黄 +4");
+    // 劫营窗口：引擎发的是整组 `cards`。读成单数 `card` 时这里是 `cardLabel(undefined)`，
+    // 线上一开窗口全场白屏（2026-08-08 修）
+    expect(humanize(event("raidWindowOpened"), nameOf)?.what).toBe("可以用同色同数的牌打断红 7");
     // 并列♥4 之前的单张写法（`card` 而不是 `cards`）：老事件还在库里，不能翻成空白
     expect(humanize({ id: 2, seq: 2, type: "cardPlayed", public_payload: { seat: 0, card: R7 } }, nameOf)).toEqual({
       who: "凛",

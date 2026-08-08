@@ -171,6 +171,48 @@ describe("U6 声明的作用域是你的这个回合", () => {
     expect(legalActions(r.state, 0)).toContainEqual({ type: "callUno", seat: 0 });
   });
 
+  /*
+    结转来的声明（2026-08-08 澄清）。真人局里报上来的那一幕：上一轮喊了 UNO 成立，
+    这一轮无牌可出摸 1 张——徽记一直挂着（人以为还护着自己），到回合末还被虚喊结算
+    平白罚摸 2。两件事同一个根：「声明此刻有效」与「本回合按过按钮」当成了一件事。
+  */
+  describe("上一轮成立、结转进来的声明", () => {
+    /** 座位 0 手上 1 张跟不上牌顶的牌，`saidUno` 是上一轮结转来的（本回合没按过）。 */
+    const carried = (drawPile: Card[]) =>
+      table([[card("G", "9")], [card("Y", "1")], [card("Y", "2")]], {
+        playedPile: [R7],
+        drawPile,
+        saidUno: [true, false, false],
+      });
+
+    it("摸 1 张顶到 2 张：徽记当场收回，UNO 键重新亮起", () => {
+      // 摸到的牌跟得上牌顶 → 停在 play 相位，回合还没交，正是玩家看见「2 张 + 已喊」的那一帧
+      const r = applyAction(carried([card("R", "3"), ...filler(3)]), { type: "drawCard", seat: 0 }, ctx());
+      expect(r.state.board!.hands[0]).toHaveLength(2);
+      expect(r.state.board!.saidUno[0]).toBe(false);
+      expect(legalActions(r.state, 0)).toContainEqual({ type: "callUno", seat: 0 });
+    });
+
+    it("交回合时不是 1 张也**不罚**：那一声在上一个回合末就结算过了", () => {
+      // 摸到的牌打不出 → 回合当场结束，2 张交出去
+      const r = applyAction(carried([card("B", "5"), ...filler(3)]), { type: "drawCard", seat: 0 }, ctx());
+      expect(r.state.board!.currentSeat).toBe(1);
+      expect(r.state.board!.hands[0]).toHaveLength(2); // 摸的那 1 张，没有多出来的罚摸 2
+      expect(r.events.some((e) => e.type === "unoMiscalled")).toBe(false);
+    });
+
+    it("本回合按过的那一声照旧受保护：手牌顶到 2 张也不清", () => {
+      // 同一个牌桌，区别只在这一声是**本回合按的**（`carried` 那份是结转来的）
+      const fresh = { ...carried([card("R", "3"), ...filler(3)]) };
+      fresh.board = { ...fresh.board!, saidUno: [false, false, false] };
+      const said = call(fresh, 0);
+      expect(said.rejected).toBeUndefined();
+      const drawn = applyAction(said.state, { type: "drawCard", seat: 0 }, ctx()).state;
+      expect(drawn.board!.hands[0]).toHaveLength(2);
+      expect(drawn.board!.saidUno[0]).toBe(true); // 回合内不清
+    });
+  });
+
   it("交回合时手牌恰 1 张：声明跟着那张牌存续，回合外也抓不得", () => {
     // 影歌②花 2 魂跳过：手牌一张没动就把回合交出去了
     const s = twoCards({
@@ -417,7 +459,8 @@ describe("司夜②换牌与已喊（04 ♣3 2026-07-31 裁定，改判后仍成
   });
 
   it("不作废**司夜自己**的已喊：他在自己的回合里，手牌 1→2→1 都不管", () => {
-    const s = nightlord({ saidUno: [true, false, false] });
+    // 「回合内不清」保护的是**本回合按过按钮**的那一声，所以 unoThisTurn 要跟着立
+    const s = nightlord({ saidUno: [true, false, false], unoThisTurn: [true, false, false] });
     const drawn = applyAction(s, { type: "stealSwap", seat: 0, target: 2 }, ctx()).state;
     expect(drawn.board!.hands[0]).toHaveLength(2);
     expect(drawn.board!.saidUno[0]).toBe(true);

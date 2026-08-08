@@ -14,14 +14,23 @@ export const reject = (state: GameState, reason: string): ApplyResult => ({ stat
 export const windowIdOf = (state: GameState): string | undefined =>
   state.pendingWindow && (state.pendingWindow.id ?? `w${state.version}:${state.pendingWindow.type}`);
 
+/** U6：这个座位**本回合按过** UNO 键吗。老状态没有这一格，一律当作没按过。 */
+export const calledThisTurn = (b: Board, seat: number): boolean => b.unoThisTurn?.[seat] ?? false;
+
 /**
  * U6（2026-08-01 改判）：声明的作用域是「你的这个回合」。
  * 回合内怎么波动都不清（并列被截剩牌回手、恒心弃 1 摸 1、洗牌②摸 1 弃 1 都要穿过 1 张），
  * 交回合那一刻由 `passTurn` 统一结算；回合之外沿用旧口径——手牌一离开 1 张立刻作废。
+ *
+ * 「回合内不清」只保护**本回合按过按钮**的声明（2026-08-08 澄清）。上一个回合末成立、
+ * 结转进来的那一份不在保护范围内：它跟着那 1 张牌存续，手牌一离开 1 张就作废——
+ * 否则「上一轮喊过 → 这一轮摸 1 张」会一路顶着徽记走到回合末，再被虚喊结算平白罚 2。
  */
 export const syncUno = (board: Board): Board => ({
   ...board,
-  saidUno: board.saidUno.map((v, i) => v && (i === board.currentSeat || board.hands[i].length === 1)),
+  saidUno: board.saidUno.map(
+    (v, i) => v && ((i === board.currentSeat && calledThisTurn(board, i)) || board.hands[i].length === 1),
+  ),
 });
 
 /** U8：一局最多把出牌堆（除顶）与弃牌堆洗回摸牌堆 2 次。 */
@@ -154,10 +163,12 @@ export const passTurn = (
   now: string,
   from = b.currentSeat,
   step = 1,
-): Pick<Board, "currentSeat" | "activatedThisTurn" | "saidUno" | "unoGrace"> => ({
+): Pick<Board, "currentSeat" | "activatedThisTurn" | "saidUno" | "unoThisTurn" | "unoGrace"> => ({
   currentSeat: nextSeat(b, from, step),
   activatedThisTurn: b.activatedThisTurn.map(() => false),
   saidUno: b.saidUno.map((v, i) => v && b.hands[i].length === 1),
+  // 「本回合按过」的额度跟 `activatedThisTurn` 一起清零：存续下去的只有声明本身
+  unoThisTurn: b.saidUno.map(() => false),
   // U7b：交回合后给离场者 1 秒补喊。无条件开——他此刻是不是持 1 张无所谓，
   // `catchable` 本来就还要看手牌数，这里只负责「谁、到什么时候之前抓不得」。
   unoGrace: { seat: from, until: new Date(Date.parse(now) + UNO_GRACE_MS).toISOString() },

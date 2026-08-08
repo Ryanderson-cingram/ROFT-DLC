@@ -19,7 +19,7 @@ import { shuffleCancelActions, SHUFFLE_CHOICES } from "./actions/shuffle-card.ts
 import { activateSkill, revealSkill } from "./actions/skill.ts";
 import { harvestActions } from "./actions/soul-harvest.ts";
 import { startGame } from "./actions/start-game.ts";
-import { isPlayable, playableFor, stalemate } from "./legal.ts";
+import { calledThisTurn, isPlayable, playableFor, stalemate } from "./legal.ts";
 import { SKILL_DATA } from "./skills/draw-passives.ts";
 import { settleTurnEnd } from "./skills/turn-end.ts";
 import { HANDLERS, spendSouls } from "./skills/handlers.ts";
@@ -135,6 +135,10 @@ const MISCALL_DRAW = 2;
  *
  * 与 `syncUno` 的分工：`syncUno` 管**回合外**的作废（手牌一离开 1 张即清），那是自然失效、
  * 不该罚；这里只认「你自己的回合结束了」这一个时点。
+ *
+ * 判的是「**本回合按过按钮**」（`unoThisTurn`）而不是「声明此刻有效」（`saidUno`）：
+ * 上一个回合末成立、结转进来的声明在那时已经结算过（恰 1 张、成立），这一回合再算一次
+ * 就是「上一轮喊过 UNO → 这一轮无牌可出摸 1 张 → 平白罚摸 2」（2026-08-08 澄清）。
  */
 function settleUnoCall(before: GameState, r: ApplyResult, ctx: Ctx): ApplyResult {
   const b0 = before.board;
@@ -143,7 +147,7 @@ function settleUnoCall(before: GameState, r: ApplyResult, ctx: Ctx): ApplyResult
   const seat = b0.currentSeat;
   // 回合没交出去就还没到结算时点（回合内手牌怎么波动都不算数）
   if (b1.currentSeat === seat) return r;
-  if (!b0.saidUno[seat] || b1.hands[seat].length === 1) return r;
+  if (!calledThisTurn(b0, seat) || b1.hands[seat].length === 1) return r;
 
   // 01-S17b ⑤：UNO 的罚摸一定要摸（2026-08-03 裁定：虚喊那 2 张同样照罚）
   const { board, drawn, reshuffledOrder } = drawCards(b1, { kind: "rule", base: MISCALL_DRAW, seat, reason: "unoPenalty" }, ctx.rng);
