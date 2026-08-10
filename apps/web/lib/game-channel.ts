@@ -2,7 +2,7 @@
 
 import type { Action, ClientSnapshot } from "@roft/engine";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { callEdge, humanReason, newIdempotencyKey } from "./api";
+import { callEdge, humanReason, newIdempotencyKey, shouldRetry } from "./api";
 import { createClient } from "./supabase/client";
 
 /** 铃铛 payload（0001 迁移的 notify_room_event 触发器发的）。 */
@@ -21,6 +21,11 @@ export type ChannelError = { text: string; kind: "action" | "sync" };
 
 const POLL_LINKED_MS = 30_000;
 const POLL_UNLINKED_MS = 3_000;
+/**
+ * 同 key 重试的退避档位（毫秒）。两次就够：再多用户已经在盯着一个不动的牌桌了，
+ * 与其继续无声等待，不如把错误摆出来让他自己决定。
+ */
+const RETRY_DELAYS = [150, 500];
 
 /**
  * 对局的数据链路：铃铛 → 拉快照。
@@ -108,8 +113,21 @@ export function useGameChannel(roomId: string | null) {
           action,
         });
 
+      /*
+        同 key 重试，最多 RETRY_DELAYS.length 次。
+
+        重试之所以**安全**，是因为服务端在跑引擎之前先按 (room_id, idempotency_key)
+        查一次账：这个 key 落过账就直接把当时的 version 还回来，不会重复结算。
+        （从前那道闸在 RPC 里，永远等不到重放——引擎先按已经前进的状态把动作拒了。）
+
+        策略见 `shouldRetry`：只重试「还没被裁决」的失败，确定性的 4xx 一次就停。
+      */
       let res = await post();
-      if (!res.ok && res.status === 0) res = await post(); // 没到服务端，同 key 再来一次
+      for (const wait of RETRY_DELAYS) {
+        if (res.ok || !shouldRetry(res.status)) break;
+        await new Promise((r) => setTimeout(r, wait));
+        res = await post();
+      }
 
       if (res.ok) {
         await pull();

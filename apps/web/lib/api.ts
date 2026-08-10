@@ -15,6 +15,23 @@ export type EdgeResult<T> =
   | { ok: false; status: number; reason: string };
 
 /**
+ * 这次失败**值不值得用同一个 idempotencyKey 再来一次**。
+ *
+ * ⚠️ 只对带幂等键的请求开。没有键的重试会重复下单——`create-room` 会多开一个房间。
+ * 现在只有 `game-channel.ts::send`（room-action）满足条件。
+ *
+ * - `0`：没拿到响应。可能压根没发出去，**也可能是服务端已经提交、回程丢了**
+ *   （Wi-Fi 掉线、切后台、代理超时）。两种都靠幂等键收口——服务端认出这个 key
+ *   就把第一次的结果还回来（room-action 的幂等预检查）。
+ * - `429`：被限流，等一下就好。
+ * - `5xx`：网关 / 冷启动 / 运行时重启。动作本身还没被裁决过。
+ *
+ * 其余 4xx 是**确定性**拒绝——「还没轮到你」重试一万次也是同一个答案，
+ * 重试只会让用户多等。
+ */
+export const shouldRetry = (status: number) => status === 0 || status === 429 || status >= 500;
+
+/**
  * 打 Edge Function。用裸 fetch 而不是 functions.invoke，是因为 409/400 的
  * 状态码与 reason 都要原样交给调用方——冲突要拉快照，非法动作要显示人话。
  */
