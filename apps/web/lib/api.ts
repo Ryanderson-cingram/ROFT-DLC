@@ -78,8 +78,10 @@ const SAYINGS: Record<string, string> = {
   bad_shape: "这几张凑不成并列：2 张同色同数 / 4 张同数 / 6 张同色，且都得是数字牌。",
   color_required: "打变色牌要先选颜色。",
   color_not_allowed: "这一手不用选颜色（有色牌自带颜色）。",
-  // 03 §4 五彩：变色牌打得出，但颜色只能维持现状
-  color_locked: "你带着「五彩」：变色牌只能定成当前的颜色。",
+  // 锁色有三个来源（专精♥9 的专属色 / 五彩 / 吟游行进曲），所以这句**不点名**——
+  // 点名了就有三分之二的场合在说谎。正常 UI 打不出这条：坞里本来就只画得出那一个色块
+  // （快照的 `wildColorLock`），这里是伪造 chosenColor 时的信任边界兜底。
+  color_locked: "这张牌的颜色被锁住了，只能定成高亮的那个色。",
   shuffle_choice_required: "打洗牌牌要先挑卡面上的那一项。",
   shuffle_choice_not_allowed: "只有洗牌牌才挑卡面选项。",
   assault_unavailable: "现在用不了强袭的掷骰打法。",

@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { applyAction, legalActions, projectView } from "../src/index.ts";
 import { windowIdOf } from "../src/actions/punish.ts";
 import { spendMarks } from "../src/skills/primitives/marks.ts";
+import { RAINBOW } from "../src/skills/primitives/statuses.ts";
 import { card, ctx, lobby, table } from "./helpers.ts";
+import type { Board } from "../src/types.ts";
 
 const R7 = card("R", "7");
 
@@ -282,6 +284,115 @@ describe("标记上限 marksCap（绑定来自 04 围栏块的 mark_cap）", () 
     expect("盗" in snap.marksCap).toBe(false);
     // 缺席才是「无上限」的表达；0 会被 UI 读成「上限是 0」
     expect(snap.marksCap.盗).toBeUndefined();
+  });
+});
+
+/**
+ * `wildColorLock`（2026-08-10）：无色牌定色被锁到哪个色，**三个来源合成一个值**。
+ *
+ * 这个字段之所以存在，是因为客户端从前自己认「五彩」那一个状态、还把锁定色写死成跟色，
+ * 于是行进曲与专精♥9 都画成四色可选、选错才被拒成 `color_locked`——同样是「不能换色」，
+ * 三个来源三种表现。判据搬进快照之后，UI 只画这一个值。
+ *
+ * 优先级（`legal.ts::requiredColor`）：专精的专属色 > 维持跟色。这里连优先级一起钉。
+ */
+describe("wildColorLock（无色牌定色锁）", () => {
+  const R7 = card("R", "7");
+  const hands = () => [[card("R", "3")], [card("Y", "1")], [card("Y", "2")]];
+  const at = (over: Partial<Board>) =>
+    projectView(table(hands(), { playedPile: [R7], drawPile: [card("G", "9")], ...over }), 0).wildColorLock;
+
+  it("谁都没锁 → null（四色随便选）", () => {
+    expect(at({})).toBeNull();
+  });
+
+  it("五彩 → 当前跟色", () => {
+    expect(at({ statuses: [[RAINBOW], [], []] })).toBe("R");
+  });
+
+  it("吟游唱行进曲 → 当前跟色（全场生效，不必是自己唱的）", () => {
+    expect(at({
+      skills: [null, "club-5", null],
+      revealed: [false, true, false],
+      chosen: { "club-5": { key: "行进曲", seat: 1 } },
+    })).toBe("R");
+  });
+
+  it("专精♥9 → 他的专属色，**与跟色无关**", () => {
+    // 跟色是红，专精色是绿：写死成 activeColor 的实现会在这里红
+    expect(at({
+      skills: ["heart-9", null, null],
+      revealed: [true, false, false],
+      chosen: { "heart-9": { key: "G", seat: 0 } },
+    })).toBe("G");
+  });
+
+  it("专精 + 行进曲同时在场 → 专精色（它比「维持跟色」更具体）", () => {
+    expect(at({
+      skills: ["heart-9", "club-5", null],
+      revealed: [true, true, false],
+      chosen: { "heart-9": { key: "G", seat: 0 }, "club-5": { key: "行进曲", seat: 1 } },
+    })).toBe("G");
+  });
+
+  // 专精色只属于定它的那个座位：别人的那份不该锁到自己头上
+  it("别人的专精色不锁你", () => {
+    expect(at({
+      skills: [null, "heart-9", null],
+      revealed: [false, true, false],
+      chosen: { "heart-9": { key: "G", seat: 1 } },
+    })).toBeNull();
+  });
+
+  // V3：没亮出的技能不生效，两条都验
+  it("技能没亮出 → 不锁", () => {
+    expect(at({
+      skills: ["heart-9", "club-5", null],
+      revealed: [false, false, false],
+      chosen: { "heart-9": { key: "G", seat: 0 }, "club-5": { key: "行进曲", seat: 1 } },
+    })).toBeNull();
+  });
+
+  // 01-P9 / 06-Q65：封印期间技能失效（值留着，只是读不到）
+  it("被封印 → 专精不锁", () => {
+    expect(at({
+      skills: ["heart-9", null, null],
+      revealed: [true, false, false],
+      chosen: { "heart-9": { key: "G", seat: 0 } },
+      statuses: [["封印"], [], []],
+    })).toBeNull();
+  });
+
+  it("唱歌的人被封印 → 行进曲不锁全场", () => {
+    expect(at({
+      skills: [null, "club-5", null],
+      revealed: [false, true, false],
+      chosen: { "club-5": { key: "行进曲", seat: 1 } },
+      statuses: [[], ["封印"], []],
+    })).toBeNull();
+  });
+
+  // 吟游选的是别支歌 → 不锁（`option_of` 的闸门：没选中的选项不生效）
+  it("唱的是别支歌 → 不锁", () => {
+    expect(at({
+      skills: [null, "club-5", null],
+      revealed: [false, true, false],
+      chosen: { "club-5": { key: "活泼板", seat: 1 } },
+    })).toBeNull();
+  });
+
+  // 跟色还没定过（开局翻出无色牌）时无色可守，照常让他选——`requiredColor` 原注
+  it("跟色未定 + 五彩 → null（没有色可守，不能锁成 undefined）", () => {
+    const s = table(hands(), {
+      playedPile: [card(null, "wild")],
+      drawPile: [card("G", "9")],
+      statuses: [[RAINBOW], [], []],
+    });
+    expect(projectView({ ...s, board: { ...s.board!, activeColor: null } }, 0).wildColorLock).toBeNull();
+  });
+
+  it("大厅态（还没有牌桌）→ null，不炸", () => {
+    expect(projectView(lobby(3), 0).wildColorLock).toBeNull();
   });
 });
 

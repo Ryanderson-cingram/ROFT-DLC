@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { PileKey } from "@/components/game/card-river";
 import { Dock } from "@/components/game/dock";
 import { DraftSheet } from "@/components/game/draft-sheet";
+import { ErrorModal } from "@/components/game/error-modal";
 import { GameOver } from "@/components/game/game-over";
 import { LogDrawer } from "@/components/game/log-drawer";
 import { PileModal } from "@/components/game/modal";
@@ -23,6 +24,7 @@ import { SkillModal } from "@/components/game/skill-modal";
 import { GameTable } from "@/components/game/table";
 import { callEdge, humanReason, newIdempotencyKey } from "@/lib/api";
 import { isWildCard } from "@/lib/cards";
+import { wildColorLockFor } from "@/lib/legal";
 import { dockSlots } from "@/lib/dock-slots";
 import { buttonLabel } from "@/lib/hud-copy";
 import { needsDeclaration } from "@/lib/skills";
@@ -86,7 +88,7 @@ export default function GamePage() {
   const [view, setView] = useState<View>(null);
   const [logOpen, setLogOpen] = useState(false);
 
-  const { snapshot, error, loaded, send } = useGameChannel(roomId);
+  const { snapshot, error, loaded, send, clearError, reload } = useGameChannel(roomId);
 
   // 昵称不在快照里（展示数据不进规则层），自己从 room_seats join profiles 取。
   useEffect(() => {
@@ -149,7 +151,8 @@ export default function GamePage() {
   if (!snapshot)
     return (
       <main className="wrap stack">
-        <p className="hint">{loaded ? (error ?? "这一桌还没开局。") : "载入牌桌…"}</p>
+        {/* 还没有牌桌可画时不弹窗：这一页整个就是那句话，弹窗盖上去只会挡住「回等候室」 */}
+        <p className="hint">{loaded ? (error?.text ?? "这一桌还没开局。") : "载入牌桌…"}</p>
         <p>
           <Link href={`/room/${code}`}>← 回等候室</Link>
         </p>
@@ -227,14 +230,8 @@ export default function GamePage() {
     send(a);
   };
 
-  /**
-   * 03 §4 五彩：使用**变色牌**时不能改变颜色。锁的是无色牌那一支——并列 4 张同数的定色
-   * 不是「使用变色牌」，引擎那边也不锁（`legal.ts::colorLocked` 只在无色牌路径上问）。
-   */
-  const lockedTo = (card?: Card) =>
-    card?.color === null && snapshot.players[snapshot.youSeat]?.statuses.includes("五彩")
-      ? snapshot.activeColor
-      : null;
+  /** 定色锁：判据整条来自快照，`lib/legal.ts` 里那一句纯函数（本页零规则）。 */
+  const lockedTo = (card?: Card) => wildColorLockFor(snapshot, card);
 
   /**
    * 定色不弹模态：待定色的那一手交给坞，中槽整个换成四个色块，手牌全程可见（spec §3.4）。
@@ -322,11 +319,9 @@ export default function GamePage() {
         snapshot={snapshot}
         names={names}
       />
-      {error && (
-        <p className="wrap hint" role="alert" style={{ color: "var(--danger-text)" }}>
-          {error}
-        </p>
-      )}
+      {/* 报错走弹窗。从前这里是一行 `.wrap.hint` 小字，而它排在粘性底坞之后 →
+          落在坞下方，手机上要滚到页面最底才看得见（2026-08-10 的真机反馈）。 */}
+      {error && <ErrorModal error={error} onClose={clearError} onReload={reload} />}
       {snapshot.phase === "dealing" && (
         <DraftSheet
           options={snapshot.draftOptions ?? []}

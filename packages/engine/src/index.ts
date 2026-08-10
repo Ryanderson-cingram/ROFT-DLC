@@ -19,7 +19,7 @@ import { shuffleCancelActions, SHUFFLE_CHOICES } from "./actions/shuffle-card.ts
 import { activateSkill, revealSkill } from "./actions/skill.ts";
 import { harvestActions } from "./actions/soul-harvest.ts";
 import { startGame } from "./actions/start-game.ts";
-import { calledThisTurn, isPlayable, playableFor, stalemate } from "./legal.ts";
+import { calledThisTurn, isPlayable, playableFor, requiredColor, stalemate } from "./legal.ts";
 import { SKILL_DATA } from "./skills/draw-passives.ts";
 import { settleTurnEnd } from "./skills/turn-end.ts";
 import { HANDLERS, spendSouls } from "./skills/handlers.ts";
@@ -423,6 +423,9 @@ export function projectView(state: GameState, seat: number): ClientSnapshot {
     canPlayMultiple: b
       ? multiPlayAllowed(b, seat, b.skills[seat] ? SKILL_DATA.byId.get(b.skills[seat]!) : undefined)
       : false,
+    // 无色牌定色被锁到哪个色（专精 / 五彩 / 行进曲三合一）。判据整条来自引擎，
+    // 客户端不再自己认技能与状态——它只负责把这个色画成唯一那个色块
+    wildColorLock: b ? (requiredColor(b, seat) ?? null) : null,
     // 02 §5：弃牌堆全公开
     discardPile: b?.discardPile ?? [],
     // 出牌堆整条也全公开（每张都被所有人亲眼见过）。方向照牌桌原样给：`[0]` 是牌顶，
