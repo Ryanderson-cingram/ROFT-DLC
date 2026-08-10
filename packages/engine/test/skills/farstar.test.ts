@@ -3,7 +3,8 @@
 // 06-Q34（不占主动）、06-Q54（付不起不能发动）、06-Q55（代价牌进弃牌堆）、06-Q56（initiator）。
 import { describe, expect, it } from "vitest";
 import { applyAction, legalActions, projectView } from "../../src/index.ts";
-import { settleFarstar, windowIdOf } from "../../src/actions/punish.ts";
+import { settleFarstar } from "../../src/actions/punish.ts";
+import { windowIdOf } from "../../src/legal.ts";
 import { skills } from "../../src/skills/registry.ts";
 import { card, ctx, table } from "../helpers.ts";
 import type { Board, Card, Color, GameState } from "../../src/types.ts";

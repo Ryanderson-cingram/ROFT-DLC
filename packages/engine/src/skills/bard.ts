@@ -26,7 +26,7 @@ import type { Board } from "../types.ts";
 const PUNISH_FACES = new Set(["+2", "+4"]);
 
 /** 这个技能当前选中的那个选项（`option_of` 的另一半）。缺席 = 还没选过。 */
-export const chosenOption = (b: Board, skillId: string): string | undefined => b.chosen?.[skillId]?.key;
+const chosenOption = (b: Board, skillId: string): string | undefined => b.chosen?.[skillId]?.key;
 
 /**
  * `seat` 此刻能不能选/换选项：卡面写着「回合开始时若你的**上家打出的不是 +2 或 +4**」。

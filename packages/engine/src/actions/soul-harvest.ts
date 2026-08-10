@@ -9,6 +9,7 @@
  * 比对对象是发动者**当众指定的色+数**，与牌顶无关，也不要求他手里有那张牌。
  */
 import { drawCards, drawEvents, giveTo } from "./draw.ts";
+import { COLORS } from "../deck.ts";
 import { WINDOW_MS, commit, isNumberCard, nextSeat, reject } from "../legal.ts";
 import { paramsOf } from "../skills/params.ts";
 import { gainMarks, markCount } from "../skills/primitives/marks.ts";
@@ -24,8 +25,6 @@ import type {
   GameState,
   SoulHarvest,
 } from "../types.ts";
-
-const COLORS: Color[] = ["R", "G", "B", "Y"];
 
 /** 三选一。`draw3` 是「亮不出或不愿亮」，也是超时的默认。 */
 const CHOICES = ["show-exact", "show-partial", "draw3"] as const;

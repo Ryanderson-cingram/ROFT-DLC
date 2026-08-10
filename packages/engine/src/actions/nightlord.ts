@@ -33,7 +33,7 @@ const STEAL = "盗";
  * 超时默认还**刚抽到的那张**（最不泄露、最保守）。是个哨兵而不是牌 id：
  * `defaultChoice` 随窗口进快照，写真 id 等于把盲抽的结果当众念出来。
  */
-export const RETURN_STOLEN = "stolen";
+const RETURN_STOLEN = "stolen";
 
 /** V3：没亮出的技能对局面毫无影响。 */
 const defOf = (b: Board, seat: number, data: SkillData): SkillDef | undefined => {

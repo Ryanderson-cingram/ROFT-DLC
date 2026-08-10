@@ -25,7 +25,7 @@ import type { Board, EngineEvent } from "../types.ts";
 /** ① 在惩罚窗口里的那个响应选项。 */
 export const DISSENT = "dissent";
 /** ② 的标记名。03 §5 的标记名是开放集合，与 `nightlord.ts` 的「盗」同一写法。 */
-export const DISSENT_MARK = "异";
+const DISSENT_MARK = "异";
 /** ② 的弃异档位：`accept:2` = 吃下并弃 2 枚异。`accept` 本身 = 弃 0。 */
 const ACCEPT_N = /^accept:(\d+)$/;
 export const acceptDiscardCount = (choice: string): number => Number(ACCEPT_N.exec(choice)?.[1] ?? 0);

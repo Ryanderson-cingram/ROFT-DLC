@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyAction } from "../src/index.ts";
-import { windowIdOf } from "../src/actions/punish.ts";
+import { windowIdOf } from "../src/legal.ts";
 import { card, ctx, table } from "./helpers.ts";
 import type { GameState } from "../src/types.ts";
 

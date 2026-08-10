@@ -50,14 +50,14 @@ function raidEffect(b: Board, seat: number, data: SkillData): SkillEffect | unde
  * 「同数」只有数字牌谈得上，所以功能牌与无色牌两边都截不了、也不可被截——
  * 04 的 2026-07-31 裁定「劫营要同色同数，本来就只可能是数字牌」正是这个意思。
  */
-export const canRaid = (c: Card, top: Card) =>
+const canRaid = (c: Card, top: Card) =>
   isNumberCard(c) && c.color === top.color && c.face === top.face;
 
 /**
  * 刚落地的那**几张**里有没有截得动的（单张出牌就是 1 张；并列是整组，
  * 04 ♥4 的 2026-08-02 改判：触发面是**组内任意一张**）。
  */
-export const canRaidAny = (c: Card, tops: Card[]) => tops.some((t) => canRaid(c, t));
+const canRaidAny = (c: Card, tops: Card[]) => tops.some((t) => canRaid(c, t));
 
 /** 刚落地 `tops` 之后，此刻能打断的座位（其他座位、亮着劫营、手里有得截）。 */
 export function raidActors(b: Board, seat: number, tops: Card[], data: SkillData = SKILL_DATA): number[] {
