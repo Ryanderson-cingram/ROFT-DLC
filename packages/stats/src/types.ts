@@ -1,0 +1,149 @@
+/**
+ * 跨局统计与成就的类型。
+ *
+ * 这个包是**纯函数**：输入一局的事件流 + 终局 state，输出每个座位的增量与本局解锁。
+ * 不碰 IO、不认识数据库、不 import 引擎的运行时——只 import 它的类型。
+ * 于是 24 条成就的判定可以整份离线单测，那是这套系统里唯一真正复杂的部分。
+ */
+
+/** 分布类计数的形状：n = 局数 / 次数，w = 其中赢了几局。 */
+export interface Tally {
+  n: number;
+  w: number;
+}
+
+/**
+ * 一局打完给一个座位攒下的增量。列名与 `player_stats` 的列一一对应——
+ * 合并就是逐列 `+=`（`max*` 那几列取 max，分布类逐键合并）。
+ */
+export interface SeatDelta {
+  // ---- 战绩 ----
+  games: number;
+  wins: number;
+  draws: number;
+  /** 这一局我是不是先手（`gameStarted.starter`）。先手胜率的分母。 */
+  gamesFirst: number;
+  winsFirst: number;
+  /** 这一局一共走了几个回合（`turnEnded` 的条数，全场共享同一个数）。 */
+  turns: number;
+
+  // ---- 牌与惩罚 ----
+  cardsPlayed: number;
+  cardsDrawn: number;
+  /** 因惩罚链吃掉的张数（`punishAccepted.total` 之和）。 */
+  punishTaken: number;
+  /** 单条链吃下的最大总量。 */
+  punishMax: number;
+  /** 指向过我、又被我转给别人的链里最大的那一条。 */
+  punishDeflectedMax: number;
+  /** 把指向自己的链转出去的次数。 */
+  punishDeflected: number;
+  /** 单个回合里打出的最多张数。 */
+  mostCardsOneTurn: number;
+
+  // ---- UNO ----
+  unoCalled: number;
+  /** 我抓到别人漏喊。 */
+  unoCaught: number;
+  /** 我被别人抓到。 */
+  unoGotCaught: number;
+  unoMiscalled: number;
+
+  // ---- 技能与盘外 ----
+  skillsRevealed: number;
+  skillsActivated: number;
+  /** 这一局我拿的是不是四神之一。 */
+  godsPlayed: number;
+  diceRolled: number;
+  /** 强袭三面骰的分布：下标即点数 0 / 1 / 2。 */
+  diceHist: [number, number, number];
+  alliancesFormed: number;
+  alliancesRefused: number;
+  raidsStarted: number;
+  marksGained: number;
+  sealedCount: number;
+
+  // ---- 纪录（合并时取极值，不累加）----
+  /** 只有赢了才有值。 */
+  fastestWinTurns: number | null;
+  longestGameTurns: number;
+
+  // ---- 分布 ----
+  /** 技能 id → {n, w}。这一局只可能有一个键（一人一技能）。 */
+  bySkill: Record<string, Tally>;
+  /** 牌面 key（`R+2` / `W变色`）→ 打出次数。 */
+  byCard: Record<string, number>;
+  /** 对手 userId → {n, w}（w = 我赢了他几局）。 */
+  vsPlayer: Record<string, Tally>;
+  /** 结过盟的人 userId → {n, w}。 */
+  withAlly: Record<string, Tally>;
+}
+
+/**
+ * 这一局之内的**形态**标记，不是累计量——所以它们不进 `player_stats`，
+ * 只在终局那一次判定里活着。10 条特判成就各读其中一格。
+ */
+export interface GameFlags {
+  won: boolean;
+  /** 单局内四色各打出 ≥ 8 张（满堂彩）。 */
+  colorSweep: boolean;
+  /** 把总量 ≥ 12 的链整条转给了别人（反手）。 */
+  bigDeflect: boolean;
+  /** 喊过 UNO、全程没被任何人抓到、并且赢了（空手接白刃）。 */
+  unoCleanWin: boolean;
+  /** 12 回合之内取胜（速通）。 */
+  swiftWin: boolean;
+  /** 赢了且全程没亮过技能（无相胜）。 */
+  facelessWin: boolean;
+  /** 赢了、拒过结盟、且一次都没结成（独狼）。 */
+  loneWolfWin: boolean;
+  /** 终局的本地时间落在 00:00–04:00（守夜人）。 */
+  nightWatch: boolean;
+  /** 赢了且中途被封印过（逆流）。 */
+  defiantWin: boolean;
+  /** 赢了、没摸过一张牌、也没吃过惩罚（零封之局）。 */
+  spotlessWin: boolean;
+  /** 赢了且牌堆已经洗满两次（归墟）。 */
+  abyssWin: boolean;
+}
+
+/**
+ * `player_stats` 里已经攒下的累计量。判定要拿它跟增量比，才知道
+ * 「这一局**跨过**了阈值」而不是「本来就够了」。
+ * 只列判定用得上的那些列；读表时缺的列按 0 补。
+ */
+export interface PriorStats {
+  games: number;
+  wins: number;
+  unoCalled: number;
+  unoCaught: number;
+  unoGotCaught: number;
+  skillsRevealed: number;
+  godsPlayed: number;
+  diceRolled: number;
+  alliancesFormed: number;
+  marksGained: number;
+  punishMax: number;
+  mostCardsOneTurn: number;
+  streakCur: number;
+  streakBest: number;
+  bySkill: Record<string, Tally>;
+}
+
+export const emptyPrior = (): PriorStats => ({
+  games: 0,
+  wins: 0,
+  unoCalled: 0,
+  unoCaught: 0,
+  unoGotCaught: 0,
+  skillsRevealed: 0,
+  godsPlayed: 0,
+  diceRolled: 0,
+  alliancesFormed: 0,
+  marksGained: 0,
+  punishMax: 0,
+  mostCardsOneTurn: 0,
+  streakCur: 0,
+  streakBest: 0,
+  bySkill: {},
+});
