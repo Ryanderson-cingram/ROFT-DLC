@@ -20,8 +20,6 @@ serveAuthed(async ({ body, user, svc }) => {
   if (!action || typeof action !== "object" || typeof action.type !== "string")
     return json({ reason: "bad_action" }, 400);
 
-  // 幂等不在这里预检查——事务外的预检查挡不住两个同 key 的并发请求。
-  // 由 RPC 里的唯一约束裁决，重放走 apply_room_action 的 unique_violation 分支。
   const { data: room } = await svc.from("rooms").select("created_by, status, config").eq("id", roomId).single();
   if (!room) return json({ error: "room_not_found" }, 404);
 
@@ -31,6 +29,28 @@ serveAuthed(async ({ body, user, svc }) => {
   if (!seat) return json({ error: "not_a_member" }, 403);
   if (action.type === "startGame" && room.created_by !== user.id)
     return json({ reason: "not_the_host" }, 400);
+
+  /*
+    幂等预检查：这个 key 已经落过账就直接把当时的 version 还回去。
+
+    **必须在引擎之前**。`apply_room_action` 里那道幂等闸看起来管着重放，
+    但它永远等不到重放——引擎在它之前就跑了，而重放时库里的状态**已经前进**，
+    于是同一个动作会被按新状态拒掉（打出最后一张 → `wrong_phase`，
+    普通出牌 → `not_in_hand` / `not_your_turn`），400 直接返回，根本到不了 RPC。
+
+    这条路真实存在：`callEdge` 的 `status === 0` 不只是「没到服务端」——
+    响应在**回程**丢了（Wi-Fi 掉线、手机切后台、代理超时）也是 0，
+    而 `game-channel.ts::send` 正是在 0 的时候拿同一个 key 重试一次。
+    第一次其实成功了，第二次却给用户弹一句「这个阶段不能做这件事」。
+
+    与 RPC 里那道闸是**分工**不是重复：
+    - 这里挡**顺序重放**（第一次已经完成）——只有事务外的预检查做得到，因为引擎在事务里。
+    - RPC 的唯一约束挡**并发重放**（两个同 key 同时到）——只有数据库做得到。
+    两道都要。
+  */
+  const { data: done } = await svc.from("room_events")
+    .select("room_version").eq("room_id", roomId).eq("idempotency_key", idempotencyKey).maybeSingle();
+  if (done) return json({ version: done.room_version, idempotent: true });
 
   /*
     再来一局（原房间重开）。**不是引擎动作**——引擎只管一局之内的规则，「把房间倒回等候室」
