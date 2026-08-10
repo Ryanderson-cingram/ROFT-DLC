@@ -156,10 +156,10 @@ max_indexes = 5
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-# 线上部署地址。site_url 是**兜底落点**：邮件里没带 redirect_to 的链接、以及
-# redirect_to 没过白名单时，人都会落到这里——所以它必须是线上，不能是本机回环。
-# 本地开发不受影响：本地那几个地址都在下面的白名单里，代码又总是显式传 redirectTo。
-site_url = "https://roft-dlc.vercel.app"
+# 这一段是**本地**的值。线上那一份在文件末尾的 `[remotes.prod]` 里——
+# 同一个 config.toml 既要喂 `supabase start` 又要喂 `config push`，混成一套的话，
+# 要么本地收发邮件得绕线上域名，要么一推就把线上的设置盖成本地开发档。
+site_url = "http://127.0.0.1:3000"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
@@ -170,7 +170,6 @@ site_url = "https://roft-dlc.vercel.app"
 # `apps/web/.env.local` 的注释），落点自然也在那个 host 上，写死一个 IP 换个路由器就废了。
 # 私房局里这条不构成开放重定向——192.168/16 里的地址，攻击者得先在同一个局域网上。
 additional_redirect_urls = [
-  "https://roft-dlc.vercel.app/**",
   "http://127.0.0.1:3000/**",
   "https://127.0.0.1:3000/**",
   "http://localhost:3000/**",
@@ -429,3 +428,37 @@ enabled = true
 # declarative_schema_path = "./database"
 # JSON string passed through to pg-delta SQL formatting.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
+
+# ============================================================
+# 线上（jqjpmnbpejqftypltowp）专有的覆盖值。`supabase config push` 会在
+# linked 的 ref 与这里的 project_id 对上时，用这一段盖住上面的本地值。
+#
+# 为什么需要它：上面那些是**本地开发档**——不发确认邮件、邮件间隔 1s、
+# 关掉 MFA。整份直接推上去，线上就跟着被降级成开发档（实测 `config push`
+# 的 diff 里确实有这几条）。所以线上只改该改的三样，其余按线上现状钉住。
+# ============================================================
+[remotes.prod]
+project_id = "jqjpmnbpejqftypltowp"
+
+[remotes.prod.auth]
+# 兜底落点必须是线上：没带 redirect_to 的邮件链接、以及 redirect_to 没过白名单时，
+# 人都会落到这里。
+site_url = "https://roft-dlc.vercel.app"
+additional_redirect_urls = ["https://roft-dlc.vercel.app/**"]
+# 登录改成邮箱 + 密码之后匿名登录没有调用方了，开着就是一条没人看的入口。
+enable_anonymous_sign_ins = false
+
+[remotes.prod.auth.email]
+# 2026-08-10 关掉。开着的时候每次注册都要发一封确认邮件，而没配自定义 SMTP 时
+# `[auth.rate_limit] email_sent` 被 Supabase 钉死在**每小时 2 封**——四个人重新注册，
+# 第 3 个就吃 `POST /auth/v1/signup → 429`（线上日志实录）。
+# 代价是邮箱不再验证：私房局里认识的人才有房间码，这个代价换「注册不发信」值得。
+# 剩下的 2 封/小时 全留给忘记密码。想把验证要回来，就得先接 Resend/SendGrid 之类的 SMTP。
+enable_confirmations = false
+# 下面两条不是新决定，是把线上现状钉住，免得被上面的本地开发档推翻。
+max_frequency = "1m0s"
+otp_length = 8
+
+[remotes.prod.auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true

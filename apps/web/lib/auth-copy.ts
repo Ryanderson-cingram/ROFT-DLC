@@ -18,8 +18,10 @@ const SAYINGS: Record<string, string> = {
   validation_failed: "邮箱或密码填得不对，检查一下格式。",
   email_address_invalid: "这个邮箱地址不合法。",
   signup_disabled: "现在不开放注册。",
-  over_email_send_rate_limit: "试得太频繁了，等一分钟再来。",
-  over_request_rate_limit: "试得太频繁了，等一分钟再来。",
+  // 这两条的窗口**不一样**，别混成一句话：邮件是「每小时 2 封」（没配自定义 SMTP 时
+  // Supabase 的硬上限），说成「等一分钟」会让人一分钟后再点一次、再吃一个 429。
+  over_email_send_rate_limit: "发邮件的额度用完了（每小时只有 2 封），过一阵再试。",
+  over_request_rate_limit: "试得太频繁了，等几分钟再来。",
   same_password: "新密码跟旧的一样。",
 };
 
