@@ -448,9 +448,14 @@ additional_redirect_urls = ["https://roft-dlc.vercel.app/**"]
 # 登录改成邮箱 + 密码之后匿名登录没有调用方了，开着就是一条没人看的入口。
 enable_anonymous_sign_ins = false
 
-# 以下三节**不是新决定**，是把线上现状钉住，免得被本地开发档推翻。
 [remotes.prod.auth.email]
-enable_confirmations = true
+# 2026-08-10 关掉。开着的时候每次注册都要发一封确认邮件，而没配自定义 SMTP 时
+# `[auth.rate_limit] email_sent` 被 Supabase 钉死在**每小时 2 封**——四个人重新注册，
+# 第 3 个就吃 `POST /auth/v1/signup → 429`（线上日志实录）。
+# 代价是邮箱不再验证：私房局里认识的人才有房间码，这个代价换「注册不发信」值得。
+# 剩下的 2 封/小时 全留给忘记密码。想把验证要回来，就得先接 Resend/SendGrid 之类的 SMTP。
+enable_confirmations = false
+# 下面两条不是新决定，是把线上现状钉住，免得被上面的本地开发档推翻。
 max_frequency = "1m0s"
 otp_length = 8
 

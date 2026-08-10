@@ -18,6 +18,14 @@ describe("authMessage", () => {
     expect(authMessage(null)).toBe("登录没成功，稍后再试一次。");
   });
 
+  it("邮件额度与请求频率是两个窗口，不能共用一句话", () => {
+    // 邮件那条是「每小时 2 封」；说成「等一分钟」会让人一分钟后再点、再吃一个 429
+    expect(authMessage({ code: "over_email_send_rate_limit" })).toContain("每小时");
+    expect(authMessage({ code: "over_email_send_rate_limit" })).not.toBe(
+      authMessage({ code: "over_request_rate_limit" }),
+    );
+  });
+
   it("认不出的 code 兜住，但把原文带上", () => {
     expect(authMessage({ code: "mfa_challenge_expired", message: "MFA challenge expired" }))
       .toBe("登录没成功：MFA challenge expired");
