@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { authMessage } from "@/lib/auth-copy";
 import { safeNext } from "@/lib/safe-next";
 import { createClient } from "@/lib/supabase/client";
@@ -22,7 +22,6 @@ const MIN_PW = 6;
 
 export default function LoginPage() {
   const router = useRouter();
-  const supabase = useMemo(() => createClient(), []);
   const emailId = useId();
   const pwId = useId();
   const nickId = useId();
@@ -50,7 +49,11 @@ export default function LoginPage() {
   /** 有会话之后的岔路。有名字就走（busy 不放，页面正在跳）。 */
   const routeByProfile = useCallback(
     async (userId: string) => {
-      const { data } = await supabase.from("profiles").select("id").eq("id", userId).maybeSingle();
+      const { data } = await createClient()
+        .from("profiles")
+        .select("id")
+        .eq("id", userId)
+        .maybeSingle();
       if (data) {
         router.replace(nextRef.current);
         router.refresh();
@@ -59,20 +62,20 @@ export default function LoginPage() {
       setBusy(false);
       setStep("name");
     },
-    [router, supabase],
+    [router],
   );
 
   useEffect(() => {
     nextRef.current = safeNext(new URLSearchParams(window.location.search).get("next"));
     (async () => {
-      const { data } = await supabase.auth.getUser();
+      const { data } = await createClient().auth.getUser();
       if (!data.user) {
         setStep("auth");
         return;
       }
       await routeByProfile(data.user.id);
     })();
-  }, [supabase, routeByProfile]);
+  }, [routeByProfile]);
 
   async function submitAuth(e: React.FormEvent) {
     e.preventDefault();
@@ -86,8 +89,8 @@ export default function LoginPage() {
     setNotice(null);
     const { data, error: authError } =
       mode === "signin"
-        ? await supabase.auth.signInWithPassword({ email: mail, password })
-        : await supabase.auth.signUp({ email: mail, password });
+        ? await createClient().auth.signInWithPassword({ email: mail, password })
+        : await createClient().auth.signUp({ email: mail, password });
     if (authError) {
       setBusy(false);
       setError(authMessage(authError));
@@ -119,7 +122,7 @@ export default function LoginPage() {
     setBusy(true);
     setError(null);
     setNotice(null);
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(mail, {
+    const { error: resetError } = await createClient().auth.resetPasswordForEmail(mail, {
       redirectTo: `${window.location.origin}/auth/reset`,
     });
     setBusy(false);
@@ -140,14 +143,14 @@ export default function LoginPage() {
     }
     setBusy(true);
     setError(null);
-    const { data: auth } = await supabase.auth.getUser();
+    const { data: auth } = await createClient().auth.getUser();
     if (!auth.user) {
       setBusy(false);
       setStep("auth");
       setError("登录状态过期了，重新登录一次。");
       return;
     }
-    const { error: profileError } = await supabase
+    const { error: profileError } = await createClient()
       .from("profiles")
       .upsert({ id: auth.user.id, username });
     if (profileError) {
@@ -160,7 +163,7 @@ export default function LoginPage() {
   }
 
   async function signOut() {
-    await supabase.auth.signOut();
+    await createClient().auth.signOut();
     setStep("auth");
     setName("");
     setPassword("");

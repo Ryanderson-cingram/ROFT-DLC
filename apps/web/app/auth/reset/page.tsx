@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { authMessage } from "@/lib/auth-copy";
 import { createClient } from "@/lib/supabase/client";
 import "../../login/login.css";
@@ -24,7 +24,6 @@ const MIN_PW = 6;
 
 export default function ResetPasswordPage() {
   const router = useRouter();
-  const supabase = useMemo(() => createClient(), []);
   const pwId = useId();
 
   const [ready, setReady] = useState<boolean | null>(null);
@@ -36,10 +35,10 @@ export default function ResetPasswordPage() {
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.auth.getUser();
+      const { data } = await createClient().auth.getUser();
       setReady(Boolean(data.user));
     })();
-  }, [supabase]);
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -49,7 +48,7 @@ export default function ResetPasswordPage() {
     }
     setBusy(true);
     setError(null);
-    const { error: updateError } = await supabase.auth.updateUser({ password });
+    const { error: updateError } = await createClient().auth.updateUser({ password });
     if (updateError) {
       setBusy(false);
       setError(authMessage(updateError));

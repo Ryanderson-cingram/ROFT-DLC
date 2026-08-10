@@ -156,18 +156,21 @@ max_indexes = 5
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "http://127.0.0.1:3000"
+# 线上部署地址。site_url 是**兜底落点**：邮件里没带 redirect_to 的链接、以及
+# redirect_to 没过白名单时，人都会落到这里——所以它必须是线上，不能是本机回环。
+# 本地开发不受影响：本地那几个地址都在下面的白名单里，代码又总是显式传 redirectTo。
+site_url = "https://roft-dlc.vercel.app"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-# 2026-08-10 加了三条 `/**`：重设密码的邮件把人送回 `/auth/reset`，那是 site_url 之外的
-# 路径，不在名单里 GoTrue 会把 redirect_to 悄悄换成 site_url，人就落到大厅而不是改密码页。
-# 名单只放本机的两个 host——它是**允许跳转到哪**的白名单，越宽越接近一个开放重定向。
-# 最后一条是内网联机用的：手机是从 `http://192.168.x.x:3000` 打开这个应用的（见
+# 2026-08-10 全部改成 `/**`：重设密码的邮件把人送回 `/auth/reset`，那是 site_url 之外的
+# 一条路径，不在名单里 GoTrue 会把 redirect_to 悄悄换成 site_url（实测过），人就落不到改密码页。
+# 名单只放线上那一个域名 + 本机——它是**允许跳转到哪**的白名单，越宽越接近一个开放重定向。
+# 最后一条是内网联机用的：手机从 `http://192.168.x.x:3000` 打开这个应用（见
 # `apps/web/.env.local` 的注释），落点自然也在那个 host 上，写死一个 IP 换个路由器就废了。
-# 私房局里这条不构成开放重定向——192.168/16 里的地址攻击者也得先在同一个局域网上。
+# 私房局里这条不构成开放重定向——192.168/16 里的地址，攻击者得先在同一个局域网上。
 additional_redirect_urls = [
-  "https://127.0.0.1:3000",
+  "https://roft-dlc.vercel.app/**",
   "http://127.0.0.1:3000/**",
   "https://127.0.0.1:3000/**",
   "http://localhost:3000/**",
