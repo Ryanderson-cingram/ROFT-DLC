@@ -57,7 +57,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
 
   // ---------- 天：要打出特定的一局 ----------
   { id: "deflect", tier: "天", mark: "反", name: "反手", descr: "把总量 12 张以上的惩罚链整条转给别人。", flag: "bigDeflect" },
-  { id: "bare-blade", tier: "天", mark: "刃", name: "空手接白刃", descr: "喊出 UNO 之后全程没被抓到，并赢下这一局。", flag: "unoCleanWin" },
+  { id: "bare-blade", tier: "天", mark: "刃", name: "空手接白刃", descr: "全程不喊 UNO、也没被抓到，并赢下这一局。", flag: "bareHandedWin" },
   { id: "swift", tier: "天", mark: "速", name: "速通", descr: "12 回合之内取胜。", flag: "swiftWin" },
   { id: "faceless", tier: "天", mark: "无", name: "无相胜", descr: "全程不亮技能取胜。", flag: "facelessWin" },
   { id: "lone-wolf", tier: "天", mark: "狼", name: "独狼", descr: "拒绝掉结盟邀请、一次都没结成，并取胜。", flag: "loneWolfWin" },

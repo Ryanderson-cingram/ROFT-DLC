@@ -89,8 +89,17 @@ export interface GameFlags {
   colorSweep: boolean;
   /** 把总量 ≥ 12 的链整条转给了别人（反手）。 */
   bigDeflect: boolean;
-  /** 喊过 UNO、全程没被任何人抓到、并且赢了（空手接白刃）。 */
-  unoCleanWin: boolean;
+  /**
+   * 全程**没喊过** UNO、也没被任何人抓到，并且赢了（空手接白刃）。
+   *
+   * 关键是「没喊」：喊了就享受 U7 的保护（`catchable` 要求「持 1 张**且未喊**」），
+   * 等于没有风险。没喊 = 手上剩最后一张的那一整轮都是敞着的，谁都能点一下罚你摸 2。
+   * 熬过去还赢了，才叫空手接白刃。
+   *
+   * 顺带把虚喊那个口子关死了：`unoMiscalled` 只在「本回合喊过」时才触发，
+   * 从没喊过就不可能虚喊，不需要再单列一条判断。
+   */
+  bareHandedWin: boolean;
   /** 12 回合之内取胜（速通）。 */
   swiftWin: boolean;
   /** 赢了且全程没亮过技能（无相胜）。 */

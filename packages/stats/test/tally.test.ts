@@ -221,12 +221,19 @@ describe("tallyGame · 特判标记", () => {
     expect(flagsOf(deflect(11)).bigDeflect).toBe(false);
   });
 
-  it("空手接白刃：喊过、没被抓、且赢了——三缺一都不算", () => {
-    const called = [ev("unoCalled", { seat: 0 })];
-    expect(flagsOf(called).unoCleanWin).toBe(true);
-    expect(flagsOf([...called, ev("unoCaught", { seat: 1, target: 0 })]).unoCleanWin).toBe(false);
-    expect(flagsOf(called, 1).unoCleanWin).toBe(false); // 没赢
-    expect(flagsOf([]).unoCleanWin).toBe(false);        // 没喊过
+  it("空手接白刃：没喊、没被抓、且赢了", () => {
+    expect(flagsOf([]).bareHandedWin).toBe(true);
+    // 喊了就有 U7 的保护，不算「空手」
+    expect(flagsOf([ev("unoCalled", { seat: 0 })]).bareHandedWin).toBe(false);
+    // 被抓着了
+    expect(flagsOf([ev("unoCaught", { seat: 1, target: 0 })]).bareHandedWin).toBe(false);
+    // 没赢
+    expect(flagsOf([], 1).bareHandedWin).toBe(false);
+    // 别人喊、别人被抓，都不关我的事
+    expect(flagsOf([
+      ev("unoCalled", { seat: 1 }),
+      ev("unoCaught", { seat: 0, target: 2 }),
+    ]).bareHandedWin).toBe(true);
   });
 
   it("速通：12 回合是上限，第 13 回合就不算", () => {

@@ -239,7 +239,7 @@ for (const d of DEFS) {
 | id | 名 | 判定 | 事件源 |
 |---|---|---|---|
 | `deflect` | 反手 | 某条 `punishStack` 的 `total ≥ 12` 且下一条事件把它转给了别人 | `punishStack` + `punishAccepted` 的 seat 变化 |
-| `bare-blade` | 空手接白刃 | 我 `handCount === 1` 跨过一整轮，且期间没有针对我的 `unoCaught` | 快照序列 + `unoCaught` |
+| `bare-blade` | 空手接白刃 | 我赢了，且全局既没有我的 `unoCalled`、也没有针对我的 `unoCaught` | `unoCalled` / `unoCaught` 双缺席 |
 | `faceless` | 无相胜 | 我赢了，且全局没有我的 `skillRevealed` | `skillRevealed` 缺席 + `final.board.winner` |
 | `lone-wolf` | 独狼 | 我赢了，且所有针对我的结盟邀请都是 `allianceRefused` | `allianceWindowOpened` + `allianceRefused` |
 | `spotless` | 零封之局 | 我赢了，且全局没有我的 `cardsDrawn`、没吃过惩罚 | `cardsDrawn` 缺席 |

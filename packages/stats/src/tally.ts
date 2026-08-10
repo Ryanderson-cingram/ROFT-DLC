@@ -250,7 +250,7 @@ export function tallyGame(
         won,
         colorSweep: (["R", "G", "B", "Y"] as const).every((c) => colors[c] >= SWEEP_PER_COLOR),
         bigDeflect: bigDeflect[seat],
-        unoCleanWin: won && calledUno[seat] && !gotCaught[seat],
+        bareHandedWin: won && !calledUno[seat] && !gotCaught[seat],
         swiftWin: won && turns <= SWIFT_TURNS,
         facelessWin: won && !revealed[seat],
         loneWolfWin: won && refusedAlliance[seat] && !formedAlliance[seat],

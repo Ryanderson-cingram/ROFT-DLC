@@ -4,7 +4,7 @@ import { emptyPrior } from "../src/types.ts";
 import type { GameFlags, PriorStats, SeatDelta, Tier } from "../src/index.ts";
 
 const NO_FLAGS: GameFlags = {
-  won: false, colorSweep: false, bigDeflect: false, unoCleanWin: false, swiftWin: false,
+  won: false, colorSweep: false, bigDeflect: false, bareHandedWin: false, swiftWin: false,
   facelessWin: false, loneWolfWin: false, nightWatch: false, defiantWin: false,
   spotlessWin: false, abyssWin: false,
 };
@@ -108,7 +108,7 @@ describe("evaluate · 特判型", () => {
   const cases: [keyof GameFlags, string][] = [
     ["colorSweep", "color-sweep"],
     ["bigDeflect", "deflect"],
-    ["unoCleanWin", "bare-blade"],
+    ["bareHandedWin", "bare-blade"],
     ["swiftWin", "swift"],
     ["facelessWin", "faceless"],
     ["loneWolfWin", "lone-wolf"],
