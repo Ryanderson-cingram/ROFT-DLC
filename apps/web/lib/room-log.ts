@@ -61,9 +61,11 @@ export function humanize(
       return { who: nameOf(seat), what: "结束回合" };
     case "deckReshuffled":
       return { who: "牌桌", what: `洗回 ${p.count} 张进摸牌堆`, kind: "system" };
-    // U8：牌堆洗满两次后又见底，无人打完 → 平局收场
-    case "gameDrawn":
-      return { who: "牌桌", what: "牌堆用尽，本局平局", kind: "system" };
+    // 终局的唯一一条。`winner` 缺席 = 平局（U8：牌堆洗满两次后又见底，无人打完）
+    case "gameEnded":
+      return typeof p.winner === "number"
+        ? { who: nameOf(p.winner), what: "打完最后一张，本局获胜", kind: "system" }
+        : { who: "牌桌", what: "牌堆用尽，本局平局", kind: "system" };
     case "punishWindowOpened":
       return { who: nameOf(asList<number>(p.actors)[0]), what: `被惩罚指向（累计 ${p.total} 张）：叠或吃`, kind: "punish" };
     case "punishStackChosen":

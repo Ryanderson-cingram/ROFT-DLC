@@ -41,7 +41,7 @@ const PAYLOAD: Record<string, Record<string, unknown>> = {
   allianceRefused: { seat: 2 },
   handsSwapped: { seats: [0, 2], counts: [3, 5] },
   drawOfferDeclined: { seat: 1 },
-  gameDrawn: {},
+  gameEnded: {},
   punishWindowOpened: { actors: [2], total: 6 },
   punishStackChosen: { seat: 2 },
   punishAccepted: { seat: 2, total: 6 },

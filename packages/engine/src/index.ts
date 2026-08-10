@@ -99,24 +99,40 @@ function malformed(state: GameState, action: Action): string | null {
 }
 
 /**
- * U8 平局：洗满 2 次之后摸牌堆再度见底、且无人打完 → 本局终局无赢家。
+ * 收场：U8 的平局判定 + 终局事件。两件事挤在一个函数里，是因为它们判的是同一个时点。
  *
+ * **U8 平局**：洗满 2 次之后摸牌堆再度见底、且无人打完 → 本局终局无赢家。
  * 判定时点是**回合交接**——`turnStart` 且没有挂着的反应窗口，也就是「这一轮全部结算完了、
  * 下一个人该动了」的那一刻。放在 applyAction 的出口而不是 `commit` 里，是因为这里看得到
  * **最终**状态：`commit` 会清窗口而各动作随后再挂回去（攒魂窗口就活在 turnStart），
- * 在 commit 里判会把「窗口还没结完」误当成交接。所有动作都从这里出去，绕不开。
+ * 在 commit 里判会把「窗口还没结完」误当成交接。
  *
  * 条件只看牌堆状态，不看「还有没有人能动」——所以它是确定性的、可测的，
  * 也因此那条「牌堆枯竭后无限转圈」的死局不复存在。
+ *
+ * **`gameEnded`**：终局的**唯一**事件，胜负与平局共用一条。
+ * 从前只有平局发事件（`gameDrawn`），赢家只写进 `board.winner`——于是任何纯事件流的
+ * 消费者（记录抽屉、跨局统计）都读不到「谁赢了」。四条胜利路径散落在
+ * play-cards / raid / shuffle-card 里，逐个补事件迟早漏一条；这里是 applyAction 的出口，
+ * **所有动作都从这里出去，绕不开**，判一次就覆盖全部路径。
+ *
+ * `winner` 缺席 = 平局（同 `Board.winner` 的口径），此时给出 `reason`。
  */
-function settleStalemate(r: ApplyResult): ApplyResult {
-  const s = r.state;
-  if (r.rejected || s.phase !== "turnStart" || s.pendingWindow || !s.board || !stalemate(s.board)) return r;
-  return {
-    ...r,
-    state: { ...s, phase: "finished" },
-    events: [...r.events, { type: "gameDrawn", public: { reason: "deck_exhausted" } }],
-  };
+function settleEnd(before: GameState, r: ApplyResult): ApplyResult {
+  if (r.rejected) return r;
+  let { state, events } = r;
+  if (state.phase === "turnStart" && !state.pendingWindow && state.board && stalemate(state.board))
+    state = { ...state, phase: "finished" };
+  // `before.phase` 的判断挡的是「终局之后又跑了一个动作」——那种动作会被 dispatch 拒掉，
+  // 但拒不掉的将来若有（房间层动作走的是另一条路），也不该重复发第二条终局事件。
+  if (state.phase === "finished" && before.phase !== "finished")
+    events = [...events, {
+      type: "gameEnded",
+      public: state.board?.winner === undefined
+        ? { reason: "deck_exhausted" }
+        : { winner: state.board.winner },
+    }];
+  return state === r.state && events === r.events ? r : { ...r, state, events };
 }
 
 /** U6：交回合时喊过却不是 1 张 → 罚摸 2 张（规则摸牌，非惩罚 P1）。 */
@@ -165,7 +181,7 @@ export function applyAction(state: GameState, action: Action, ctx: Ctx): ApplyRe
   if (bad) return { state, events: [], rejected: { reason: bad } };
   // 顺序要紧：罚摸可能把牌堆抽干，平局判定得看**罚完之后**的牌堆。
   // 回合末的赋状态（八门②的五彩）不摸牌，排在最前最后都一样，摆在最里层贴着「回合刚交完」
-  return settleStalemate(settleUnoCall(state, settleTurnEnd(state, dispatch(state, action, ctx)), ctx));
+  return settleEnd(state, settleUnoCall(state, settleTurnEnd(state, dispatch(state, action, ctx)), ctx));
 }
 
 function dispatch(state: GameState, action: Action, ctx: Ctx): ApplyResult {
