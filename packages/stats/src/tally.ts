@@ -1,4 +1,7 @@
-import type { Card, EngineEvent, GameState } from "@roft/engine";
+// 相对路径而不是 `@roft/engine`：边缘函数在 Deno 下跑，那边没有 import map
+// （`deno.json` 只关掉了 node_modules 解析），裸标识符解析不了。
+// 既有的 `supabase/functions/*/index.ts` 也都是这么 import 引擎的，跟着走。
+import type { Card, EngineEvent, GameState } from "../../engine/src/index.ts";
 import type { GameFlags, SeatDelta, Tally } from "./types.ts";
 
 /** 04 «神 四神»：四神的技能 id。见神 / 万神殿都认这四个。 */

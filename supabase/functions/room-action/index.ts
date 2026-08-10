@@ -1,6 +1,7 @@
 import { applyAction, type Action, type GameState } from "../../../packages/engine/src/index.ts";
 import { compactSeats } from "../_shared/db.ts";
 import { json, serveAuthed } from "../_shared/http.ts";
+import { tallyFinishedGame } from "../_shared/stats.ts";
 
 serveAuthed(async ({ body, user, svc }) => {
   const { roomId, expectedVersion, idempotencyKey } = body as {
@@ -77,21 +78,38 @@ serveAuthed(async ({ body, user, svc }) => {
   });
   if (result.rejected) return json({ reason: result.rejected.reason }, 400);
 
-  // CAS + state + status + events 全在这一个事务里。null = 版本冲突且零副作用。
+  const finished = result.state.phase === "finished";
+  /*
+    终局这一步顺带把跨局统计与成就算出来（0006 的三张表）。
+    `room_events` 打完 24 小时就被 `purge_stale_rooms` 回收，所以**这一刻不算就永远算不出来**。
+
+    整段用 try 包住、失败只记日志：统计是派生数据，游戏本身才是主线。
+    这里若把错误抛出去，客户端会拿到 500 并用**同一个 idempotency_key** 重试，
+    于是每次都在同一处炸——这一局就永远收不了场。丢一局统计远比卡死一桌人轻。
+  */
+  let stats: Awaited<ReturnType<typeof tallyFinishedGame>> | null = null;
+  if (finished) {
+    try {
+      stats = await tallyFinishedGame(svc, roomId, result);
+    } catch (e) {
+      console.error("tallyFinishedGame failed（这一局的统计丢了，对局照常收场）", e);
+    }
+  }
+
+  // CAS + state + status + events + 统计 全在这一个事务里。null = 版本冲突且零副作用。
   const { data: applied, error } = await svc.rpc("apply_room_action", {
     p_room: roomId,
     p_expected_version: expectedVersion,
     p_actor: user.id,
     p_state: result.state,
-    p_events: result.events,
+    // 成就解锁跟着这一批事件一起落库，客户端的 room-log 增量拉取自然就收到了
+    p_events: [...result.events, ...(stats?.events ?? [])],
     p_idempotency_key: idempotencyKey,
+    p_stats: stats?.rows ?? null,
     // 终局那一步以前**没人写** `rooms.status`（0001 建了 check 却没有写入路径），于是房间
     // 永远停在 playing——重开的前置条件与回收的「打完 24 小时」都靠它，2026-08-02 补上。
     // 引擎的 phase 是唯一权威，这里只是把它同步到房间层。
-    p_new_status:
-      action.type === "startGame" ? "playing"
-      : result.state.phase === "finished" ? "finished"
-      : null,
+    p_new_status: action.type === "startGame" ? "playing" : finished ? "finished" : null,
   });
   if (error) {
     console.error("apply_room_action failed", error);

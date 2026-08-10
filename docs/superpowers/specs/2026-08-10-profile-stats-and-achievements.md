@@ -104,7 +104,8 @@ create table public.player_stats (
 > 在 SQL 里再写一遍就是**双源**——这个仓库为 skill_defs 专门配了 CI 漂移检查来防的正是这件事。
 >
 > 所以改成：**合并只留 TypeScript 一份，SQL 只负责原子落库**。
-> 形状的唯一来源是 `SeatDelta` / `PriorStats`，表里不写 check 约束去复述它（复述就是第三份真相）。
+> 形状的唯一来源是 `SeatDelta`（一局的增量）与 `PlayerStats`（累计量），
+> 表里不写 check 约束去复述它（复述就是第三份真相）。
 
 代价写在明处：`stats` 是**整体覆盖写**，同一个人的两局**同时**结算会丢掉其中一局
 （后写的那份基于旧值算）。一个人同时打两局本来就要主动开两个房间，损失是一局的计数——
@@ -177,9 +178,14 @@ create table public.player_achievements (
 
 ```ts
 tallyGame(events, final, finishedAt): Map<seat, { delta: SeatDelta; flags: GameFlags }>
-mergePrior(prior, delta, won): PriorStats
-evaluate(stats, flags, owned): string[]
+mergePrior(prior: Partial<PlayerStats>, delta: SeatDelta, won: boolean): PlayerStats
+evaluate(stats: PlayerStats, flags: GameFlags, owned: Set<string>): string[]
 ```
+
+⚠️ **`PlayerStats` 必须装下 `SeatDelta` 的每一列。** 初版把它写成「判定用得上的那个子集」，
+于是 `mergePrior` 把出牌数 / 摸牌数 / 骰子分布 / 宿敌一路丢掉——52 个单测全绿，
+端到端跑第一次才看见 profile 页会拿到一屏 undefined。
+现在有一条结构性用例守着（`mergePrior · 一列都不能少`）：加了列忘了并，它会红。
 
 **24 条成就分三类**（不是初稿说的 19 + 5）：
 

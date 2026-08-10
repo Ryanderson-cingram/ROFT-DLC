@@ -1,4 +1,4 @@
-import type { GameFlags, PriorStats, SeatDelta, Tally } from "./types.ts";
+import { emptyStats, type GameFlags, type PlayerStats, type SeatDelta, type Tally } from "./types.ts";
 import { GOD_SKILLS } from "./tally.ts";
 
 /** 全部技能数（04 catalog：★4 + 四花色各 13 + 神 4）。博物志要凑齐它。 */
@@ -7,10 +7,10 @@ export const ALL_SKILLS = 60;
 export type Tier = "凡" | "玄" | "天" | "神";
 
 /**
- * `PriorStats` 里**是数字**的那些列。阈值判定只能指向它们——
+ * `PlayerStats` 里**是数字**的那些列。阈值判定只能指向它们——
  * 少了这一层，`key` 可以写成 `bySkill`（一个 Record），比大小就成了运行时的谜。
  */
-type NumericStatKey = { [K in keyof PriorStats]: PriorStats[K] extends number ? K : never }[keyof PriorStats];
+type NumericStatKey = { [K in keyof PlayerStats]: PlayerStats[K] extends number ? K : never }[keyof PlayerStats];
 
 export interface AchievementDef {
   id: string;
@@ -27,7 +27,7 @@ export interface AchievementDef {
    */
   stat?: { key: NumericStatKey; goal: number };
   flag?: keyof GameFlags;
-  derive?: (s: PriorStats) => boolean;
+  derive?: (s: PlayerStats) => boolean;
 }
 
 const godsWon = (bySkill: Record<string, Tally>) =>
@@ -89,36 +89,83 @@ export const ACHIEVEMENTS: AchievementDef[] = [
 const byId = new Map(ACHIEVEMENTS.map((a) => [a.id, a]));
 export const achievementById = (id: string) => byId.get(id);
 
-/**
- * 把一局的增量并进累计量。**连胜在这里算**——它是唯一一个不能靠逐列 `+=` 得出的列
- * （要知道这一局赢没赢，而不只是赢了几场）。
- */
-export function mergePrior(prior: PriorStats, delta: SeatDelta, won: boolean): PriorStats {
-  const streakCur = won ? prior.streakCur + 1 : 0;
-  const bySkill: Record<string, Tally> = {};
-  for (const [k, v] of Object.entries(prior.bySkill)) bySkill[k] = { ...v };
-  for (const [k, v] of Object.entries(delta.bySkill)) {
-    const t = (bySkill[k] ??= { n: 0, w: 0 });
+const mergeTally = (a: Record<string, Tally>, b: Record<string, Tally>): Record<string, Tally> => {
+  const out: Record<string, Tally> = {};
+  for (const [k, v] of Object.entries(a ?? {})) out[k] = { n: v.n, w: v.w };
+  for (const [k, v] of Object.entries(b ?? {})) {
+    const t = (out[k] ??= { n: 0, w: 0 });
     t.n += v.n;
     t.w += v.w;
   }
+  return out;
+};
+
+const mergeCount = (a: Record<string, number>, b: Record<string, number>): Record<string, number> => {
+  const out = { ...(a ?? {}) };
+  for (const [k, v] of Object.entries(b ?? {})) out[k] = (out[k] ?? 0) + v;
+  return out;
+};
+
+/**
+ * 把一局的增量并进累计量。四种合并规则各管一批列，见 `PlayerStats` 的分组注释：
+ * 累加 / 取极值 / 逐元素相加 / 逐键合并，外加连胜。
+ *
+ * **连胜是唯一一个不能靠逐列合并得出的**——它要知道这一局赢没赢，而不只是总共赢了几场。
+ *
+ * `prior` 允许是残缺的（老行、或者压根没有这一行），所以先跟 `emptyStats()` 铺一层底：
+ * 少一个键就会让那一列变成 `undefined + n = NaN`，而 NaN 会一路写进库里再也回不来。
+ */
+export function mergePrior(prior: Partial<PlayerStats>, delta: SeatDelta, won: boolean): PlayerStats {
+  const p: PlayerStats = { ...emptyStats(), ...prior };
+  const streakCur = won ? p.streakCur + 1 : 0;
+  const fastest = delta.fastestWinTurns;
   return {
-    games: prior.games + delta.games,
-    wins: prior.wins + delta.wins,
-    unoCalled: prior.unoCalled + delta.unoCalled,
-    unoCaught: prior.unoCaught + delta.unoCaught,
-    unoGotCaught: prior.unoGotCaught + delta.unoGotCaught,
-    skillsRevealed: prior.skillsRevealed + delta.skillsRevealed,
-    godsPlayed: prior.godsPlayed + delta.godsPlayed,
-    diceRolled: prior.diceRolled + delta.diceRolled,
-    alliancesFormed: prior.alliancesFormed + delta.alliancesFormed,
-    marksGained: prior.marksGained + delta.marksGained,
-    // 这两列是**极值**，不是累加
-    punishMax: Math.max(prior.punishMax, delta.punishMax),
-    mostCardsOneTurn: Math.max(prior.mostCardsOneTurn, delta.mostCardsOneTurn),
+    games: p.games + delta.games,
+    wins: p.wins + delta.wins,
+    draws: p.draws + delta.draws,
+    gamesFirst: p.gamesFirst + delta.gamesFirst,
+    winsFirst: p.winsFirst + delta.winsFirst,
+    turnsTotal: p.turnsTotal + delta.turns,
+    cardsPlayed: p.cardsPlayed + delta.cardsPlayed,
+    cardsDrawn: p.cardsDrawn + delta.cardsDrawn,
+    punishTaken: p.punishTaken + delta.punishTaken,
+    punishDeflected: p.punishDeflected + delta.punishDeflected,
+    unoCalled: p.unoCalled + delta.unoCalled,
+    unoCaught: p.unoCaught + delta.unoCaught,
+    unoGotCaught: p.unoGotCaught + delta.unoGotCaught,
+    unoMiscalled: p.unoMiscalled + delta.unoMiscalled,
+    skillsRevealed: p.skillsRevealed + delta.skillsRevealed,
+    skillsActivated: p.skillsActivated + delta.skillsActivated,
+    godsPlayed: p.godsPlayed + delta.godsPlayed,
+    diceRolled: p.diceRolled + delta.diceRolled,
+    alliancesFormed: p.alliancesFormed + delta.alliancesFormed,
+    alliancesRefused: p.alliancesRefused + delta.alliancesRefused,
+    raidsStarted: p.raidsStarted + delta.raidsStarted,
+    marksGained: p.marksGained + delta.marksGained,
+    sealedCount: p.sealedCount + delta.sealedCount,
+
+    punishMax: Math.max(p.punishMax, delta.punishMax),
+    punishDeflectedMax: Math.max(p.punishDeflectedMax, delta.punishDeflectedMax),
+    mostCardsOneTurn: Math.max(p.mostCardsOneTurn, delta.mostCardsOneTurn),
+    longestGameTurns: Math.max(p.longestGameTurns, delta.longestGameTurns),
+    // 最快取胜取**最小**；输了这一局不参与比较（delta 里是 null）
+    fastestWinTurns: fastest === null ? p.fastestWinTurns
+      : p.fastestWinTurns === null ? fastest
+      : Math.min(p.fastestWinTurns, fastest),
+
     streakCur,
-    streakBest: Math.max(prior.streakBest, streakCur),
-    bySkill,
+    streakBest: Math.max(p.streakBest, streakCur),
+
+    diceHist: [
+      p.diceHist[0] + delta.diceHist[0],
+      p.diceHist[1] + delta.diceHist[1],
+      p.diceHist[2] + delta.diceHist[2],
+    ],
+
+    bySkill: mergeTally(p.bySkill, delta.bySkill),
+    byCard: mergeCount(p.byCard, delta.byCard),
+    vsPlayer: mergeTally(p.vsPlayer, delta.vsPlayer),
+    withAlly: mergeTally(p.withAlly, delta.withAlly),
   };
 }
 
@@ -140,7 +187,7 @@ export function mergePrior(prior: PriorStats, delta: SeatDelta, won: boolean): P
  * `owned` 传进来而不是在这里查库：这个包不碰 IO。
  */
 export function evaluate(
-  stats: PriorStats,
+  stats: PlayerStats,
   flags: GameFlags,
   owned: ReadonlySet<string>,
 ): string[] {

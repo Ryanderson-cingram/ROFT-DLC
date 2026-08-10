@@ -214,6 +214,15 @@ export function humanize(
       return { who: nameOf(seat), what: "回合结束时手牌不是 1 张，喊的 UNO 不作数——罚摸 2 张", kind: "uno" };
     case "unoCaught":
       return { who: nameOf(seat), what: `抓了${nameOf(p.target as number)}没喊 UNO——摸 2 张`, kind: "uno" };
+    /*
+      成就解锁（0006）。**全场可见**：成就不含任何暗牌信息，而「对手刚拿下一枚 0.3% 的封泥」
+      是这个品类里极强的桌面戏剧性。自己的那条另外还会弹一次（见 <AchievementToast>）。
+      名字来自 `achievement_defs`；这里拿不到那张表，所以只报数——一行日志不值得为它多拉一次表。
+    */
+    case "achievementUnlocked": {
+      const n = asList<string>(p.ids).length;
+      return n === 0 ? null : { who: nameOf(seat), what: `解锁了 ${n} 枚封泥`, kind: "system" };
+    }
     // 发牌/候选细节要么是暗信息、要么是纯噪音
     case "handDealt":
     case "draftOptionsDealt":

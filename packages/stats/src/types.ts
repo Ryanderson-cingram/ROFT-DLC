@@ -13,8 +13,10 @@ export interface Tally {
 }
 
 /**
- * 一局打完给一个座位攒下的增量。列名与 `player_stats` 的列一一对应——
- * 合并就是逐列 `+=`（`max*` 那几列取 max，分布类逐键合并）。
+ * 一局打完给一个座位攒下的增量。
+ *
+ * 与 `PlayerStats` 是**同一套列**（合并规则见 `mergePrior`）——只有两处措辞不同：
+ * `turns` 是这一局的回合数（累计成 `turnsTotal`），`fastestWinTurns` 输了就是 null。
  */
 export interface SeatDelta {
   // ---- 战绩 ----
@@ -71,7 +73,7 @@ export interface SeatDelta {
   // ---- 分布 ----
   /** 技能 id → {n, w}。这一局只可能有一个键（一人一技能）。 */
   bySkill: Record<string, Tally>;
-  /** 牌面 key（`R+2` / `W变色`）→ 打出次数。 */
+  /** 牌面 key（`R+2` / `Wwild`）→ 打出次数。 */
   byCard: Record<string, number>;
   /** 对手 userId → {n, w}（w = 我赢了他几局）。 */
   vsPlayer: Record<string, Tally>;
@@ -117,42 +119,71 @@ export interface GameFlags {
 }
 
 /**
- * `player_stats` 里已经攒下的累计量。判定要拿它跟增量比，才知道
- * 「这一局**跨过**了阈值」而不是「本来就够了」。
- * 只列判定用得上的那些列；读表时缺的列按 0 补。
+ * 一个人的**全部**累计量——`player_stats.stats` 那一列存的就是它。
+ *
+ * ⚠️ 它必须装下 `SeatDelta` 的每一列，不能只装「判定用得上的那些」。
+ * 初版只列了判定要读的十来个字段，于是 `mergePrior` 把出牌数、摸牌数、骰子分布、
+ * 宿敌这些**一路丢掉**，profile 页拿到一屏 undefined——端到端跑第一次才看见。
+ * 加新统计时两处一起加，`tally.ts::zero()` 与这里的字段是一一对应的。
  */
-export interface PriorStats {
+export interface PlayerStats {
+  // ---- 累加 ----
   games: number;
   wins: number;
+  draws: number;
+  gamesFirst: number;
+  winsFirst: number;
+  /** 生涯总回合数。÷ games = 场均回合。 */
+  turnsTotal: number;
+  cardsPlayed: number;
+  cardsDrawn: number;
+  punishTaken: number;
+  punishDeflected: number;
   unoCalled: number;
   unoCaught: number;
   unoGotCaught: number;
+  unoMiscalled: number;
   skillsRevealed: number;
+  skillsActivated: number;
   godsPlayed: number;
   diceRolled: number;
   alliancesFormed: number;
+  alliancesRefused: number;
+  raidsStarted: number;
   marksGained: number;
+  sealedCount: number;
+
+  // ---- 取极值 ----
   punishMax: number;
+  punishDeflectedMax: number;
   mostCardsOneTurn: number;
+  longestGameTurns: number;
+  /** 取**最小**值；从没赢过是 null。 */
+  fastestWinTurns: number | null;
+
+  // ---- 连胜（唯一一个不能靠逐列合并得出的，要知道这一局赢没赢）----
   streakCur: number;
   streakBest: number;
+
+  // ---- 逐元素相加 ----
+  diceHist: [number, number, number];
+
+  // ---- 逐键合并 ----
   bySkill: Record<string, Tally>;
+  byCard: Record<string, number>;
+  vsPlayer: Record<string, Tally>;
+  withAlly: Record<string, Tally>;
 }
 
-export const emptyPrior = (): PriorStats => ({
-  games: 0,
-  wins: 0,
-  unoCalled: 0,
-  unoCaught: 0,
-  unoGotCaught: 0,
-  skillsRevealed: 0,
-  godsPlayed: 0,
-  diceRolled: 0,
-  alliancesFormed: 0,
-  marksGained: 0,
-  punishMax: 0,
-  mostCardsOneTurn: 0,
-  streakCur: 0,
-  streakBest: 0,
-  bySkill: {},
+export const emptyStats = (): PlayerStats => ({
+  games: 0, wins: 0, draws: 0, gamesFirst: 0, winsFirst: 0, turnsTotal: 0,
+  cardsPlayed: 0, cardsDrawn: 0, punishTaken: 0, punishDeflected: 0,
+  unoCalled: 0, unoCaught: 0, unoGotCaught: 0, unoMiscalled: 0,
+  skillsRevealed: 0, skillsActivated: 0, godsPlayed: 0, diceRolled: 0,
+  alliancesFormed: 0, alliancesRefused: 0, raidsStarted: 0, marksGained: 0, sealedCount: 0,
+  punishMax: 0, punishDeflectedMax: 0, mostCardsOneTurn: 0, longestGameTurns: 0,
+  fastestWinTurns: null,
+  streakCur: 0, streakBest: 0,
+  diceHist: [0, 0, 0],
+  bySkill: {}, byCard: {}, vsPlayer: {}, withAlly: {},
 });

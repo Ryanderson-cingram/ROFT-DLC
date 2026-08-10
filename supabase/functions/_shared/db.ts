@@ -1,5 +1,8 @@
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 
+// 客户端类型从这里再出去一次：谁要它就 import 这里，npm 那个说明符只写在这一处
+export type { SupabaseClient };
+
 const url = Deno.env.get("SUPABASE_URL")!;
 
 /** Client acting as the caller — RLS applies. */
