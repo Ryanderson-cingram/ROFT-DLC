@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import LobbyForms from "./lobby-forms";
+import { SignOutButton } from "./sign-out";
 import "./lobby.css";
 
 export default async function LobbyPage() {
@@ -25,7 +26,8 @@ export default async function LobbyPage() {
         </div>
         <div className="me">
           <span className="dot" />
-          {profile.username}
+          <span className="me__name">{profile.username}</span>
+          <SignOutButton />
         </div>
       </header>
 

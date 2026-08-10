@@ -24,7 +24,12 @@
     color: var(--brass);
   }
   .brand span { font-family: var(--font-display); font-size: 15px; color: var(--text-secondary); }
-  .me { display: flex; align-items: center; gap: var(--sp-2); font-size: 14px; }
+  .me { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; font-size: 14px; }
+  /* 名字多长都不许把退出按钮挤出顶栏 */
+  .me__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* 顶栏里的次要动作收一档：44px 的主操作尺寸摆在这儿会喧宾夺主（触点仍有 36px + 内边距） */
+  .me .btn { flex: none; min-height: 36px; padding: 0 10px; font-size: 13px; color: var(--text-secondary); }
+  .me .btn:hover { color: var(--text-primary); }
   /* 开场：扇形牌 + 一句话定位 */
   .hero { padding: var(--sp-5) 0 var(--sp-4); text-align: center; }
   /* 全页唯一的画面：五张牌摊在最上面。牌放大一档、叠得更紧，
@@ -124,7 +129,10 @@
 
 <header class="topbar">
   <div class="brand"><b>ROFT-DLC</b><span>诸神降临 4.1</span></div>
-  <div class="me"><span class="dot"></span>凛</div>
+  <div class="me">
+    <span class="dot"></span><span class="me__name">凛</span>
+    <button class="btn btn--ghost">退出登录</button>
+  </div>
 </header>
 
 <main class="wrap">
