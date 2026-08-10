@@ -52,7 +52,9 @@ export default function RoomPage() {
     (async () => {
       const { data: auth } = await supabase.auth.getUser();
       if (!auth.user) {
-        router.replace("/login");
+        // 带上落点：别人发来的房间链接落在没登录的人手里时，登完要回到这一桌，
+        // 而不是把房间码再要一遍（登录页用 `safeNext` 校验这个值）。
+        router.replace(`/login?next=${encodeURIComponent(`/room/${code}`)}`);
         return;
       }
       setMe(auth.user.id);

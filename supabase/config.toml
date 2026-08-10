@@ -156,11 +156,26 @@ max_indexes = 5
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "http://127.0.0.1:3000"
+# 线上部署地址。site_url 是**兜底落点**：邮件里没带 redirect_to 的链接、以及
+# redirect_to 没过白名单时，人都会落到这里——所以它必须是线上，不能是本机回环。
+# 本地开发不受影响：本地那几个地址都在下面的白名单里，代码又总是显式传 redirectTo。
+site_url = "https://roft-dlc.vercel.app"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+# 2026-08-10 全部改成 `/**`：重设密码的邮件把人送回 `/auth/reset`，那是 site_url 之外的
+# 一条路径，不在名单里 GoTrue 会把 redirect_to 悄悄换成 site_url（实测过），人就落不到改密码页。
+# 名单只放线上那一个域名 + 本机——它是**允许跳转到哪**的白名单，越宽越接近一个开放重定向。
+# 最后一条是内网联机用的：手机从 `http://192.168.x.x:3000` 打开这个应用（见
+# `apps/web/.env.local` 的注释），落点自然也在那个 host 上，写死一个 IP 换个路由器就废了。
+# 私房局里这条不构成开放重定向——192.168/16 里的地址，攻击者得先在同一个局域网上。
+additional_redirect_urls = [
+  "https://roft-dlc.vercel.app/**",
+  "http://127.0.0.1:3000/**",
+  "https://127.0.0.1:3000/**",
+  "http://localhost:3000/**",
+  "http://192.168.*.*:3000/**",
+]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.
@@ -175,7 +190,9 @@ refresh_token_reuse_interval = 10
 # Allow/disallow new user signups to your project.
 enable_signup = true
 # Allow/disallow anonymous sign-ins to your project.
-enable_anonymous_sign_ins = true
+# 2026-08-10 关掉：登录改成邮箱 + 密码之后没有任何调用方，开着就是一条没人看的入口
+# （匿名号照样能建房间、占座位）。
+enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
 enable_manual_linking = false
 # Passwords shorter than this value will be rejected as weak. Minimum 6, recommended 8 or more.

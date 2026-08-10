@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>登录 · ROFT-DLC</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  /* ---- 登录：一张转着的式盘当底，牌摊在盘心 ----
+     全页只有两件东西：背后那面缓缓转的六壬式盘（签名母题，纯装饰），
+     和盘心那叠牌 + 一块面板。面板本身保持安静——1px 发丝线，无渐变无堆影，
+     "酷"全部由那面转动的盘和牌面五色出。 */
+
+  /* 天：两圈反向转的式盘。fixed 铺满，压在内容之下（z-index:-1 与 .ambience 同一档）。
+     两圈方向相反才看得出"在转"——同向的话像整块背景在漂。 */
+  .sky { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+  /* tokens 里的 .plate 是 position:absolute 但不给 inset；这里显式 inset:0 + margin:auto 居中，
+     不依赖父级的 place-items（绝对定位子元素的静态位置在各引擎里不完全一致）。 */
+  .sky .plate { inset: 0; margin: auto; }
+  .plate--outer { width: min(680px, 132vw); opacity: 0.55; animation: plate-turn 150s linear infinite; }
+  .plate--inner { width: min(380px, 74vw); opacity: 0.8; animation: plate-turn 96s linear infinite reverse; }
+  @keyframes plate-turn { to { transform: rotate(360deg); } }
+
+  .login { display: grid; place-items: center; min-height: 100svh; padding: var(--sp-4) var(--sp-3); }
+  .login__in { width: 100%; max-width: 420px; text-align: center; }
+
+  /* 牌摊在盘心：与大厅同一副扇形，逐张发出来（@keyframes deal 在 tokens 里） */
+  .cardfan { display: flex; justify-content: center; height: 104px; margin-bottom: var(--sp-4); }
+  .cardfan .card { --card-w: 62px; --card-h: 93px; margin: 0 -8px; transform-origin: 50% 120%; animation: deal 0.42s ease-out backwards; }
+  .cardfan .card:nth-child(1) { transform: rotate(-14deg) translateY(6px); animation-delay: 0s; }
+  .cardfan .card:nth-child(2) { transform: rotate(-7deg) translateY(1px); animation-delay: 0.06s; }
+  .cardfan .card:nth-child(3) { transform: rotate(0deg) translateY(-3px); animation-delay: 0.12s; }
+  .cardfan .card:nth-child(4) { transform: rotate(7deg) translateY(1px); animation-delay: 0.18s; }
+  .cardfan .card:nth-child(5) { transform: rotate(14deg) translateY(6px); animation-delay: 0.24s; }
+
+  .login h1 { margin-top: var(--sp-2); font-size: clamp(26px, 8vw, 34px); }
+  .login .hint { margin: var(--sp-2) 0 0; }
+  .login .panel { margin-top: var(--sp-4); text-align: left; }
+  /* .tabs 是共享组件（与 game-status.html 同一份，真实产品里住在 globals.css）；
+     静态稿之间只能各复制一遍。 */
+  .tabs { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: var(--sp-3) 0 var(--sp-2); border-bottom: var(--line); }
+  .tabs button {
+    min-height: 38px; padding: 0 4px; margin-bottom: -1px;
+    border: 0; border-bottom: 2px solid transparent; background: none;
+    color: var(--qingyan); font: inherit; font-size: 14px; cursor: pointer;
+  }
+  .tabs button[aria-selected="true"], .tabs button[aria-pressed="true"] { color: var(--yuebai); border-bottom-color: var(--piao); }
+  /* 面板里的 .tabs 顶到面板上沿：登录/注册是这块面板的两副面孔，不是面板里的一段内容 */
+  .login .tabs { margin-top: 0; }
+  .login .tabs button { padding: 0 var(--sp-2); font-size: 15px; }
+
+  .field-label { display: block; margin: var(--sp-3) 0 var(--sp-1); font-size: 13px; color: var(--text-secondary); }
+  /* 标签行右边挂一个次要动作（忘记密码）：与标签同一条基线，不另占一行 */
+  .field-line { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
+  .field-line .field-label { margin-bottom: var(--sp-1); }
+  /* 长得像链接的按钮：动作是 JS 的（发信 / 退出），语义上不是导航，所以不能用 <a> */
+  .linkish {
+    border: 0; background: none; padding: 0;
+    color: var(--piao); font: inherit; font-size: 13px; text-decoration: underline; cursor: pointer;
+  }
+  .linkish:disabled { color: var(--text-muted); cursor: not-allowed; }
+  .warn-line { margin: var(--sp-2) 0 0; font-size: 13px; color: var(--warn); }
+  .field {
+    width: 100%;
+    min-height: 52px;
+    padding: 0 var(--sp-3);
+    border: 1px solid var(--brass-dim);
+    border-radius: var(--radius-card);
+    background: var(--surface-sunken);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 17px;
+  }
+  .field::placeholder { color: #5c6862; }
+  .field:focus { border-color: var(--piao); }
+  /* 昵称那一步只有一个框，放大一档当主角 */
+  .field--big { min-height: 56px; font-size: 20px; }
+
+  /* 密码框：显示/隐藏贴在框内右缘，输入区让出它的宽度 */
+  .field-pw { position: relative; }
+  .field-pw .field { padding-right: 62px; }
+  .field-pw button {
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    min-height: 40px; padding: 0 10px;
+    border: 0; border-radius: var(--radius-card);
+    background: transparent; color: var(--text-secondary);
+    font: inherit; font-size: 13px; cursor: pointer;
+  }
+  .field-pw button:hover { color: var(--piao); }
+
+  .login .btn--block { margin-top: var(--sp-4); }
+  .login .err { margin: var(--sp-3) 0 0; font-size: 13px; color: var(--danger-text); }
+  .login .foot { margin: var(--sp-3) 0 0; font-size: 12px; color: var(--text-muted); text-align: center; }
+  .login .foot .linkish { font-size: 12px; }
+
+  /* 设计稿状态：三块面板同源，一次只显示一块 */
+  .step { display: none; }
+  body[data-state="signin"] .step--auth,
+  body[data-state="signup"] .step--auth,
+  body[data-state="name"] .step--name,
+  body[data-state="reset"] .step--reset,
+  body[data-state="dead"] .step--dead { display: block; }
+  body[data-state="signin"] .pane--signup, body[data-state="signup"] .pane--signin { display: none; }
+
+  @media (max-width: 640px) {
+    .cardfan { height: 92px; }
+    .cardfan .card { --card-w: 54px; --card-h: 81px; }
+    .field { min-height: 48px; font-size: 16px; }
+  }
+</style>
+</head>
+<body data-state="signin">
+
+<nav class="state-picker" aria-label="设计稿状态切换">
+  <button data-state="signin" aria-pressed="true">A 登录</button>
+  <button data-state="signup" aria-pressed="false">B 注册</button>
+  <button data-state="name" aria-pressed="false">C 还没取名</button>
+  <button data-state="reset" aria-pressed="false">D 重设密码</button>
+  <button data-state="dead" aria-pressed="false">E 链接失效</button>
+</nav>
+
+<div class="sky" aria-hidden="true">
+  <span class="plate plate--outer"></span>
+  <span class="plate plate--inner"></span>
+</div>
+
+<main class="login">
+  <div class="login__in">
+    <div class="cardfan" aria-hidden="true">
+      <span class="card" data-color="green" data-face="7"></span>
+      <span class="card" data-color="yellow" data-face="+2"></span>
+      <span class="card" data-color="wild" data-face="+4"></span>
+      <span class="card" data-color="red" data-face="停"></span>
+      <span class="card" data-color="blue" data-face="3"></span>
+    </div>
+    <p class="eyebrow">ROFT-DLC · 诸神降临 4.1</p>
+
+    <!-- 第一步：邮箱 + 密码。登录与注册共用一套框，只换标题、按钮和 autocomplete -->
+    <section class="step step--auth">
+      <h1 class="pane--signin">回到牌桌</h1>
+      <h1 class="pane--signup">开个账号</h1>
+      <p class="hint pane--signin">邮箱和密码，进门就落座。</p>
+      <p class="hint pane--signup">一个邮箱、一个密码（至少 6 位）。</p>
+
+      <form class="panel">
+        <!-- 不用 role="tablist"：两个页签换的是**同一张表单**的用途，不是两块 tabpanel。
+             aria-pressed 的一对开关既说得准，又已经在 tokens 里有样式。 -->
+        <div class="tabs">
+          <button type="button" data-state="signin" aria-pressed="true">登录</button>
+          <button type="button" data-state="signup" aria-pressed="false">注册</button>
+        </div>
+
+        <label class="field-label" for="email">邮箱</label>
+        <input class="field" id="email" type="email" inputmode="email" autocomplete="email" required
+               placeholder="you@example.com" spellcheck="false">
+
+        <div class="field-line">
+          <label class="field-label" for="pw">密码</label>
+          <button type="button" class="linkish pane--signin">忘记密码？</button>
+        </div>
+        <div class="field-pw">
+          <input class="field" id="pw" type="password" autocomplete="current-password" required minlength="6" placeholder="至少 6 位">
+          <button type="button" aria-pressed="false">显示</button>
+        </div>
+        <!-- 大写锁定：只在密码框上探（键盘事件才拿得到 getModifierState） -->
+        <p class="warn-line" role="status">大写锁定开着。</p>
+
+        <p class="err" role="alert">邮箱或密码不对。</p>
+
+        <button class="btn btn--primary btn--block pane--signin">进入大厅</button>
+        <button class="btn btn--primary btn--block pane--signup">注册并入席</button>
+      </form>
+      <p class="foot">私房局。邮箱只用来登录，不会收到任何邮件。</p>
+    </section>
+
+    <!-- 第二步：登录成功但还没有名字（新号，或上次注册完就关了页面） -->
+    <section class="step step--name">
+      <h1>先取个名字</h1>
+      <p class="hint">同桌的人靠这个认出你。</p>
+
+      <form class="panel">
+        <label class="field-label" for="nick">昵称（2–24 个字）</label>
+        <input class="field field--big" id="nick" type="text" maxlength="24"
+               placeholder="例如：阿柴" autocomplete="nickname" spellcheck="false">
+        <button class="btn btn--primary btn--block">进入大厅</button>
+      </form>
+      <p class="foot">不是你的账号？<button type="button" class="linkish">退出登录</button></p>
+    </section>
+
+    <!-- /auth/reset：邮件里那条链接的落点。同一页也是「修改密码」（有会话就能改） -->
+    <section class="step step--reset">
+      <h1>设个新密码</h1>
+      <p class="hint">改完直接进大厅，不用再登一次。</p>
+
+      <form class="panel">
+        <label class="field-label" for="newpw">新密码（至少 6 位）</label>
+        <div class="field-pw">
+          <input class="field" id="newpw" type="password" autocomplete="new-password" required minlength="6" placeholder="至少 6 位">
+          <button type="button" aria-pressed="false">显示</button>
+        </div>
+        <!-- 只有一个框、可以随时亮出来看——比一个「再输一遍」的确认框管用 -->
+        <button class="btn btn--primary btn--block">改好了，进大厅</button>
+      </form>
+    </section>
+
+    <!-- 换个浏览器点开重设链接：PKCE 的 code_verifier 不在这台机器上，兑不出会话 -->
+    <section class="step step--dead">
+      <h1>这条链接用不了</h1>
+      <p class="hint">
+        多半是过期了，或者是在另一个浏览器里点开的——重设链接只在发起重设的那个浏览器里有效。
+        回登录页重新发一封就好。
+      </p>
+      <p class="foot"><a href="#">← 回登录页</a></p>
+    </section>
+  </div>
+</main>
+
+<script>
+  const body = document.body;
+  document.addEventListener('click', (e) => {
+    const t = e.target.closest('[data-state]');
+    if (t) {
+      body.dataset.state = t.dataset.state;
+      document.querySelectorAll('.state-picker [data-state], .tabs [data-state]')
+        .forEach(x => x.setAttribute('aria-pressed', String(x.dataset.state === t.dataset.state)));
+      document.getElementById('pw').setAttribute(
+        'autocomplete', t.dataset.state === 'signup' ? 'new-password' : 'current-password');
+    }
+    const eye = e.target.closest('.field-pw button');
+    if (eye) {
+      const pw = eye.previousElementSibling;
+      const show = pw.type === 'password';
+      pw.type = show ? 'text' : 'password';
+      eye.textContent = show ? '隐藏' : '显示';
+      eye.setAttribute('aria-pressed', String(show));
+    }
+  });
+</script>
+</body>
+</html>

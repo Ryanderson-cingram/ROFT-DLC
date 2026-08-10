@@ -17,7 +17,12 @@
   color: var(--brass);
 }
 .brand span { font-family: var(--font-display); font-size: 15px; color: var(--text-secondary); }
-.me { display: flex; align-items: center; gap: var(--sp-2); font-size: 14px; }
+.me { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; font-size: 14px; }
+/* 名字多长都不许把退出按钮挤出顶栏 */
+.me__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 顶栏里的次要动作收一档：44px 的主操作尺寸摆在这儿会喧宾夺主（触点仍有 36px + 内边距） */
+.me .btn { flex: none; min-height: 36px; padding: 0 10px; font-size: 13px; color: var(--text-secondary); }
+.me .btn:hover { color: var(--text-primary); }
 /* 开场：扇形牌 + 一句话定位 */
 .hero { padding: var(--sp-5) 0 var(--sp-4); text-align: center; }
 .cardfan { display: flex; justify-content: center; margin-bottom: var(--sp-4); height: 96px; }

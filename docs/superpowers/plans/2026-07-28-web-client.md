@@ -24,6 +24,9 @@
 
 **决策：MVP 用匿名登录 + 昵称**，不做邮箱/密码——私房熟人局，一个昵称就够，邮箱注册是纯摩擦。`config.toml` 里 `[auth] enable_anonymous_sign_ins = true`。
 
+> **已被取代（2026-08-10）：** 登录改成邮箱 + 密码，昵称降为「没有 profile 时补的第二步」。
+> 匿名登录随之关掉（`enable_anonymous_sign_ins = false`）。设计稿：`design/mockups/login.html`。
+
 - [ ] **Step 1:** 按 `supabase` 技能的 `@supabase/ssr` 写法建 browser/server 两个 client 工厂（**不要**用已废弃的 auth-helpers）
 - [ ] **Step 2:** 登录页：输入昵称 → `signInAnonymously()` → 写 `profiles` 行（`username` 长度 2–24，见迁移里的 check 约束；**单字昵称如「凛」会被拒**，前端要给出人话提示，别让用户撞 500）
 - [ ] **Step 3: 验证** — `supabase start` 后实际走一遍：登录后 `profiles` 出现对应行，刷新页面仍是登录态（cookie 正确落地）
