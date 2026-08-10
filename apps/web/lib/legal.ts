@@ -1,4 +1,4 @@
-import type { Action, ClientSnapshot } from "@roft/engine";
+import type { Action, Card, ClientSnapshot, Color } from "@roft/engine";
 
 /**
  * 快照 → 「哪张牌现在可点」的映射。零规则：这里只把 `legalActions` 换个索引方式，
@@ -54,6 +54,21 @@ export function handPickActionsOf(s: ClientSnapshot): Map<string, Respond> {
       : [],
   );
 }
+
+/**
+ * 这张牌定色时被锁到哪个色（`null` = 四色随便选）。
+ *
+ * **判据整条来自快照的 `wildColorLock`**，这里一条规则都不判。从前这一句长在
+ * `page.tsx` 里、自己认「五彩」那一个状态、还把锁定色写死成跟色，于是三个来源
+ * 三种表现：五彩对了，行进曲（吟游♣5，全场）与专精♥9（锁的是他的**专属色**，
+ * 根本不是跟色）都画成四色可选，选错才被服务端拒成 `color_locked`。
+ *
+ * `card.color === null` 不是在判规则，是在读契约：`wildColorLock` 按定义只管无色牌，
+ * 并列♥4 的 4 张同数也要定色但**不在其列**（引擎那边同样不锁，见 `play-cards.ts`
+ * 的 `isWild(card) &&` 那道门）。
+ */
+export const wildColorLockFor = (s: ClientSnapshot, card?: Card | null): Color | null =>
+  card?.color === null ? s.wildColorLock : null;
 
 /** 手牌里该高亮的牌：能打的 + 能当代价／打断／取消交出去的 + 该挑一张还／弃的。 */
 export function playableIds(s: ClientSnapshot): Set<string> {

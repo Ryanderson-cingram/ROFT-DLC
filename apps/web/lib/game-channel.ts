@@ -8,6 +8,17 @@ import { createClient } from "./supabase/client";
 /** 铃铛 payload（0001 迁移的 notify_room_event 触发器发的）。 */
 type Bell = { roomId: string; version: number; seq: number };
 
+/**
+ * 出错了，以及**这个错要不要担心牌面是不是陈的**。
+ *
+ * - `action`：你刚才那个动作被拒（引擎给的拒因）。一次性，关掉重来即可，牌面是新的。
+ * - `sync`：拉快照失败，或撞上 409 版本冲突。**屏幕上的牌面可能已经过时**，
+ *   所以这一档要多给一条「重新载入牌面」的出口，不能只让人关掉了事。
+ *
+ * 从前两者合成一个 `string`，于是「还没轮到你」和「牌面是陈的」长得一模一样。
+ */
+export type ChannelError = { text: string; kind: "action" | "sync" };
+
 const POLL_LINKED_MS = 30_000;
 const POLL_UNLINKED_MS = 3_000;
 
@@ -25,7 +36,7 @@ const POLL_UNLINKED_MS = 3_000;
 export function useGameChannel(roomId: string | null) {
   const supabase = useMemo(() => createClient(), []);
   const [snapshot, setSnapshot] = useState<ClientSnapshot | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ChannelError | null>(null);
   const [loaded, setLoaded] = useState(false);
   // 版本放 ref：铃铛回调与轮询都要读最新值，不能吃闭包里的旧快照。
   const version = useRef(-1);
@@ -36,7 +47,8 @@ export function useGameChannel(roomId: string | null) {
     const res = await callEdge<{ version: number; view: ClientSnapshot }>("get-snapshot", { roomId });
     setLoaded(true);
     if (!res.ok) {
-      setError(humanReason(res.reason));
+      // 拉不到快照 = 屏幕上的牌面就是此刻能拿到的全部，且可能是陈的
+      setError({ text: humanReason(res.reason), kind: "sync" });
       return;
     }
     version.current = res.data.version;
@@ -105,10 +117,18 @@ export function useGameChannel(roomId: string | null) {
       }
       // 409：状态已经变了，原动作可能已经非法 —— 拉新快照让用户自己看，不自动重放。
       await pull();
-      setError(res.status === 409 ? "桌面刚变过，看一眼再重来。" : humanReason(res.reason));
+      // 409 归 sync：它说的正是「你看到的牌面已经不是现在的牌面」
+      setError(
+        res.status === 409
+          ? { text: "桌面刚变过，看一眼再重来。", kind: "sync" }
+          : { text: humanReason(res.reason), kind: "action" },
+      );
     },
     [roomId, pull],
   );
 
-  return { snapshot, error, loaded, send };
+  // 弹窗关掉时清空。`pull` 一并给出去：`sync` 那一档的「重新载入牌面」要用它
+  const clearError = useCallback(() => setError(null), []);
+
+  return { snapshot, error, loaded, send, clearError, reload: pull };
 }

@@ -19,6 +19,7 @@ export function Modal({
   labelledBy,
   className,
   eyebrow,
+  role,
   onClose,
   children,
 }: {
@@ -28,6 +29,11 @@ export function Modal({
   /** 设计稿的变体类（`modal--skill` / `modal--pile`），加在 `.modal` 上。 */
   className?: string;
   eyebrow?: ReactNode;
+  /**
+   * 盖掉原生 `<dialog>` 的隐含 `role="dialog"`。目前只有报错弹窗用得上——
+   * `alertdialog` 才是「出事了，读屏该立刻打断去念它」的那个角色。
+   */
+  role?: "alertdialog";
   /** 不给 = 这个弹窗必须选完才能走（抽 3 选 1），连 Esc 也挡掉。 */
   onClose?: () => void;
   children?: ReactNode;
@@ -43,6 +49,7 @@ export function Modal({
     <dialog
       ref={ref}
       className={className ? `modal ${className}` : "modal"}
+      role={role}
       aria-label={label}
       aria-labelledby={labelledBy}
       // 点遮罩关闭：模态 dialog 上，落在 .modal__box 之外的点击 target 就是 dialog 自己

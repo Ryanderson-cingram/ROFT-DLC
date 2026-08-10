@@ -787,6 +787,14 @@ dialog.modal { margin: 0; width: 100%; height: 100%; max-width: none; max-height
 .modal--pile h2 { margin-top: var(--sp-2); }
 .modal--pile .hint { margin: var(--sp-3) 0 0; }
 
+/* 服务端报错：窄盒 + 朱砂上沿。原来它是页面最底一行小字，落在粘性底坞下方、
+   手机上滚不到就看不见（2026-08-10）。 */
+.modal--error .modal__box { max-width: 420px; border-top: 2px solid var(--zhu); }
+.errbox { display: grid; gap: var(--sp-2); }
+.errbox h2 { margin: 0; font-size: 19px; }
+.errbox p { margin: 0; color: var(--qingyan); }
+.errbox .btn { margin-top: var(--sp-2); }
+
 /* 一局收场：居中一句话 + 一个出口。烟花铺在盒子里、盖不住字（z-index 分层） */
 .modal--over .modal__box { position: relative; overflow: hidden; max-width: 420px; }
 .over { position: relative; z-index: 1; display: grid; gap: var(--sp-2); justify-items: center; text-align: center; padding: var(--sp-3) 0 var(--sp-2); }

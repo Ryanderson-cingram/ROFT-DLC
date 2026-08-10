@@ -7,8 +7,9 @@ import type { DockSlots as Slots, Slot, SlotName } from "@/lib/dock-slots";
 
 /**
  * 待定色的那一手：中槽整个换成四个色块，**不上遮罩**，手牌全程可见（spec §3.4）。
- * `lockedTo` = 03 §4 五彩的「使用变色牌时不能改变颜色」：只画那一个色块，
- * 别的点了也只会被引擎拒（`color_locked`）。
+ * `lockedTo` = 快照 `wildColorLock` 那个色（专精♥9 的专属色 / 五彩 / 行进曲三合一，
+ * 优先级由引擎分好）：只画那一个色块。**组件不认识来源、也不判合法性**——
+ * 给了色就只画一个，没给就画四个。
  */
 export type PickColor = {
   card: Card;
@@ -94,10 +95,12 @@ function SlotButton({
 function ColorSlots({ pick }: { pick: PickColor }) {
   return (
     <>
+      {/* 锁住时**不点名来源**：三个来源（专精♥9 / 五彩 / 行进曲）说法各不相同，
+          点名了就有三分之二的场合在说谎。这里只说「锁住了、只有这一个色」。 */}
       <div
         className="colors"
         role="group"
-        aria-label={`${cardFaceLabel(pick.card)}：${pick.lockedTo ? "五彩：颜色维持不变" : "选择颜色"}`}
+        aria-label={`${cardFaceLabel(pick.card)}：${pick.lockedTo ? "颜色被锁住，只能选这一个" : "选择颜色"}`}
       >
         {COLORS.filter((c) => !pick.lockedTo || c.value === pick.lockedTo).map((c) => (
           <button type="button" key={c.value} data-color={c.value} onClick={() => pick.onPick(c.value)}>

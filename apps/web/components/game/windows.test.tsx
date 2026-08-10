@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { HAND, makeSnapshot } from "@/test-support/snapshot";
 import { buttonLabels, cardNames, pickedCardNames, renderGame } from "@/test-support/render-game";
+import { wildColorLockFor } from "@/lib/legal";
 
 /**
  * 反应窗口的**两侧**：当事人与旁观者。
@@ -433,12 +434,24 @@ describe("定色", () => {
     onCancel: over.onCancel ?? (() => {}),
   });
 
-  // 03 §4 五彩：使用变色牌时不能改变颜色 —— 坞里就只画得出那一个色块
-  it("带五彩时只给当前跟色那一块（别的点了也只会被引擎拒）", () => {
+  // 锁色时坞里就只画得出那一个色块。**组件不认识来源**：专精♥9 的专属色 / 五彩 /
+  // 行进曲三条在引擎里已经合成 `wildColorLock` 一个值，这里给什么色就画什么色。
+  it("锁了色就只给那一块，且 aria-label 不点名来源", () => {
     const { container } = renderGame(makeSnapshot({ activeColor: "B" }), {}, { ...pick(), lockedTo: "B" as const });
     const [, main] = slotsOf(container);
     expect([...main.querySelectorAll(".colors button")].map((b) => b.textContent)).toEqual(["蓝"]);
-    expect(main.querySelector(".colors")!.getAttribute("aria-label")).toContain("五彩");
+    const label = main.querySelector(".colors")!.getAttribute("aria-label")!;
+    expect(label).toContain("颜色被锁住");
+    // 三个来源说法各不相同，点名了就有三分之二的场合在说谎
+    for (const source of ["五彩", "行进曲", "专精"]) expect(label).not.toContain(source);
+  });
+
+  // 锁到的色**不一定是跟色**：专精♥9 锁的是他亮出时定死的专属色。
+  // 从前客户端把锁定色写死成 activeColor，这条就是钉住「组件照快照给的色画」。
+  it("锁到的色与当前跟色无关（专精♥9 那一档）", () => {
+    const { container } = renderGame(makeSnapshot({ activeColor: "B" }), {}, { ...pick(), lockedTo: "G" as const });
+    const [, main] = slotsOf(container);
+    expect([...main.querySelectorAll(".colors button")].map((b) => b.textContent)).toEqual(["绿"]);
   });
 
   it("中槽整块换成四色块 + 一条退路，别的槽一动不动", () => {
@@ -485,5 +498,34 @@ describe("定色", () => {
     expect(onPick).toHaveBeenCalledTimes(1);
     expect(onAction).not.toHaveBeenCalled();
     expect(onPlay).not.toHaveBeenCalled();
+  });
+
+  /**
+   * 「锁到哪个色」这一句纯函数（`page.tsx` 唯一的调用方）。它是 S1 的核心：
+   * 客户端不再自己认技能与状态，只读快照的 `wildColorLock` + 一条「只管无色牌」的契约。
+   */
+  describe("wildColorLockFor（快照 → 锁到哪个色）", () => {
+    const numbered = { id: "R5#x", color: "R", face: "5" } as const;
+
+    it("无色牌 + 快照锁了色 → 就是那个色", () => {
+      expect(wildColorLockFor(makeSnapshot({ wildColorLock: "G" }), WILD)).toBe("G");
+    });
+
+    it("快照没锁 → null（四色随便选）", () => {
+      expect(wildColorLockFor(makeSnapshot(), WILD)).toBeNull();
+    });
+
+    /*
+      反向断言：**并列♥4 的 4 张同数也要定色，但那不是「使用变色牌」**。
+      引擎那边同样不锁（`play-cards.ts` 的 `isWild(card) &&` 那道门），
+      所以带着五彩/行进曲的人打并列时照样四色可选——锁错了会让一手合法的牌打不出去。
+    */
+    it("有色牌（并列 4 张同数）不吃这个锁，哪怕快照锁着色", () => {
+      expect(wildColorLockFor(makeSnapshot({ wildColorLock: "B" }), numbered)).toBeNull();
+    });
+
+    it("没有牌（还没进定色态）→ null", () => {
+      expect(wildColorLockFor(makeSnapshot({ wildColorLock: "B" }), null)).toBeNull();
+    });
   });
 });

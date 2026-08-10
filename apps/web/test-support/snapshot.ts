@@ -58,6 +58,9 @@ const BASE = {
   followFace: TOP.face,
   // 凛持恒心，不是并列——入口按钮不该露出来（引擎算好给 UI，客户端不判技能）
   canPlayMultiple: false,
+  // 基准态没人锁色：定色时四个色块都画得出来。要演锁色的用例自己覆盖成一个 Color
+  // （专精♥9 的专属色 / 五彩 / 行进曲三个来源在引擎里已经合成这一个值）
+  wildColorLock: null,
   discardPile: [c("G2#d0", "G", "2"), c("Y9#d1", "Y", "9"), c("B5#d2", "B", "5")],
   drawPileCount: 38,
   // Q26 未裁定前引擎不发 callUno 提示，fixture 也不装作有——
