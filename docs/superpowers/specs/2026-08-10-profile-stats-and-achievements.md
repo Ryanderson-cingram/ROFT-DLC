@@ -58,13 +58,16 @@ room_events（append-only，24 小时后被 purge 回收）
   │  ← 终局那一帧（result.state.phase === "finished"）：
   │     room-action 边缘函数在调 apply_room_action **之前**多跑一步
   ▼
-tallyGame(events, finalState)  ── 纯函数，@roft/engine 之外的新包 @roft/stats
-  │      输入：这一局的全部事件 + 终局 state
-  │      输出：每个座位的一份 delta（≈ 40 个计数）+ 触发的成就 id
+tallyGame(events, final, finishedAt)  ── 纯函数，@roft/engine 之外的新包 @roft/stats
+  │      输入：这一局的全部事件 + 终局 state + 终局时刻
+  │      输出：每个座位的 { delta, flags }
   ▼
-apply_room_action(..., p_stats_delta, p_unlocked)   ← 同一个事务
-  ├─ player_stats     累加 delta（upsert，列级 +=）
-  ├─ player_achievements  插入新解锁（on conflict do nothing = 幂等）
+mergePrior(prior, delta, won) → next     ← 合并只此一份（TypeScript）
+evaluate(next, flags, owned)  → 本局该有而还没有的成就 id
+  ▼
+apply_room_action(..., p_stats)   ← 同一个事务
+  ├─ player_stats     整份覆盖写（合并已在 TS 里做完）
+  ├─ player_achievements  插入解锁（on conflict do nothing = 幂等）
   └─ room_events      追加 achievementUnlocked 事件（每人一条）
                           │
                           │  既有的 bell 触发器照常发实时铃铛
@@ -85,71 +88,39 @@ apply_room_action(..., p_stats_delta, p_unlocked)   ← 同一个事务
 
 ## 3. 表
 
-### 3.1 `player_stats` —— 一人一行的宽表
+### 3.1 `player_stats` —— 一人一行、一个 jsonb
 
 ```sql
 create table public.player_stats (
   user_id uuid primary key references public.profiles(id) on delete cascade,
-
-  -- 战绩
-  games int not null default 0,
-  wins int not null default 0,
-  draws int not null default 0,
-  games_first int not null default 0,      -- 先手局数（先手胜率的分母）
-  wins_first int not null default 0,
-  turns_total int not null default 0,      -- ÷ games = 场均回合
-  streak_cur int not null default 0,
-  streak_best int not null default 0,
-
-  -- 牌与惩罚
-  cards_played int not null default 0,
-  cards_drawn int not null default 0,
-  punish_taken int not null default 0,     -- 因惩罚链摸掉的张数
-  punish_max int not null default 0,       -- 单条链承受的最大总量
-  punish_deflected_max int not null default 0,
-  punish_broken int not null default 0,
-
-  -- UNO
-  uno_called int not null default 0,
-  uno_caught int not null default 0,       -- 我抓到别人
-  uno_got_caught int not null default 0,   -- 我被抓
-  uno_miscalled int not null default 0,
-
-  -- 技能与盘外
-  skills_activated int not null default 0,
-  wins_after_activate int not null default 0,
-  dice_rolled int not null default 0,
-  dice_hist smallint[] not null default '{0,0,0}',   -- ×0 / ×1 / ×2
-  alliances_formed int not null default 0,
-  alliances_refused int not null default 0,
-  raids_started int not null default 0,
-  marks_gained int not null default 0,
-  sealed_count int not null default 0,
-
-  -- 纪录（取极值，不累加）
-  fastest_win_turns int,
-  longest_game_turns int,
-  most_cards_one_turn int not null default 0,
-  peak_hand int not null default 0,
-
-  -- 分布（jsonb，键少值多的那几项）
-  by_skill jsonb not null default '{}',    -- {"club-3": {"n": 34, "w": 24}, ...} → 本命神职 + 博物志
-  by_card jsonb not null default '{}',     -- {"R+2": 96, ...} → 最常打出的一张
-  vs_player jsonb not null default '{}',   -- {"<uuid>": {"n": 26, "w": 7}} → 宿敌
-  with_ally jsonb not null default '{}',   -- 结盟过的人的胜率 → 最佳盟友
-
+  stats jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now()
 );
 ```
 
-**为什么是宽表不是 `(user_id, stat_key, value)` 竖表**：40 个计数、全部在同一次终局里一起更新、
-profile 页一次性全要。竖表要 40 行 upsert + 一次 pivot 才能渲染一屏。
-榜单要在某一列上建索引，竖表就得建部分索引或物化视图。宽表一行搞定。
+> **2026-08-10 实现时推翻了初稿。** 初稿写的是 40 个具名列 + SQL 里逐列 `+=` 的 upsert。
+> 动手时才看清代价：合并逻辑（连胜要看这一局赢没赢、`punishMax` 取极值、四张分布表逐键相加）
+> 在 `packages/stats` 里已经有一份带 47 个用例的实现（`mergePrior`），
+> 在 SQL 里再写一遍就是**双源**——这个仓库为 skill_defs 专门配了 CI 漂移检查来防的正是这件事。
+>
+> 所以改成：**合并只留 TypeScript 一份，SQL 只负责原子落库**。
+> 形状的唯一来源是 `SeatDelta` / `PriorStats`，表里不写 check 约束去复述它（复述就是第三份真相）。
 
-**为什么 4 个分布放 jsonb**：它们的键是开放集合（60 个技能、108 张牌面、所有玩家），
-拆成表就是 4 张 `(user_id, key, n, w)`，为了 profile 页一屏的四个模块多养 4 张表不值当。
-`by_skill` 最多 60 键、`by_card` 最多 ~15 键（只记数字牌 + 功能牌的色/面组合）、
-`vs_player` 与 `with_ally` 随交手对象增长——**这两个要设上限**，见 §7 风险。
+代价写在明处：`stats` 是**整体覆盖写**，同一个人的两局**同时**结算会丢掉其中一局
+（后写的那份基于旧值算）。一个人同时打两局本来就要主动开两个房间，损失是一局的计数——
+不值得为它引入一套 CAS 重试。真出现了再上。
+
+榜单靠**表达式索引**走，不需要具名列：
+
+```sql
+create index player_stats_wins_idx on public.player_stats (((stats->>'wins')::int) desc);
+create index player_stats_caught_idx on public.player_stats (((stats->>'unoCaught')::int) desc);
+create index player_stats_streak_idx on public.player_stats (((stats->>'streakBest')::int) desc);
+```
+
+`stats` 里装什么见 `packages/stats/src/types.ts`：约 30 个标量计数
+（战绩 / 牌与惩罚 / UNO / 技能与盘外 / 纪录），外加四张分布表
+`bySkill`（≤ 60 键）、`byCard`、`vsPlayer`、`withAlly`——后两张随交手对象增长，见 §7 风险①。
 
 ### 3.2 `achievement_defs` —— 成就定义（种子数据）
 
@@ -201,54 +172,61 @@ create table public.player_achievements (
 
 ## 4. 判定：`@roft/stats`
 
-新包，纯函数，零依赖（除了 `@roft/engine` 的类型）。**引擎一行不改。**
+新包，纯函数，零依赖（除了 `@roft/engine` 的类型）。**引擎只加了一条 `gameEnded` 事件**，
+其余一行不改——成就是引擎输出的下游消费者。
 
 ```ts
-// packages/stats/src/index.ts
-export interface SeatDelta { /* player_stats 每一列的增量 */ }
-
-export function tallyGame(
-  events: EngineEvent[],          // 这一局从 gameStarted 到终局的全部事件
-  final: GameState,
-  seats: { seat: number; userId: string }[],
-): Map<number, SeatDelta>;
-
-export function evaluate(
-  before: PlayerStats,            // 这一局之前的累计
-  delta: SeatDelta,
-  gameFlags: GameFlags,           // 这一局的特判标记（见下）
-  owned: Set<string>,             // 已经有的成就 id
-): string[];                      // 本局新解锁的 id
+tallyGame(events, final, finishedAt): Map<seat, { delta: SeatDelta; flags: GameFlags }>
+mergePrior(prior, delta, won): PriorStats
+evaluate(stats, flags, owned): string[]
 ```
 
-**24 条成就分两类：**
+**24 条成就分三类**（不是初稿说的 19 + 5）：
 
-**计数型（19 条）** —— 定义里写 `stat_key` + `stat_goal`，`evaluate` 一个循环全覆盖：
+- **计数型 11 条** —— 定义里写 `stat` + `goal`，一个循环全覆盖。
+- **形态型 10 条** —— 条件是「这一局之内的样子」，`tallyGame` 顺手在 `GameFlags` 里立旗。
+- **派生型 3 条** —— 要同时读多个累计量（万神殿读 `bySkill` 四神的 `w`、博物志数 `bySkill` 的键数、
+  无漏要 `unoCalled ≥ 100 且 unoGotCaught === 0`）。
 
-```ts
-for (const d of DEFS) {
-  if (!d.statKey || owned.has(d.id)) continue;
-  if (before[d.statKey] < d.goal && before[d.statKey] + delta[d.statKey] >= d.goal)
-    unlocked.push(d.id);
-}
-```
+### `evaluate` 只比「此刻够不够格」，不比「这一局跨没跨过阈值」
 
-**特判型（5 条）** —— 条件是「这一局之内的形态」，不是累计量。`tallyGame` 顺手在 `GameFlags` 里立旗，
-`evaluate` 里各写一行。逐条列出，每条标明**靠哪个事件判**：
+初稿写的是后者（`prior < goal && next >= goal`），理由是「否则每局都会重发一遍」。
+实现时发现那个理由不成立——去重的口径本来就是 `owned`（= `player_achievements` 的主键），
+「跨过」这层判断是多余的，而且**有害**：
 
-| id | 名 | 判定 | 事件源 |
-|---|---|---|---|
-| `deflect` | 反手 | 某条 `punishStack` 的 `total ≥ 12` 且下一条事件把它转给了别人 | `punishStack` + `punishAccepted` 的 seat 变化 |
-| `bare-blade` | 空手接白刃 | 我赢了，且全局既没有我的 `unoCalled`、也没有针对我的 `unoCaught` | `unoCalled` / `unoCaught` 双缺席 |
-| `faceless` | 无相胜 | 我赢了，且全局没有我的 `skillRevealed` | `skillRevealed` 缺席 + `final.board.winner` |
-| `lone-wolf` | 独狼 | 我赢了，且所有针对我的结盟邀请都是 `allianceRefused` | `allianceWindowOpened` + `allianceRefused` |
-| `spotless` | 零封之局 | 我赢了，且全局没有我的 `cardsDrawn`、没吃过惩罚 | `cardsDrawn` 缺席 |
+- **它让漏判变成永久错过。** 判定与写库不在一个原子步里（读 prior → 算 → 写），
+  中间漏一次（并发、报错、回滚），下一局 `prior` 已经够了、跨不动了，这条成就就永远拿不到。
+  只比「够不够格」则下一局自己补上。
+- **它让改阈值必须配回填脚本。** 只比「够不够格」的话，调低门槛后够格的人下一局自动拿到。
 
-其余三条「神」品（万神殿、博物志、天命）是**跨局的派生量**，不需要特判也不需要新列——
-直接读 `by_skill`：四神四个 key 的 `w > 0` 即万神殿；`by_skill` 的键数达 60 即博物志。
+代价是每局把 24 条过一遍——24 次比大小，不值得为它引入状态。
 
-**测试**：`packages/stats/test/` 里给每条成就一个用例——喂一串真事件，断言解不解锁。
-特判那 5 条各再补一条**反例**（差一点点不该解锁）。计数那 19 条共用一个表驱动的用例即可。
+### 形态型 10 条的判据
+
+| id | 名 | 判据 |
+|---|---|---|
+| `color-sweep` | 满堂彩 | 单局内四色各打出 ≥ 8 张 |
+| `deflect` | 反手 | 指向我的链总量 ≥ 12，且窗口重开时受害者换了人 |
+| `bare-blade` | 空手接白刃 | 赢了，且全局既没有我的 `unoCalled`、也没有针对我的 `unoCaught` |
+| `swift` | 速通 | 赢了，且全场 `turnEnded` ≤ 12 |
+| `faceless` | 无相胜 | 赢了，且全局没有我的 `skillRevealed` |
+| `lone-wolf` | 独狼 | 赢了，有我的 `allianceRefused`，且没有含我的 `allianceFormed` |
+| `night-watch` | 守夜人 | 终局时刻的钟点 < 4（**服务端时区**，见 §7 风险⑥） |
+| `defiant` | 逆流 | 赢了，且有过针对我的 `sealed` |
+| `spotless` | 零封之局 | 赢了，且没有我的 `cardsDrawn`（count > 0）、也没有我的 `punishAccepted` |
+| `abyss` | 归墟 | 赢了，且 `board.reshuffles ≥ 2` |
+
+### 读不到的东西不猜
+
+初稿列了 `peak_hand`（手牌峰值）与「手牌剩 1 张熬过一整轮」的判据。
+**都砍了**：要算准得重放每一次换手 / 交牌 / 结盟互换 / 洗牌重分，公开事件流给不出。
+给一个八九不离十的数不如没有这一列。
+
+同理 `bySkill` 只能从**终局 state** 读，不能从 `skillChosen` 事件读——
+那条事件的 payload 里没有 `skillId`（抽到什么是暗信息）。
+
+**测试**：47 个用例。最要紧的一半是拿**引擎真发出来的事件**对 payload 键名——
+写错一个键不会报错，只会让某个计数永远是 0。
 
 ---
 
@@ -324,8 +302,12 @@ profile 页只需要「宿敌」和「最佳盟友」各一个。**这是有意�
 **④ 存量玩家没有历史数据。** `player_stats` 从这一版之后的对局开始记，之前的局已经被 purge 掉了，无法回填。
 profile 页对 `games === 0` 的人要有一个像样的空状态，不能是一屏的 0。
 
-**⑤ 成就定义改了怎么办。** 阈值调低 → 已经够格但没解锁的人不会被追认（判定只在终局跑）。
-对策：改阈值时配一个一次性回填脚本，扫 `player_stats` 补发。改描述/名字不受影响（定义在表里）。
+**⑤ 成就定义改了怎么办。** 已解决——`evaluate` 只比「此刻够不够格」（§4），
+阈值调低后够格的人**下一局自动拿到**，不需要回填脚本。改描述/名字更不受影响（定义在表里）。
+
+**⑥ 守夜人用的是服务端时区。** 终局那一刻的 `new Date().getHours() < 4`。
+玩家在别的时区就对不上「他的半夜」。要按玩家本地时间就得把时区从客户端传上来——
+多一个不可信输入，为一条成就不值当。现在的口径是「服务器所在时区的深夜」，明确记在这里。
 
 ---
 

@@ -123,19 +123,24 @@ export function mergePrior(prior: PriorStats, delta: SeatDelta, won: boolean): P
 }
 
 /**
- * 这一局新解锁了哪几条。
+ * 这一局之后**该有而还没有**的成就。
  *
- * 三条判定路各自的口径：
- * - `stat`：**跨过**阈值才算（`prior < goal && next >= goal`），不是「够了就算」——
- *   否则每打完一局都会把所有够格的成就重发一遍。
- * - `flag`：这一局的形态成立即可（成就本身由 `owned` 去重，不会重复解锁）。
- * - `derive`：同 `stat`，比 `prior` 与 `next` 两个时刻。
+ * 只比「此刻够不够格」，不比「这一局跨没跨过阈值」——去重的唯一口径是 `owned`
+ * （= `player_achievements` 里已经有的行，主键就是它的去重键）。
  *
- * `owned` 是这个人已经有的 id。传进来而不是在这里查库——这个包不碰 IO。
+ * 这个选择有两个好处，都是「跨过」判法给不了的：
+ * - **自愈**。判定与写库不在一个原子步里（读 prior → 算 → 写），中间漏了一次
+ *   （并发、报错、回滚）在「跨过」判法下就是**永久**错过——下一局 prior 已经够了、
+ *   跨不动了。这里下一局自己就补上了。
+ * - **改阈值不用回填**。调低门槛后，够格的人下一局自动拿到。
+ *
+ * 代价是每局都要把 24 条过一遍——24 次比大小，不值得为它引入状态。
+ *
+ * `flags` 那 10 条天然只在本局成立，没有「此刻够不够格」可言，所以照旧读本局形态。
+ * `owned` 传进来而不是在这里查库：这个包不碰 IO。
  */
 export function evaluate(
-  prior: PriorStats,
-  next: PriorStats,
+  stats: PriorStats,
   flags: GameFlags,
   owned: ReadonlySet<string>,
 ): string[] {
@@ -143,11 +148,11 @@ export function evaluate(
   for (const a of ACHIEVEMENTS) {
     if (owned.has(a.id)) continue;
     if (a.stat) {
-      if (prior[a.stat.key] < a.stat.goal && next[a.stat.key] >= a.stat.goal) unlocked.push(a.id);
+      if (stats[a.stat.key] >= a.stat.goal) unlocked.push(a.id);
     } else if (a.flag) {
       if (flags[a.flag]) unlocked.push(a.id);
     } else if (a.derive) {
-      if (!a.derive(prior) && a.derive(next)) unlocked.push(a.id);
+      if (a.derive(stats)) unlocked.push(a.id);
     }
   }
   return unlocked;

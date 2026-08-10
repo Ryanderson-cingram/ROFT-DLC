@@ -24,6 +24,12 @@ jobs:
       - name: skill defs 无漂移（含迁移 seed 同源）
         run: git diff --exit-code -- packages/engine/src/skills supabase/migrations/0004_skill_defs_seed.sql
 
+      # 成就同理：定义的唯一来源是 packages/stats/src/achievements.ts，
+      # 迁移 seed 是它的产物。手改 seed = 双源漂移 = CI 红。
+      - run: pnpm --filter @roft/stats gen:achievements
+      - name: achievement defs 无漂移
+        run: git diff --exit-code -- supabase/migrations/0007_achievement_defs_seed.sql
+
       - run: pnpm test
       - run: pnpm --filter web build
 

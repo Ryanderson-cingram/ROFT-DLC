@@ -31,7 +31,7 @@ const play = (
   const d = { ...emptyDelta(), games: 1, ...delta };
   const f = { ...NO_FLAGS, ...flags };
   const next = mergePrior(prior, d, f.won);
-  return { unlocked: evaluate(prior, next, f, new Set(owned)), next };
+  return { unlocked: evaluate(next, f, new Set(owned)), next };
 };
 
 describe("成就定义表", () => {
@@ -51,20 +51,25 @@ describe("成就定义表", () => {
 });
 
 describe("evaluate · 计数型", () => {
-  it("跨过阈值才解锁，而不是「够了就解锁」", () => {
-    let prior = emptyPrior();
+  it("够了就解锁；再打一局靠 owned 去重，不会重发", () => {
+    const prior = { ...emptyPrior(), unoCaught: 23 };
     // 第 24 次：还差一次
-    prior = { ...prior, unoCaught: 23 };
     const first = play(prior, { unoCaught: 1 });
     expect(first.unlocked).not.toContain("catch-hunter");
 
-    // 第 25 次：跨过去了
+    // 第 25 次：够了
     const second = play(first.next, { unoCaught: 1 });
     expect(second.unlocked).toContain("catch-hunter");
 
-    // 第 26 次：已经够了，不能再发一遍
-    const third = play(second.next, { unoCaught: 1 });
+    // 第 26 次：已经写进 player_achievements 了，owned 挡住
+    const third = play(second.next, { unoCaught: 1 }, {}, ["catch-hunter"]);
     expect(third.unlocked).not.toContain("catch-hunter");
+  });
+
+  /* 判定与写库不在一个原子步里，中间漏一次不能变成**永久**错过。 */
+  it("自愈：上一局漏判了，下一局自己补上", () => {
+    const overdue = { ...emptyPrior(), unoCaught: 40 };  // 早就够 25 了，却没写进 owned
+    expect(play(overdue, {}).unlocked).toContain("catch-hunter");
   });
 
   it("已经拥有的一律跳过（owned 是唯一的去重口径）", () => {
@@ -77,7 +82,7 @@ describe("evaluate · 计数型", () => {
     expect(unlocked).toEqual(expect.arrayContaining(["first-game", "first-uno", "first-reveal", "first-god"]));
   });
 
-  it("清算与一口气取的是极值不是累加：两局各 8 张凑不出 16", () => {
+  it("清算取的是极值不是累加：两局各 8 张凑不出 16", () => {
     const a = play(emptyPrior(), { punishMax: 8 });
     const b = play(a.next, { punishMax: 8 });
     expect(b.unlocked).not.toContain("reckoning");
