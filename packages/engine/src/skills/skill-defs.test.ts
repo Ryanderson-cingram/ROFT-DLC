@@ -2,14 +2,15 @@
 // 迁移里的 seed 必须内嵌同一份 JSON。任一处手改（双源漂移）都在这里红。
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { build, outPath, parseFence, toEffect } from '../../../../scripts/gen-skill-defs.ts';
-import { skillDefs } from './skill-defs.ts';
+import { build, ENUMS, outPath, parseFence, toEffect } from '../../../../scripts/gen-skill-defs.ts';
+import { skillDefs } from './registry.ts';
+import type { RevealWindow, SkillEffect, SkillEffectKind, SkillWindow } from './types.ts';
 
 const built = build();
-const committed = (k: 'json' | 'ts' | 'sql') => readFileSync(outPath(k), 'utf8');
+const committed = (k: 'json' | 'sql') => readFileSync(outPath(k), 'utf8');
 
 describe('skill defs 生成源', () => {
-  it.each(['json', 'ts', 'sql'] as const)('%s 与重跑生成脚本的产物逐字节一致', (k) => {
+  it.each(['json', 'sql'] as const)('%s 与重跑生成脚本的产物逐字节一致', (k) => {
     expect(committed(k)).toBe(built[k]);
   });
 
@@ -31,6 +32,51 @@ describe('skill defs 生成源', () => {
     for (const s of skillDefs.skills) {
       if (!s.effects) expect(s.structured).toBe(false);
     }
+  });
+});
+
+/**
+ * 生成器的取值白名单 ↔ `types.ts` 的联合类型，两边不许漂移。
+ *
+ * 从前这条由 `skill-defs.ts` 那个带类型标注的镜像免费提供：生成器多认一个值、
+ * 联合里没有，那份 `const skillDefs: SkillDefsDoc = {…}` 就编译不过。镜像换成
+ * JSON + 一句 cast 之后没人再对——cast 是不查的，于是「生成器放行了一个引擎类型
+ * 不认识的值」会一路静默到运行时。所以在这里补回来。
+ *
+ * 机件：下面每张表的**键**由 tsc 按联合查穷尽性（少一个不算 Record，多一个不可赋值），
+ * 值再与生成器那张 Set 逐一比。两侧任一边先动，这里就红。
+ * `duration` / `procedure` 不在此列——types.ts 那两格本来就是 `string`，没有联合可对。
+ */
+describe('取值白名单与联合类型同步', () => {
+  const keysOf = (t: Record<string, true>) => new Set(Object.keys(t));
+
+  const KINDS: Record<SkillEffectKind, true> = {
+    passive: true, active: true, on_reveal: true, on_play: true,
+    response: true, replacement: true, status_grant: true, meta_rule: true,
+  };
+  const WINDOWS: Record<SkillWindow, true> = {
+    turn_start: true, play_phase: true, after_play: true, turn_end: true,
+    on_punish_resolve: true, on_stack_contribute: true, interrupt: true,
+    on_draw: true, on_dice_roll: true, any: true,
+  };
+  const REVEAL_WINDOWS: Record<RevealWindow, true> = {
+    own_turn: true, any_time: true, when_skipped: true, when_challenged_uno: true,
+  };
+  const TARGETING: Record<NonNullable<SkillEffect['targeting']>, true> = {
+    self: true, single: true, all_others: true, global: true,
+  };
+  const ONCE: Record<NonNullable<SkillEffect['once']>, true> = {
+    once: true, once_per_player: true, per_player_count: true, unlimited: true,
+  };
+
+  it.each([
+    ['kind', KINDS],
+    ['window', WINDOWS],
+    ['reveal_window', REVEAL_WINDOWS],
+    ['targeting', TARGETING],
+    ['once', ONCE],
+  ] as const)('%s 的白名单与联合逐值相同', (field, table) => {
+    expect(ENUMS[field]).toEqual(keysOf(table));
   });
 });
 

@@ -20,7 +20,7 @@ import type { DrawProcedure } from "./primitives/draw-modifier.ts";
 import type { ApplyResult, Board, Ctx, EngineEvent, GameState, PunishChain } from "../types.ts";
 
 /** 交牌：要交的那几张走 `cardIds`。 */
-export const GIVE = "give";
+const GIVE = "give";
 /** 不交（04 ♥6 的「**可**交」）。超时也走它。 */
 export const KEEP = "keep";
 

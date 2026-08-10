@@ -1,5 +1,5 @@
 // 技能定义的唯一生成源：docs/knowledge-base/04-skills-catalog.md → 版本化 JSON。
-// 产物：packages/engine/src/skills/skill-defs.{json,ts} 与 supabase/migrations/0004_skill_defs_seed.sql
+// 产物：packages/engine/src/skills/skill-defs.json 与 supabase/migrations/0004_skill_defs_seed.sql
 // 跑：pnpm --filter @roft/engine gen:skills（CI 重跑后 git diff 必须为空）
 //
 // 两路输入，都在 04 里：
@@ -88,7 +88,13 @@ const SKILL_ORDER = [
   'structured',
   'unimplemented',
 ];
-const ENUMS: Record<string, Set<string>> = {
+/**
+ * 取值白名单。**导出是给漂移测试用的**：这几张表与 `skills/types.ts` 里的联合类型
+ * 是同一件事的两份写法，从前由 skill-defs.ts 那个带类型标注的镜像替我们对齐
+ * （生成器多放一个值、联合里没有，镜像就编译不过）。镜像删掉之后没人再对，
+ * 所以 `skill-defs.test.ts` 接管——那里的表由 tsc 查穷尽性，值再跟这里逐一比。
+ */
+export const ENUMS: Record<string, Set<string>> = {
   kind: new Set([
     'passive',
     'active',
@@ -503,7 +509,7 @@ export function parseCatalog(md: string): SkillDef[] {
   });
 }
 
-export function build(): { json: string; ts: string; sql: string } {
+export function build(): { json: string; sql: string } {
   const md = readFileSync(new URL(SOURCE, repoRoot), 'utf8');
   const skills = parseCatalog(md);
 
@@ -527,13 +533,6 @@ export function build(): { json: string; ts: string; sql: string } {
   };
   const json = `${JSON.stringify(doc, null, 2)}\n`;
 
-  const ts =
-    `// 由 ${GENERATOR} 生成，勿手改；改规则先改 ${SOURCE}，再跑 pnpm --filter @roft/engine gen:skills\n` +
-    `// ponytail: 与同目录 skill-defs.json 同源同内容的 TS 镜像。直接 import JSON 需要\n` +
-    `// resolveJsonModule，而那在共享 tsconfig 里（别人的地盘）；等它打开就把这里换成一行 import。\n` +
-    `import type { SkillDefsDoc } from './types.ts';\n\n` +
-    `export const skillDefs: SkillDefsDoc = ${JSON.stringify(doc, null, 2)};\n`;
-
   // 迁移直接内嵌同一份 JSON 文本（dollar-quote，无转义），保证「同源」肉眼可查。
   const sql = `-- 由 ${GENERATOR} 生成，勿手改。内嵌的 JSON 与 packages/engine/src/skills/skill-defs.json 逐字节相同。
 -- skill_defs 表建于 0001_init.sql；这里只灌数据，按 (ruleset_version, id) 幂等 upsert。
@@ -544,12 +543,11 @@ from doc, jsonb_array_elements(d->'skills') as s
 on conflict (ruleset_version, id) do update set def = excluded.def;
 `;
 
-  return { json, ts, sql };
+  return { json, sql };
 }
 
 const OUT = {
   json: 'packages/engine/src/skills/skill-defs.json',
-  ts: 'packages/engine/src/skills/skill-defs.ts',
   sql: 'supabase/migrations/0004_skill_defs_seed.sql',
 } as const;
 

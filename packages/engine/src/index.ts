@@ -12,14 +12,14 @@ import { callUno, catchable, catchUno } from "./actions/uno.ts";
 import { playCards } from "./actions/play-cards.ts";
 import {
   canStack, claimTimeout, dissentActions, farstarActions, punishFace, respond, soulSkipEffect,
-  SOUL_SKIP, windowIdOf,
+  SOUL_SKIP,
 } from "./actions/punish.ts";
 import { raidActions } from "./actions/raid.ts";
 import { shuffleCancelActions, SHUFFLE_CHOICES } from "./actions/shuffle-card.ts";
 import { activateSkill, revealSkill } from "./actions/skill.ts";
 import { harvestActions } from "./actions/soul-harvest.ts";
 import { startGame } from "./actions/start-game.ts";
-import { calledThisTurn, isPlayable, playableFor, stalemate } from "./legal.ts";
+import { calledThisTurn, isPlayable, playableFor, stalemate, windowIdOf } from "./legal.ts";
 import { SKILL_DATA } from "./skills/draw-passives.ts";
 import { settleTurnEnd } from "./skills/turn-end.ts";
 import { HANDLERS, spendSouls } from "./skills/handlers.ts";
@@ -29,12 +29,11 @@ import { isSealed, suppressesEffect } from "./skills/primitives/suppression.ts";
 import type { SkillEffect } from "./skills/types.ts";
 import type { Action, ApplyResult, Board, Card, ClientSnapshot, Color, Ctx, GameState } from "./types.ts";
 export * from "./types.ts";
+import { COLORS } from "./deck.ts";
 export { buildDeck, shuffle } from "./deck.ts";
 export { isPlayable } from "./legal.ts";
 // 客户端要把技能 id 映射成名字/文案（draft 候选、亮出的技能椰）；定义本来就是公开的百科数据
 export { skills as loadedSkills } from "./skills/registry.ts";
-
-const COLORS: Color[] = ["R", "G", "B", "Y"];
 
 /**
  * 标记上限表（标记名 → 上限），来自各技能定义的 `mark_cap`（04 围栏块 / 02 §6）。

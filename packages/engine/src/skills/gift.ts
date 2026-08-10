@@ -20,7 +20,7 @@ import type { DrawRequest } from "./primitives/draw-modifier.ts";
 import type { Board } from "../types.ts";
 
 /** 这个座位手上还有能打的牌吗（含状态限制）。 */
-export const hasPlayable = (b: Board, seat: number): boolean =>
+const hasPlayable = (b: Board, seat: number): boolean =>
   b.hands[seat].some((c) => playableFor(b, seat, c));
 
 /**

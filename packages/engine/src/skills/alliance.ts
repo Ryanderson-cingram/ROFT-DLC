@@ -25,7 +25,7 @@ import type { ApplyResult, Board, Card, Ctx, EngineEvent, Face, GameState } from
 
 /** 03 §1 的**功能牌**：+2 / 转 / 停。变色牌（变色 / +4 / 毒 / 洗牌）不在其列。 */
 const FUNCTION_FACES: ReadonlySet<Face> = new Set<Face>(["+2", "skip", "rev"]);
-export const isFunctionCard = (c: Card) => FUNCTION_FACES.has(c.face);
+const isFunctionCard = (c: Card) => FUNCTION_FACES.has(c.face);
 
 /**
  * `seat` 身上那条「打出功能牌后可摸弃」的被动。**按定义找，不认技能 id**：
@@ -79,9 +79,9 @@ const bookOf = (b: Board) => b.funcPlay ?? b.hands.map(() => ({ thisTurn: false,
 // ─────────────────────────────────────────────────────────────── ①：结盟
 
 /** 相应（= 亮出并换手牌）。 */
-export const ALLY = "ally";
+const ALLY = "ally";
 /** 不相应。超时也走它（S13：不选 = 无人相应）。 */
-export const REFUSE = "refuse";
+const REFUSE = "refuse";
 
 /**
  * `seat` 亮出的技能有没有「另一半」在场，以及那一半在谁手上。

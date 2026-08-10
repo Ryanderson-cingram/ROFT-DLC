@@ -28,8 +28,6 @@ import type { SkillData } from "../skills/draw-passives.ts";
 import type { SkillEffect } from "../skills/types.ts";
 import type { Action, ApplyResult, Board, Card, Color, Ctx, GameState, PunishChain } from "../types.ts";
 
-export { windowIdOf };
-
 /** P1：惩罚 = 仅因 +2 / +4 的摸牌。 */
 export const PUNISH_DRAW = { "+2": 2, "+4": 4 } as const;
 export type PunishFace = keyof typeof PUNISH_DRAW;
@@ -128,7 +126,7 @@ export function soulSkipEffect(b: Board, seat: number, data: SkillData = SKILL_D
 }
 
 /** 远星♦J 在惩罚窗口里的那个响应选项。 */
-export const FARSTAR = "farstar";
+const FARSTAR = "farstar";
 
 /**
  * 远星♦J（04 ♦J / 01-P7 / 06-Q34 / 06-Q54 / 06-Q55）：被惩罚指向时的第三个选项。

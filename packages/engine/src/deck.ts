@@ -1,6 +1,7 @@
 import type { Card, Color, Face, RulePack } from "./types.ts";
 
-const COLORS: Color[] = ["R", "G", "B", "Y"];
+/** 四色。`deck.ts` 只依赖 types.ts，是棵叶子，所以放这里不会跟任何模块成环。 */
+export const COLORS: Color[] = ["R", "G", "B", "Y"];
 const DIGITS: Face[] = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
 /** 每色牌面构成，见 `docs/knowledge-base/05-gods-omens-deck.md` §3。 */

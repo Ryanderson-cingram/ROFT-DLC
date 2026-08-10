@@ -8,7 +8,8 @@
  */
 import { describe, expect, it } from "vitest";
 import { applyAction, legalActions } from "../../src/index.ts";
-import { canStack, PUNISH_DRAW, windowIdOf } from "../../src/actions/punish.ts";
+import { canStack, PUNISH_DRAW } from "../../src/actions/punish.ts";
+import { windowIdOf } from "../../src/legal.ts";
 import { nextSeat } from "../../src/legal.ts";
 import { card, ctx, table } from "../helpers.ts";
 import type { PunishFace } from "../../src/actions/punish.ts";

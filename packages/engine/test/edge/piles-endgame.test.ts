@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { applyAction, legalActions, projectView } from "../../src/index.ts";
-import { windowIdOf } from "../../src/actions/punish.ts";
+import { windowIdOf } from "../../src/legal.ts";
 import { MAX_RESHUFFLES, stalemate } from "../../src/legal.ts";
 import { card, ctx, table } from "../helpers.ts";
 import type { EngineEvent, GameState } from "../../src/types.ts";

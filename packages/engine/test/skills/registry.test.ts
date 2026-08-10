@@ -2,9 +2,8 @@
 // 数据驱动最典型的失败是静默失效：JSON 写了个 kind，引擎没实现，技能亮出后什么都不发生。
 // 这里守的就是「不许静默跳过」。
 import { describe, expect, it } from "vitest";
-import { loadSkills, mechanismRefs } from "../../src/skills/registry.ts";
+import { loadSkills, mechanismRefs, skillDefs } from "../../src/skills/registry.ts";
 import { primitives } from "../../src/skills/primitives/index.ts";
-import { skillDefs } from "../../src/skills/skill-defs.ts";
 import type { LoadableSkillDef } from "../../src/skills/registry.ts";
 
 const def = (over: Partial<LoadableSkillDef> & { id: string }): LoadableSkillDef => ({

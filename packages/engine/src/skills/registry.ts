@@ -9,8 +9,15 @@
 // 规则来源：docs/knowledge-base/02-methodology.md §1/§2；计划 §1「硬约束」。
 import { HANDLERS } from "./handlers.ts";
 import { primitives } from "./primitives/index.ts";
-import { skillDefs } from "./skill-defs.ts";
-import type { SkillDef } from "./types.ts";
+import rawDefs from "./skill-defs.json" with { type: "json" };
+import type { SkillDef, SkillDefsDoc } from "./types.ts";
+
+/**
+ * 技能定义的唯一产物（由 scripts/gen-skill-defs.ts 从 04-skills-catalog.md 生成）。
+ * cast 是必需的一句：JSON 模块的字面量类型会被宽化成 `string`，接不上 `SkillEffectKind`
+ * 一类的联合。逐字节的正确性由 CI 的重跑无漂移 + skill-defs.test.ts 守着，不靠这里的类型。
+ */
+export const skillDefs = rawDefs as SkillDefsDoc;
 
 export type LoadableSkillDef = SkillDef & {
   /** 计划 §1：机制还没建的技能显式标出来，不进抽 3 选 1 的池 */

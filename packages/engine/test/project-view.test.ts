@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyAction, legalActions, projectView } from "../src/index.ts";
-import { windowIdOf } from "../src/actions/punish.ts";
+import { windowIdOf } from "../src/legal.ts";
 import { spendMarks } from "../src/skills/primitives/marks.ts";
 import { card, ctx, lobby, table } from "./helpers.ts";
 

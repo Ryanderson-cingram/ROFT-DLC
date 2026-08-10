@@ -81,7 +81,7 @@ export function openDrawDiscard(
 }
 
 /** 真的摸、真的开弃牌窗口。「要不要」那一步已经问过（或不必问）才走到这里。 */
-export function drawAndDiscard(
+function drawAndDiscard(
   state: GameState,
   b: Board,
   seat: number,
@@ -177,9 +177,9 @@ export const drawDiscardActions = (seat: number, windowId: string) => [
  *
  * 所以它不长在某个技能的模块里，而是长在摸 N 弃 N 的共用入口旁边。
  */
-export const TAKE = "take";
+const TAKE = "take";
 /** 不要。超时也走它——两条规则的默认都是「不打扰牌桌」。 */
-export const DECLINE = "decline";
+const DECLINE = "decline";
 
 export function openDrawOffer(
   state: GameState,

@@ -64,7 +64,7 @@ export const sealedOff = (b: Board, seat: number, def: SkillDef) =>
  * 技能，而②明文不占主动额度、不限回合、只替掉掷骰这一步（06-Q34）——跟被动同款处理，
  * 与 `draw-passives.ts` 同一条理由。
  */
-export function takeoverActors(b: Board, data: SkillData = SKILL_DATA): number[] {
+function takeoverActors(b: Board, data: SkillData = SKILL_DATA): number[] {
   return b.skills.flatMap((id, seat) => {
     // V3：没亮出的技能对局面毫无影响
     if (!id || !b.revealed[seat]) return [];
