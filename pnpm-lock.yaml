@@ -13,6 +13,9 @@ importers:
       '@roft/engine':
         specifier: workspace:^
         version: link:../../packages/engine
+      '@roft/stats':
+        specifier: workspace:^
+        version: link:../../packages/stats
       '@supabase/ssr':
         specifier: 0.8.0
         version: 0.8.0(@supabase/supabase-js@2.86.0)

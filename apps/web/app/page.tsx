@@ -26,7 +26,10 @@ export default async function LobbyPage() {
         </div>
         <div className="me">
           <span className="dot" />
-          <span className="me__name">{profile.username}</span>
+          {/* 名字就是进自己命盘的入口——顶栏已经满了，不再单开一个按钮 */}
+          <Link className="me__name" href={`/profile/${data.claims.sub}`}>
+            {profile.username}
+          </Link>
           <SignOutButton />
         </div>
       </header>
