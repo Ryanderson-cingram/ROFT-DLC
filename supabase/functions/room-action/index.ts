@@ -4,12 +4,10 @@ import { json, serveAuthed } from "../_shared/http.ts";
 import { tallyFinishedGame } from "../_shared/stats.ts";
 
 serveAuthed(async ({ body, user, svc }) => {
-  const { roomId, expectedVersion, idempotencyKey, tzOffset } = body as {
+  const { roomId, expectedVersion, idempotencyKey } = body as {
     roomId: string;
     expectedVersion: number;
     idempotencyKey: string;
-    /** 客户端的 `getTimezoneOffset()`。只喂给「守夜人」那枚封泥，见 _shared/stats.ts::localHour。 */
-    tzOffset?: number;
   };
   /**
    * 房间层动作与引擎动作走同一个端点。`restartGame` 不在引擎的 `Action` 里——引擎只管
@@ -112,7 +110,7 @@ serveAuthed(async ({ body, user, svc }) => {
   let stats: Awaited<ReturnType<typeof tallyFinishedGame>> | null = null;
   if (finished) {
     try {
-      stats = await tallyFinishedGame(svc, roomId, result, tzOffset);
+      stats = await tallyFinishedGame(svc, roomId, result);
     } catch (e) {
       console.error("tallyFinishedGame failed（这一局的统计丢了，对局照常收场）", e);
     }

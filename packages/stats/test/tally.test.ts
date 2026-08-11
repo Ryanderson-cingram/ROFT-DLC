@@ -1,7 +1,7 @@
 import { applyAction } from "@roft/engine";
 import type { Board, Card, Color, EngineEvent, Face, GameState } from "@roft/engine";
 import { describe, expect, it } from "vitest";
-import { sliceCurrentGame, tallyGame } from "../src/tally.ts";
+import { GAME_TIMEZONE, hourIn, sliceCurrentGame, tallyGame } from "../src/tally.ts";
 
 /* ------------------------------------------------------------------ 夹具 */
 
@@ -299,5 +299,42 @@ describe("sliceCurrentGame", () => {
   it("没有 gameStarted（老房间）就整份返回——宁可算宽，也不静默丢掉一整局", () => {
     const all = [ev("cardPlayed", { seat: 0, cards: [card("R", "1")] })];
     expect(sliceCurrentGame(all)).toEqual(all);
+  });
+});
+
+/* ------------------------------------------------------------ 统一时区 */
+
+/**
+ * 「守夜人」按牌局的统一时区（悉尼）判，不看玩家当地时间也不看服务器时区。
+ *
+ * 这一组守的是**夏令时**：悉尼在 AEST(+10) 与 AEDT(+11) 之间来回切，
+ * 写死偏移量的话每年有小半年是错的。切换日期年年由政府定，只有时区数据库知道，
+ * 所以 `hourIn` 必须走 Intl —— 这几条用例就是在钉「它真的走了 Intl」。
+ */
+describe("hourIn · 统一时区与夏令时", () => {
+  it("悉尼的冬天是 UTC+10（AEST）", () => {
+    // 2026-07-01 02:00 UTC → 悉尼 12:00
+    expect(hourIn(new Date("2026-07-01T02:00:00Z"))).toBe(12);
+  });
+
+  it("悉尼的夏天是 UTC+11（AEDT）——同一个 UTC 钟点，结果差一小时", () => {
+    // 2026-01-01 02:00 UTC → 悉尼 13:00
+    expect(hourIn(new Date("2026-01-01T02:00:00Z"))).toBe(13);
+  });
+
+  it("午夜给 0 不给 24", () => {
+    // 2026-07-01 14:00 UTC → 悉尼次日 00:00
+    expect(hourIn(new Date("2026-07-01T14:00:00Z"))).toBe(0);
+  });
+
+  it("守夜人的窗口按悉尼算：UTC 的下午正是悉尼的深夜", () => {
+    const at = (iso: string) => hourIn(new Date(iso));
+    expect(at("2026-07-01T15:30:00Z")).toBe(1);   // 悉尼 01:30 → 算深夜
+    expect(at("2026-07-01T18:30:00Z")).toBe(4);   // 悉尼 04:30 → 不算
+  });
+
+  it("时区名可以覆盖，默认是 GAME_TIMEZONE", () => {
+    expect(GAME_TIMEZONE).toBe("Australia/Sydney");
+    expect(hourIn(new Date("2026-07-01T02:00:00Z"), "UTC")).toBe(2);
   });
 });

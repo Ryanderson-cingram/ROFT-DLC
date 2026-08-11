@@ -62,7 +62,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: "faceless", tier: "天", mark: "无", name: "无相胜", descr: "全程不亮技能取胜。", flag: "facelessWin" },
   { id: "lone-wolf", tier: "天", mark: "狼", name: "独狼", descr: "拒绝掉结盟邀请、一次都没结成，并取胜。", flag: "loneWolfWin" },
   { id: "reckoning", tier: "天", mark: "算", name: "清算", descr: "独自吃下总量 16 张的惩罚链。", stat: { key: "punishMax", goal: 16 } },
-  { id: "night-watch", tier: "天", mark: "夜", name: "守夜人", descr: "在 00:00–04:00 之间打完一局。", flag: "nightWatch" },
+  { id: "night-watch", tier: "天", mark: "夜", name: "守夜人", descr: "在悉尼时间 00:00–04:00 之间打完一局。", flag: "nightWatch" },
   { id: "one-breath", tier: "天", mark: "气", name: "一口气", descr: "单回合打出 6 张以上的牌。", stat: { key: "mostCardsOneTurn", goal: 6 } },
 
   // ---------- 神：极稀 ----------

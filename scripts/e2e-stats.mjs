@@ -114,9 +114,6 @@ const act = (key) => fetch(`${API}/functions/v1/room-action`, {
   body: JSON.stringify({
     roomId: ROOM, expectedVersion: 7, idempotencyKey: key,
     action: { type: "playCards", cardIds: ["R5#a"] },
-    // 「守夜人」判的是**玩家本地**的钟点，不是边缘运行时容器的 UTC。
-    // 真客户端也是这么报的（game-channel.ts::send）。
-    tzOffset: new Date().getTimezoneOffset(),
   }),
 });
 
@@ -160,13 +157,15 @@ const got = {};
 for (const a of ach) (got[NAMES[U.indexOf(a.user_id)]] ??= []).push(a.achievement_id);
 
 /*
-  「守夜人」判的是**玩家本地**的终局钟点（00:00–04:00），而上面 `act()` 报的就是
-  这台机器的时区偏移。所以它成不成立取决于你什么时候跑这个脚本——断言跟着钟点走，
-  否则半夜跑必红，那是脚本的毛病不是代码的。
+  「守夜人」判的是**悉尼时间**的终局钟点（00:00–04:00），全局统一、不看玩家当地。
+  所以它成不成立取决于你什么时候跑这个脚本——断言跟着同一个时区走，
+  否则悉尼的半夜跑必红，那是脚本的毛病不是代码的。
 */
-const nightly = new Date().getHours() < 4 ? ["night-watch"] : [];
+const sydneyHour = Number(new Intl.DateTimeFormat("en-GB",
+  { timeZone: "Australia/Sydney", hour: "2-digit", hour12: false }).format(new Date())) % 24;
+const nightly = sydneyHour < 4 ? ["night-watch"] : [];
 const expect = (...ids) => [...ids, ...nightly].sort();
-if (nightly.length) console.log("  （现在是深夜，守夜人计入预期）");
+if (nightly.length) console.log(`  （悉尼时间 ${sydneyHour} 点，守夜人计入预期）`);
 
 // 这一局是照着这几条摆的：见脚本上方牌桌那段注释
 check("无咎", (got["无咎"] ?? []).sort(),

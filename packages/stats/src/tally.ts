@@ -18,6 +18,28 @@ const MAX_RESHUFFLES = 2;
 /** 守夜人：终局钟点在 [0, NIGHT_UNTIL) 之间算深夜。 */
 const NIGHT_UNTIL = 4;
 
+/**
+ * 牌局的**统一时区**（2026-08-11 拍板）。
+ *
+ * 「守夜人」按这里的钟点判，不看玩家当地时间——一桌人本来就坐在同一个夜里，
+ * 各按各的时区反而会出现「同一局有人拿到有人没拿到」。
+ *
+ * 必须是 IANA 时区名而不是写死的偏移：悉尼有夏令时（AEST +10 / AEDT +11），
+ * 写死 +10 的话每年有小半年是错的。
+ */
+export const GAME_TIMEZONE = "Australia/Sydney";
+
+/**
+ * 某个时刻在指定时区的钟点（0–23）。
+ *
+ * 走 `Intl` 而不是手算偏移：夏令时的切换日期年年由政府定，只有时区数据库知道。
+ * `hour12: false` 在部分实现里会把午夜给成 24，所以取模收一下。
+ */
+export function hourIn(at: Date, timeZone: string = GAME_TIMEZONE): number {
+  const hh = new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", hour12: false }).format(at);
+  return Number(hh) % 24;
+}
+
 const zero = (): SeatDelta => ({
   games: 0, wins: 0, draws: 0, gamesFirst: 0, winsFirst: 0, turns: 0,
   cardsPlayed: 0, cardsDrawn: 0, punishTaken: 0, punishMax: 0,
@@ -47,11 +69,11 @@ const bump = (m: Record<string, Tally>, key: string, won: boolean) => {
  * ⚠️ `events` 必须只含这一局：`room_events` 是按房间存的，一个房间重开多局会一直累积，
  * 调用方要按最后一次 `gameStarted` 的 seq 切一刀（见 `sliceCurrentGame`）。
  *
- * `localHour` 是**玩家所在时区**的终局钟点（0–23），由调用方算好传进来。
+ * `localHour` 是终局那一刻在 `GAME_TIMEZONE` 的钟点（0–23），由调用方用 `hourIn()` 算好传进来。
  * 守夜人那条成就是唯一用到它的地方。
  *
  * 一开始这里收的是 `Date`、内部调 `getHours()`——那是个藏起来的环境依赖：
- * 边缘运行时的容器跑在 UTC，于是「00:00–04:00 的深夜」对悉尼玩家实际是**上午 10 点到下午 2 点**。
+ * 边缘运行时的容器跑在 UTC，于是「00:00–04:00 的深夜」实际成了悉尼的**上午 10 点到下午 2 点**。
  * 纯函数不该有隐式时钟，所以改成收一个已经算好的钟点数。
  *
  * 读不到的东西一律不猜：手牌峰值要重放每一次换手/交牌才算得准，

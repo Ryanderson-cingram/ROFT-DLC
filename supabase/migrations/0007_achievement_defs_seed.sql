@@ -170,7 +170,7 @@ with doc as (select $achievement_defs${
       "tier": "天",
       "mark": "夜",
       "name": "守夜人",
-      "descr": "在 00:00–04:00 之间打完一局。",
+      "descr": "在悉尼时间 00:00–04:00 之间打完一局。",
       "stat_key": null,
       "stat_goal": null,
       "sort": 16

@@ -3,6 +3,7 @@ import {
   ACHIEVEMENTS,
   evaluate,
   mergePrior,
+  hourIn,
   sliceCurrentGame,
   tallyGame,
   type PlayerStats,
@@ -25,26 +26,6 @@ export interface StatsRow {
 
 const KNOWN = new Set(ACHIEVEMENTS.map((a) => a.id));
 
-/** UTC±14 是现存时区的极值。超出这个范围的一律当没传。 */
-const MAX_TZ_OFFSET = 14 * 60;
-
-/**
- * 玩家所在时区的此刻钟点（0–23）。
- *
- * 偏移量由客户端随动作报上来（`Date.prototype.getTimezoneOffset`），**不可信**——
- * 但唯一读它的是「守夜人」那枚封泥，而封泥不进任何榜单、没有竞技价值，
- * 谎报只是骗自己。反过来不信它的代价是实打实的：边缘运行时跑在 UTC，
- * 「00:00–04:00 的深夜」对悉尼玩家就成了上午 10 点到下午 2 点。
- *
- * 没传 / 传了脏值就回落到服务端的 UTC 钟点——宁可算得保守，也不为一条成就抛错。
- */
-function localHour(tzOffsetMinutes: unknown): number {
-  const off = typeof tzOffsetMinutes === "number" && Number.isFinite(tzOffsetMinutes)
-    && Math.abs(tzOffsetMinutes) <= MAX_TZ_OFFSET ? tzOffsetMinutes : 0;
-  // getTimezoneOffset 的符号是「本地 + offset = UTC」，所以本地 = UTC − offset
-  return new Date(Date.now() - off * 60_000).getUTCHours();
-}
-
 /**
  * 终局那一步：把这一局碾成每个人的累计量与新解锁的成就。
  *
@@ -60,7 +41,6 @@ export async function tallyFinishedGame(
   svc: SupabaseClient,
   roomId: string,
   result: ApplyResult,
-  tzOffsetMinutes: unknown,
 ): Promise<{ rows: StatsRow[]; events: EngineEvent[] }> {
   const seats = result.state.seats ?? [];
   if (seats.length === 0) return { rows: [], events: [] };
@@ -82,7 +62,9 @@ export async function tallyFinishedGame(
   // 房间可以重开，`room_events` 会一直往后追加——只算最后一局
   const events = sliceCurrentGame([...history, ...result.events]);
 
-  const tallied = tallyGame(events, result.state, localHour(tzOffsetMinutes));
+  // 「守夜人」按牌局的统一时区判，不看玩家当地时间（2026-08-11 拍板）。
+  // 容器跑在 UTC，直接 getHours() 会把「深夜」算成悉尼的上午 10 点。
+  const tallied = tallyGame(events, result.state, hourIn(new Date()));
   const userIds = seats.map((s) => s.userId).filter(Boolean);
 
   // 两条读并发跑：一条拿此前的累计量，一条拿已经有的成就（去重的唯一口径）
