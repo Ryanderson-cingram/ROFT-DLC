@@ -35,7 +35,8 @@ function table(hands: Card[][], board: Partial<Board> = {}): GameState {
   };
 }
 
-const NOON = new Date("2026-08-10T12:00:00");
+const NOON = 12;  // 终局钟点（玩家本地），守夜人之外没人读它
+const NOW = "2026-08-10T12:00:00.000Z";  // 喂给引擎的 ctx.now，与上面那个钟点无关
 const ev = (type: string, pub: Record<string, unknown>): EngineEvent => ({ type, public: pub });
 
 /* ------------------------------------------------------ 与真引擎对齐的那一半 */
@@ -52,7 +53,7 @@ describe("tallyGame · 对着真引擎的事件流", () => {
     });
     const r = applyAction(s, { type: "playCards", seat: 0, cardIds: [s.board!.hands[0][0].id] }, {
       rng: () => 0.5,
-      now: NOON.toISOString(),
+      now: NOW,
     });
     expect(r.state.board!.winner).toBe(0);
 
@@ -76,7 +77,7 @@ describe("tallyGame · 对着真引擎的事件流", () => {
 
   it("摸牌 → cardsDrawn 按张数累加，且破掉零封", () => {
     const s = table([[card("Y", "9")], [card("B", "3")], [card("G", "9")]]);
-    const r = applyAction(s, { type: "drawCard", seat: 0 }, { rng: () => 0.5, now: NOON.toISOString() });
+    const r = applyAction(s, { type: "drawCard", seat: 0 }, { rng: () => 0.5, now: NOW });
     expect(r.rejected).toBeUndefined();
 
     const me = tallyGame(r.events, r.state, NOON).get(0)!.delta;
@@ -201,8 +202,8 @@ describe("tallyGame · 特判标记", () => {
     phase: "finished",
     board: { ...base.board!, ...board, ...(winner === undefined ? {} : { winner }) },
   });
-  const flagsOf = (events: EngineEvent[], winner = 0, board: Partial<Board> = {}, when = NOON) =>
-    tallyGame(events, finished(winner, board), when).get(0)!.flags;
+  const flagsOf = (events: EngineEvent[], winner = 0, board: Partial<Board> = {}, hour = NOON) =>
+    tallyGame(events, finished(winner, board), hour).get(0)!.flags;
 
   it("满堂彩：四色各 8 张才算，差一张就不算", () => {
     const sweep = (perColor: number) =>
@@ -256,9 +257,11 @@ describe("tallyGame · 特判标记", () => {
     expect(flagsOf([]).loneWolfWin).toBe(false); // 没人邀请过也不算
   });
 
-  it("守夜人只看终局的钟点", () => {
-    expect(flagsOf([], 0, {}, new Date("2026-08-10T02:30:00")).nightWatch).toBe(true);
-    expect(flagsOf([], 0, {}, new Date("2026-08-10T04:00:00")).nightWatch).toBe(false);
+  /* 钟点是**入参**，不是环境——从前它读 `new Date().getHours()`，
+     于是跑在 UTC 容器里的边缘函数把「深夜」判成了悉尼的上午 10 点。 */
+  it("守夜人只看传进来的钟点，0–3 点算，4 点不算", () => {
+    for (const h of [0, 1, 2, 3]) expect(flagsOf([], 0, {}, h).nightWatch, `${h} 点该算`).toBe(true);
+    for (const h of [4, 12, 23]) expect(flagsOf([], 0, {}, h).nightWatch, `${h} 点不该算`).toBe(false);
   });
 
   it("逆流：被封印过还赢了", () => {

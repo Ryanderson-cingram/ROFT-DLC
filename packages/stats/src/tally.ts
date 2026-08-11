@@ -15,6 +15,8 @@ const SWIFT_TURNS = 12;
 const BIG_CHAIN = 12;
 /** U8：牌堆最多洗回几次（与引擎的 MAX_RESHUFFLES 同源，归墟要它）。 */
 const MAX_RESHUFFLES = 2;
+/** 守夜人：终局钟点在 [0, NIGHT_UNTIL) 之间算深夜。 */
+const NIGHT_UNTIL = 4;
 
 const zero = (): SeatDelta => ({
   games: 0, wins: 0, draws: 0, gamesFirst: 0, winsFirst: 0, turns: 0,
@@ -45,8 +47,12 @@ const bump = (m: Record<string, Tally>, key: string, won: boolean) => {
  * ⚠️ `events` 必须只含这一局：`room_events` 是按房间存的，一个房间重开多局会一直累积，
  * 调用方要按最后一次 `gameStarted` 的 seq 切一刀（见 `sliceCurrentGame`）。
  *
- * `finishedAt` 单独传而不是读 `Date.now()`——这个包是纯函数，时间是输入不是环境。
+ * `localHour` 是**玩家所在时区**的终局钟点（0–23），由调用方算好传进来。
  * 守夜人那条成就是唯一用到它的地方。
+ *
+ * 一开始这里收的是 `Date`、内部调 `getHours()`——那是个藏起来的环境依赖：
+ * 边缘运行时的容器跑在 UTC，于是「00:00–04:00 的深夜」对悉尼玩家实际是**上午 10 点到下午 2 点**。
+ * 纯函数不该有隐式时钟，所以改成收一个已经算好的钟点数。
  *
  * 读不到的东西一律不猜：手牌峰值要重放每一次换手/交牌才算得准，
  * 公开事件流给不出，所以**没有这一列**，而不是给一个八九不离十的数。
@@ -54,7 +60,7 @@ const bump = (m: Record<string, Tally>, key: string, won: boolean) => {
 export function tallyGame(
   events: EngineEvent[],
   final: GameState,
-  finishedAt: Date,
+  localHour: number,
 ): Map<number, { delta: SeatDelta; flags: GameFlags }> {
   const seats = final.seats ?? [];
   const board = final.board;
@@ -209,8 +215,7 @@ export function tallyGame(
   }
 
   // ---- 收尾：把只有终局才知道的东西补齐 ----
-  const hour = finishedAt.getHours();
-  const nightWatch = hour < 4;
+  const nightWatch = localHour >= 0 && localHour < NIGHT_UNTIL;
   const reshuffles = board?.reshuffles ?? 0;
   const result = new Map<number, { delta: SeatDelta; flags: GameFlags }>();
 

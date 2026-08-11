@@ -114,6 +114,9 @@ const act = (key) => fetch(`${API}/functions/v1/room-action`, {
   body: JSON.stringify({
     roomId: ROOM, expectedVersion: 7, idempotencyKey: key,
     action: { type: "playCards", cardIds: ["R5#a"] },
+    // 「守夜人」判的是**玩家本地**的钟点，不是边缘运行时容器的 UTC。
+    // 真客户端也是这么报的（game-channel.ts::send）。
+    tzOffset: new Date().getTimezoneOffset(),
   }),
 });
 
@@ -155,11 +158,21 @@ console.log("\n—— 成就 ——");
 const ach = await rest(`player_achievements?user_id=in.(${U.join(",")})&select=user_id,achievement_id`);
 const got = {};
 for (const a of ach) (got[NAMES[U.indexOf(a.user_id)]] ??= []).push(a.achievement_id);
-// 这一局是照着这 7 条摆的：见脚本上方牌桌那段注释
-check("无咎 7 枚", (got["无咎"] ?? []).sort(),
-  ["abyss", "bare-blade", "faceless", "first-game", "first-god", "spotless", "swift"]);
-check("照野 只有初登盘", got["照野"], ["first-game"]);
-check("青塘 只有初登盘", got["青塘"], ["first-game"]);
+
+/*
+  「守夜人」判的是**玩家本地**的终局钟点（00:00–04:00），而上面 `act()` 报的就是
+  这台机器的时区偏移。所以它成不成立取决于你什么时候跑这个脚本——断言跟着钟点走，
+  否则半夜跑必红，那是脚本的毛病不是代码的。
+*/
+const nightly = new Date().getHours() < 4 ? ["night-watch"] : [];
+const expect = (...ids) => [...ids, ...nightly].sort();
+if (nightly.length) console.log("  （现在是深夜，守夜人计入预期）");
+
+// 这一局是照着这几条摆的：见脚本上方牌桌那段注释
+check("无咎", (got["无咎"] ?? []).sort(),
+  expect("abyss", "bare-blade", "faceless", "first-game", "first-god", "spotless", "swift"));
+check("照野 只有初登盘", (got["照野"] ?? []).sort(), expect("first-game"));
+check("青塘 只有初登盘", (got["青塘"] ?? []).sort(), expect("first-game"));
 
 const evs = await rest(`room_events?room_id=eq.${ROOM}&select=seq,type,public_payload&order=seq`);
 const unlockEvents = evs.filter((e) => e.type === "achievementUnlocked");

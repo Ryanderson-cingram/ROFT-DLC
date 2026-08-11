@@ -111,6 +111,9 @@ export function useGameChannel(roomId: string | null) {
           expectedVersion: version.current,
           idempotencyKey,
           action,
+          // 只有终局那一步用得上（「守夜人」封泥要玩家本地的钟点，
+          // 而边缘运行时跑在 UTC）。每次都带着，省得判断哪一手是最后一手。
+          tzOffset: new Date().getTimezoneOffset(),
         });
 
       /*
