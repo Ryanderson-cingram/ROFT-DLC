@@ -216,7 +216,7 @@ export function humanize(
       return { who: nameOf(seat), what: `抓了${nameOf(p.target as number)}没喊 UNO——摸 2 张`, kind: "uno" };
     /*
       成就解锁（0006）。**全场可见**：成就不含任何暗牌信息，而「对手刚拿下一枚 0.3% 的封泥」
-      是这个品类里极强的桌面戏剧性。自己的那条另外还会弹一次（见 <AchievementToast>）。
+      是这个品类里极强的桌面戏剧性。自己的那几枚另外画在收场弹窗里（`useMyUnlocks` + `<GameOver>`）。
       名字来自 `achievement_defs`；这里拿不到那张表，所以只报数——一行日志不值得为它多拉一次表。
     */
     case "achievementUnlocked": {

@@ -817,6 +817,50 @@ dialog.modal { margin: 0; width: 100%; height: 100%; max-width: none; max-height
   100% { opacity: 0; transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) scale(0.25); }
 }
 
+/* 本局解锁的封泥：一枚 28px 的印 + 一行「解锁 · 名」+ 品级点。
+   品级色抄 profile 页的 `.seal[data-tier]`——同一枚封泥在两处必须认得出是同一个东西。
+   （那份样式住在 profile 路由自己的 css 里，牌桌这条路由不加载它，所以这里是缩写版，不是重复。） */
+.overseals { display: grid; gap: 6px; width: 100%; margin-bottom: var(--sp-2); }
+.overseal {
+  position: relative; overflow: hidden;
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 12px 6px 6px;
+  border: var(--line); border-radius: var(--radius-pill);
+  background: var(--mo-2); text-align: left;
+  animation: rise 0.3s var(--ease-tactile) backwards;
+}
+.overseal i {
+  flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 6px;
+  font-family: var(--font-display); font-style: normal; font-size: 16px; transform: rotate(-3deg);
+}
+.overseal b { font-family: var(--font-display); font-size: 14px; letter-spacing: 0.06em; }
+.overseal small {
+  margin-left: auto; font-family: var(--font-mono); font-size: 10px; color: var(--muted); white-space: nowrap;
+}
+.overseal small::before {
+  content: ""; display: inline-block; width: 5px; height: 5px; border-radius: 50%;
+  background: currentColor; margin-right: 5px; vertical-align: middle;
+}
+.overseal[data-tier="凡"] i { background: var(--mo); border: 1px solid var(--edge); color: var(--qingyan); }
+.overseal[data-tier="玄"] { border-color: var(--piao-dim); }
+.overseal[data-tier="玄"] i { background: rgba(99, 210, 195, 0.14); border: 1px solid var(--piao); color: var(--piao); }
+.overseal[data-tier="天"] { border-color: #7a5a1c; }
+.overseal[data-tier="天"] i { background: rgba(224, 163, 60, 0.14); border: 1px solid var(--warn); color: var(--warn); }
+.overseal[data-tier="神"] { border-color: #4f3d80; }
+.overseal[data-tier="神"] i {
+  border: 1px solid var(--card-wild-a); color: #d9ccff;
+  background: conic-gradient(from 45deg, rgba(226, 59, 59, 0.3) 0 25%, rgba(49, 132, 240, 0.3) 0 50%, rgba(240, 180, 41, 0.3) 0 75%, rgba(49, 177, 90, 0.3) 0);
+  box-shadow: 0 0 20px -6px rgba(123, 92, 214, 0.9);
+}
+/* 神品那一道流光，只有它有——最稀的东西才配动（profile 页同款） */
+.overseal[data-tier="神"]::after {
+  content: ""; position: absolute; top: 0; left: -60%; width: 45%; height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(217, 204, 255, 0.16), transparent);
+  animation: seal-shine 5s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes seal-shine { 0%, 70% { left: -60%; } 100% { left: 200%; } }
+
 /* ---------- 记录抽屉（offcanvas，两端同一套） ---------- */
 
 .drawer__handle {

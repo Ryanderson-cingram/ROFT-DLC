@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState, type CSSProperties } from "react";
 import { Modal } from "./modal";
 import type { NameOf } from "@/lib/hud-copy";
+import type { Seal } from "@/lib/unlocks";
 
 /** 三轮、每轮八条，错开放。角度写死不随机——`Math.random()` 会让 SSR 与水合对不上。 */
 const RAYS = 8;
@@ -51,9 +52,12 @@ export function GameOver({
   onRestart,
   onLeave,
   roomHref,
+  unlocked = [],
 }: {
   snapshot: ClientSnapshot;
   nameOf: NameOf;
+  /** 本局解锁的封泥（只有自己的那些，`useMyUnlocks`）。空 = 这一局没解锁，整块不出现。 */
+  unlocked?: Seal[];
   /** 原房间重开（房间号不变、人不动、上一局的记录清空）。缺席 = 只留「回大厅」那条路。 */
   onRestart?: () => void | Promise<void>;
   /** 返回大厅 = **退出房间**（座位交还服务端，防幽灵座位），然后由它自己导航。缺席 = 退化成纯导航。 */
@@ -92,6 +96,20 @@ export function GameOver({
             "手牌清空，收工。"
           : "手牌被清空的是别人，下一局再说。"}
         </p>
+        {/* 本局解锁的封泥（spec §5）。解锁只在终局那一帧发生，而那一帧这个弹窗就在人眼前——
+            所以它长在这里，不是坞上的浮报（浮报会被这个 top layer 的 dialog 整个盖住）。
+            缩到 28px 的封泥 + 一行「解锁 · 名」+ 品级点，与 profile 页同一条视觉规则。 */}
+        {unlocked.length > 0 && (
+          <div className="overseals" aria-label={`本局解锁 ${unlocked.length} 枚封泥`}>
+            {unlocked.map((a) => (
+              <span key={a.id} className="overseal" data-tier={a.tier}>
+                <i aria-hidden="true">{a.mark}</i>
+                <b>解锁 · {a.name}</b>
+                <small>{a.tier} 品</small>
+              </span>
+            ))}
+          </div>
+        )}
         {onRestart && (
           <button
             type="button"
