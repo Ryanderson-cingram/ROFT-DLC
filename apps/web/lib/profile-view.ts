@@ -10,9 +10,15 @@
  */
 
 import type { PlayerStats, Tally, Tier } from "@roft/stats";
-import { skillById } from "./skills";
 import { faceLabel } from "./cards";
-import type { Color, Face } from "@roft/engine";
+import { loadedSkills, type Color, type Face } from "@roft/engine";
+
+/**
+ * 技能名与沿印一律读**引擎的定义**，不走 `lib/skills.ts` 的 `skillById`——
+ * 那份表只覆盖有玩家版文案的 20 个技能，四神与其余 36 个查它一律 undefined，
+ * 命盘上就会露出 `god-fade` 这样的裸 id。名字与花色的唯一来源本来就是引擎（skills.ts 的注释也这么写）。
+ */
+const skillDef = (id: string) => loadedSkills.byId.get(id);
 
 /** 本命神职至少要打过几局才上榜——3 局 100% 不该压着 34 局 71%。 */
 const MASTERY_MIN_GAMES = 8;
@@ -99,6 +105,78 @@ export function parseCardKey(key: string): { color: Color | null; face: Face } {
   return { color: isColor ? (head as Color) : null, face: key.slice(1) as Face };
 }
 
+// ---------------------------------------------------------------- 近 20 场
+
+/** `player_recent` 的一行（迁移 0009）。`won === null` = 平局。 */
+export interface RecentRow {
+  finished_at: string;
+  won: boolean | null;
+  skill_id: string | null;
+  turns: number;
+  hand_left: number;
+}
+
+export interface RunView {
+  /** 胜 / 负 / 平。点上印的就是这个字母。 */
+  result: "W" | "L" | "D";
+  /** 悬停那一行摘要（纯文本，不带标记）。 */
+  tip: string;
+}
+
+export interface RecentView {
+  /** **旧 → 新**：曲线从左往右读，最右边那个点是最近一场。 */
+  runs: RunView[];
+  wins: number;
+  /** 滚动胜率的折线（`viewBox="0 0 560 108"`）。 */
+  line: string;
+  /** 同一条线收口成的面积块。 */
+  area: string;
+}
+
+const SPARK_W = 560;
+/** 纵轴铺满 0–100%（54 = 50% 那条基准虚线）。压缩量程的话，第一场之后必然是 0% 或 100%，会冲出画布。 */
+const SPARK_Y = (p: number) => 104 - p * 100;
+
+/**
+ * 近 20 场 → 一排结果点 + 滚动胜率曲线。
+ *
+ * 入参是 PostgREST 直接给的那一截：**新 → 旧**（`order=finished_at.desc&limit=20`）。
+ * 翻转在这儿做，不在页面里——「哪一头是最近一场」搞反了画出来的曲线是反的，
+ * 而反的曲线一样很像真的，肉眼查不出来。
+ *
+ * 滚动胜率 = 从这 20 场里最旧的那一场起的**累计**胜率（第 i 个点 = 前 i+1 场的胜率）。
+ * 平局按「没赢」算进分母——它确实不是一场胜。
+ *
+ * 一行都没有 → null（页面走空状态，不画一条 0% 的直线）。
+ */
+export function projectRecent(rows: readonly RecentRow[]): RecentView | null {
+  if (rows.length === 0) return null;
+
+  const oldestFirst = [...rows].reverse();
+  const runs: RunView[] = oldestFirst.map((r) => {
+    const skill = r.skill_id ? (skillDef(r.skill_id)?.name ?? r.skill_id) : "没有技能";
+    const tail = r.won ? "打完收工" : `收场还剩 ${r.hand_left} 张`;
+    return {
+      result: r.won === null ? "D" : r.won ? "W" : "L",
+      tip: `${skill} · ${r.turns} 回合 · ${tail}`,
+    };
+  });
+
+  let won = 0;
+  const pts = runs.map((r, i) => {
+    if (r.result === "W") won++;
+    return won / (i + 1);
+  });
+  // 只有一场时两端各放一个点：单点的 `M…` 什么都画不出来，一条横线才看得见
+  const xs = pts.length > 1 ? pts.map((_, i) => (i / (pts.length - 1)) * SPARK_W) : [0, SPARK_W];
+  const ys = pts.length > 1 ? pts : [pts[0], pts[0]];
+  const line = xs
+    .map((x, i) => `${i ? "L" : "M"}${x.toFixed(1)} ${SPARK_Y(ys[i]).toFixed(1)}`)
+    .join(" ");
+
+  return { runs, wins: won, line, area: `${line} L${SPARK_W} 108 L0 108 Z` };
+}
+
 /** `achievement_defs` 的一行（只取页面用得上的列）。 */
 export interface DefRow {
   id: string;
@@ -151,11 +229,11 @@ export function projectProfile(
   const mastery: MasteryRow[] = Object.entries(bySkill)
     .filter(([, t]) => num(t?.n) >= MASTERY_MIN_GAMES)
     .map(([id, t]) => {
-      const skill = skillById(id);
+      const def = skillDef(id);
       return {
         id,
-        name: skill?.name ?? id,
-        sigil: skill?.sigil ?? "?",
+        name: def?.name ?? id,
+        sigil: def?.suit_rank ?? "?",
         games: num(t.n),
         winPct: Math.round((num(t.w) / num(t.n)) * 1000) / 10,
       };

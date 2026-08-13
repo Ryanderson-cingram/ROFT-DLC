@@ -145,7 +145,27 @@
   border: 1px dashed var(--edge); border-radius: 50%; opacity: 0.5; pointer-events: none;
 }
 
-/* ---------- 三、本命神职 ---------- */
+/* ---------- 三、近况（近 20 场 + 滚动胜率） ---------- */
+.spark { position: relative; padding: var(--sp-3); }
+.spark svg { display: block; width: 100%; height: 108px; overflow: visible; }
+.spark .ln { fill: none; stroke: var(--piao); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.spark .ar { fill: url(#sparkFill); }
+.spark .base { stroke: var(--edge); stroke-width: 1; stroke-dasharray: 3 5; }
+.spark__cap { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: var(--muted); }
+
+/* 一排结果点：胜 = 缥青实心、负 = 朱砂描边、平 = 灰。摘要走原生 title
+   （设计稿里那个自绘浮层在窄屏会被裁掉，而 title 键盘与读屏都认） */
+.runs { display: flex; flex-wrap: wrap; gap: 5px; margin-top: var(--sp-3); }
+.run {
+  display: grid; place-items: center; width: 22px; height: 28px;
+  border: 1px solid var(--edge); border-radius: 3px; background: var(--sunken);
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--muted);
+  cursor: help;
+}
+.run[data-r="W"] { border-color: var(--piao-dim); background: rgba(99, 210, 195, 0.16); color: var(--piao); }
+.run[data-r="L"] { border-color: var(--zhu-dim); color: var(--danger-text); }
+
+/* ---------- 四、本命神职 ---------- */
 .mastery { display: grid; gap: 7px; }
 .mrow {
   display: grid; grid-template-columns: 116px minmax(0, 1fr) 108px; align-items: center; gap: var(--sp-3);

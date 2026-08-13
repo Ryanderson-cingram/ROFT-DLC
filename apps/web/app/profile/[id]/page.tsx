@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Count, Reveal } from "@/components/profile/animate";
 import { cardColorClass, cardFaceLabel } from "@/lib/cards";
-import { projectProfile, PLATE_TICKS, type DefRow } from "@/lib/profile-view";
+import { projectProfile, projectRecent, PLATE_TICKS, type DefRow, type RecentRow } from "@/lib/profile-view";
 import { createClient } from "@/lib/supabase/server";
 import "./profile.css";
 
@@ -34,13 +34,20 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
   const { data: auth } = await supabase.auth.getClaims();
   if (!auth?.claims) redirect("/login");
 
-  // 四条读并发跑。RLS 对这几张表是 select 全开（成就与统计里没有暗信息），
+  // 五条读并发跑。RLS 对这几张表是 select 全开（成就与统计里没有暗信息），
   // 所以看别人的命盘走的是同一条路径，不需要分支。
-  const [me, statsRow, ownedRows, defRows] = await Promise.all([
+  const [me, statsRow, ownedRows, defRows, recentRows] = await Promise.all([
     supabase.from("profiles").select("id, username, created_at").eq("id", id).maybeSingle(),
     supabase.from("player_stats").select("stats").eq("user_id", id).maybeSingle(),
     supabase.from("player_achievements").select("achievement_id").eq("user_id", id),
     supabase.from("achievement_defs").select("id, tier, mark, name, descr, stat_key, stat_goal, sort, unlock_rate"),
+    // 近 20 场：新 → 旧（`projectRecent` 自己翻成旧 → 新）。截断是查询的事
+    supabase
+      .from("player_recent")
+      .select("finished_at, won, skill_id, turns, hand_left")
+      .eq("user_id", id)
+      .order("finished_at", { ascending: false })
+      .limit(20),
   ]);
   if (!me.data) notFound();
 
@@ -49,6 +56,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
     (ownedRows.data ?? []).map((r) => r.achievement_id as string),
     (defRows.data ?? []) as DefRow[],
   );
+  const recent = projectRecent((recentRows.data ?? []) as RecentRow[]);
 
   // 宿敌与盟友只有 id，名字要另外查一次（两个人，一条 in 查询）
   const relIds = [v.nemesis?.userId, v.ally?.userId].filter((x): x is string => !!x);
@@ -223,12 +231,55 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
               </section>
             </Reveal>
 
-            {/* ================= 三、本命神职 ================= */}
+            {/* ================= 三、近况 ================= */}
+            {recent ? (
+              <Reveal>
+                <section>
+                  <div className="sec-head">
+                    <p className="eyebrow">Ⅱ</p><h2>近况</h2>
+                    <span className="hint">最近 {recent.runs.length} 场 · 滚动胜率</span>
+                  </div>
+                  <div className="panel spark">
+                    {/* 曲线是**累计**胜率：最左边是这一截里最旧的一场，最右边是最近一场。
+                        路径由 projectRecent 算好（那儿有用例钉着方向与平局的口径） */}
+                    <svg viewBox="0 0 560 108" preserveAspectRatio="none" role="img"
+                      aria-label={`最近 ${recent.runs.length} 场的滚动胜率，胜 ${recent.wins} 场`}>
+                      <defs>
+                        {/* 颜色写死成字面量，不写 var(--piao)：presentation attribute 里的
+                            自定义属性不是所有引擎都认，设计稿里也是字面量 */}
+                        <linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="rgba(99,210,195,0.28)" />
+                          <stop offset="100%" stopColor="rgba(99,210,195,0)" />
+                        </linearGradient>
+                      </defs>
+                      <line className="base" x1="0" y1="54" x2="560" y2="54" />
+                      <path className="ar" d={recent.area} />
+                      <path className="ln" d={recent.line} />
+                    </svg>
+                    <div className="spark__cap">
+                      <span>{recent.runs.length} 场前</span><span>50% 基准</span><span>最近一场</span>
+                    </div>
+                    {/* 每场一个点。摘要是 title 而不是自绘的浮层——原生 tooltip 键盘与读屏都认，
+                        而且不会在窄屏上被裁掉（.run__tip 那套是设计稿里的做法，落地时换掉） */}
+                    <div className="runs">
+                      {recent.runs.map((r, i) => (
+                        <span key={i} className="run" data-r={r.result} title={r.tip}>
+                          {r.result}
+                          <span className="sr-only">：{r.tip}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </section>
+              </Reveal>
+            ) : null}
+
+            {/* ================= 四、本命神职 ================= */}
             {v.mastery.length ? (
               <Reveal>
                 <section>
                   <div className="sec-head">
-                    <p className="eyebrow">Ⅱ</p><h2>本命神职</h2>
+                    <p className="eyebrow">Ⅲ</p><h2>本命神职</h2>
                     <span className="hint">用过 ≥ 8 局 · 按胜率排</span>
                   </div>
                   <div className="mastery">
@@ -279,7 +330,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
             <Reveal>
               <section>
                 <div className="sec-head">
-                  <p className="eyebrow">Ⅲ</p><h2>趣味数据</h2>
+                  <p className="eyebrow">Ⅳ</p><h2>趣味数据</h2>
                   <span className="hint">生涯累计</span>
                 </div>
                 <div className="fun">
@@ -360,7 +411,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
         <Reveal>
           <section>
             <div className="sec-head">
-              <p className="eyebrow">{v.empty ? "Ⅰ" : "Ⅳ"}</p><h2>封泥</h2>
+              <p className="eyebrow">{v.empty ? "Ⅰ" : "Ⅴ"}</p><h2>封泥</h2>
               <span className="hint"><b className="code">{v.achievementsOwned}</b> / {v.achievements.length} 已得</span>
             </div>
             <div className="ach">

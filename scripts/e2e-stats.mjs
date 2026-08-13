@@ -44,6 +44,7 @@ const card = (color, face, tag) => ({ id: `${color ?? "W"}${face}#${tag}`, color
 await del(`rooms?id=eq.${ROOM}`);
 await del(`player_achievements?user_id=in.(${U.join(",")})`);
 await del(`player_stats?user_id=in.(${U.join(",")})`);
+await del(`player_recent?user_id=in.(${U.join(",")})`);
 for (const id of U) {
   await fetch(`${API}/auth/v1/admin/users/${id}`, { method: "DELETE", headers: svcHeaders }).catch(() => {});
 }
@@ -179,6 +180,23 @@ check("achievementUnlocked 三条（每人一条）", unlockEvents.length, 3);
 check("终局事件带 winner", evs.find((e) => e.type === "gameEnded")?.public_payload, { winner: 0 });
 
 /*
+  近 20 场（0009 的 `player_recent`）。这张表**只有在终局那一帧搭上 p_stats 的车**才会有行，
+  所以它验的是「边缘函数把 recent 填对了」+「RPC 那条 insert 走通了」，两头都在别的进程里。
+*/
+console.log("\n—— 近 20 场 ——");
+const recent = await rest(`player_recent?user_id=in.(${U.join(",")})&select=user_id,won,skill_id,turns,hand_left`);
+const recentOf = Object.fromEntries(recent.map((r) => [NAMES[U.indexOf(r.user_id)], r]));
+check("一人一行", recent.length, 3);
+check("赢家 won = true", recentOf["无咎"]?.won, true);
+check("输的那两个 won = false（不是 null——null 是平局）", [recentOf["照野"]?.won, recentOf["青塘"]?.won], [false, false]);
+check("技能 id 落库", recentOf["无咎"]?.skill_id, "god-fade");
+check("回合数与统计里的同一个数", recentOf["无咎"]?.turns, me.turnsTotal);
+check("赢家收场手牌 0 张", recentOf["无咎"]?.hand_left, 0);
+check("没赢的人手上还剩牌", recentOf["照野"]?.hand_left, 1);
+// 没抽到技能的座位不许写成空字符串（页面按 null 走「没有技能」那条分支）
+check("青塘没有技能 → null", recentOf["青塘"]?.skill_id, null);
+
+/*
   榜单（0008 的 `leaderboards()`）。这一段**必须用玩家的 token 打**，不是 service_role：
   「我排第几」走的是 `auth.uid()`，用 service_role 跑它恒为 null，等于什么都没验。
   名次不写死成 1——本地库里可能还躺着别的对局，验的是「榜上那一行」与「我的名次」对得上。
@@ -204,6 +222,9 @@ check("同 key 重放 → idempotent", body.idempotent, true);
 check("同 key 重放 → 还回第一次的 version", body.version, 8);
 const after = await rest(`player_stats?user_id=eq.${U[0]}&select=stats`);
 check("重放不重复计数", after[0].stats.games, 1);
+// player_recent 是 insert（不是 upsert），重放要是走到了那条语句就会多出一行
+const afterRecent = await rest(`player_recent?user_id=in.(${U.join(",")})&select=id`);
+check("重放不多插一行近况", afterRecent.length, 3);
 // 换一个 key 重发同一个动作：这才该被引擎拒
 const fresh = await act("e2e-different-key");
 check("换 key 重发 → 400", fresh.status, 400);

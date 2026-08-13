@@ -1,6 +1,7 @@
 import type { PlayerStats } from "@roft/stats";
 import { describe, expect, it } from "vitest";
-import { parseCardKey, projectProfile, type DefRow } from "./profile-view";
+import { parseCardKey, projectProfile, projectRecent, type DefRow, type RecentRow } from "./profile-view";
+import { loadedSkills } from "@roft/engine";
 
 const def = (over: Partial<DefRow> = {}): DefRow => ({
   id: "first-game", tier: "凡", mark: "初", name: "初登盘", descr: "打完你的第一局。",
@@ -176,5 +177,67 @@ describe("projectProfile · 掷骰", () => {
 
   it("没掷过 → null 而不是 0%", () => {
     expect(projectProfile(stats(), [], []).dice.twoPct).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------- 近 20 场（0009）
+
+const run = (over: Partial<RecentRow> = {}): RecentRow => ({
+  finished_at: "2026-08-13T00:00:00Z", won: true, skill_id: null, turns: 20, hand_left: 0, ...over,
+});
+
+/**
+ * 这一层最容易错的两处，都不是「算错一个数」而是「画出来一样像真的」：
+ * ① 时间方向反了（PostgREST 给的是新 → 旧，曲线要从旧往新读）；
+ * ② 平局被当成胜或被排除出分母。
+ * 所以下面每一条都盯着这两件事。
+ */
+describe("projectRecent · 近 20 场", () => {
+  it("一行都没有 → null（页面走空状态，不画一条 0% 的假线）", () => {
+    expect(projectRecent([])).toBeNull();
+  });
+
+  it("入参是新 → 旧，画出来必须是旧 → 新", () => {
+    // 库里的顺序：最近一场在最前
+    const v = projectRecent([run({ won: true }), run({ won: false }), run({ won: false })])!;
+    expect(v.runs.map((r) => r.result)).toEqual(["L", "L", "W"]);
+    // 滚动胜率：0/1 → 0/2 → 1/3，最后一个点才抬起来
+    expect(v.line).toBe("M0.0 104.0 L280.0 104.0 L560.0 70.7");
+  });
+
+  it("平局是 D，按「没赢」算进分母（不是赢、也不是不算）", () => {
+    const v = projectRecent([run({ won: null }), run({ won: true })])!;
+    expect(v.runs.map((r) => r.result)).toEqual(["W", "D"]);
+    expect(v.wins).toBe(1);
+    // 1/1 → 1/2：平局把胜率拉下来，而不是被跳过
+    expect(v.line).toBe("M0.0 4.0 L560.0 54.0");
+  });
+
+  it("只有一场 → 一条横线（单点的 M 什么都画不出来）", () => {
+    const v = projectRecent([run({ won: true })])!;
+    expect(v.line).toBe("M0.0 4.0 L560.0 4.0");
+    expect(v.area).toBe("M0.0 4.0 L560.0 4.0 L560 108 L0 108 Z");
+  });
+
+  it("摘要：赢了写「打完收工」，没赢写剩几张；技能取中文名，没有就说没有", () => {
+    const v = projectRecent([
+      run({ won: false, skill_id: "god-fade", turns: 30, hand_left: 6 }),
+      run({ won: true, skill_id: null, turns: 12 }),
+    ])!;
+    expect(v.runs[0].tip).toBe("没有技能 · 12 回合 · 打完收工");
+    expect(v.runs[1].tip).toBe(`${loadedSkills.byId.get("god-fade")!.name} · 30 回合 · 收场还剩 6 张`);
+  });
+
+  // 库里可能留着已经被删掉的技能 id（引擎改过名），那时候宁可显示 id 也不能崩
+  it("认不出的技能 id 原样显示", () => {
+    const v = projectRecent([run({ skill_id: "no-such-skill" })])!;
+    expect(v.runs[0].tip).toContain("no-such-skill");
+  });
+
+  // 页面只查 20 行，但函数不许假设这一点——多给了就多画，不该悄悄截断
+  it("给多少画多少（截断是查询的事，不是这里的事）", () => {
+    const v = projectRecent(Array.from({ length: 25 }, () => run()))!;
+    expect(v.runs.length).toBe(25);
+    expect(v.wins).toBe(25);
   });
 });

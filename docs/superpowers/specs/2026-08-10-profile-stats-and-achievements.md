@@ -278,13 +278,24 @@ evaluate(stats: PlayerStats, flags: GameFlags, owned: Set<string>): string[]
 **profile 页**：一次 `select` 拿 `player_stats` 一行 + `player_achievements` 全部 + `achievement_defs` 全部。
 三个查询、无 join、无聚合。设计稿 `design/mockups/profile.html` 里的每一格都能从这三份数据直接算出来。
 
-**近 20 场**：`player_stats` 里没有，也不该有（宽表不装序列）。
-另开一张窄表 `player_recent(user_id, finished_at, won, skill_id, turns)`，
-终局时插一行，同一个作业里删掉每人第 20 行之后的。它是唯一一处需要「留一段历史」的地方。
+**近 20 场**（迁移 0009）：`player_stats` 里没有，也不该有（宽表不装序列）。
+另开一张窄表 `player_recent(user_id, finished_at, won, skill_id, turns, hand_left)`，终局时一人插一行。
+它是唯一一处需要「留一段历史」的地方。
 
-> **还没做**（2026-08-13）。profile 页目前没有这一格——设计稿 `profile.html` 里的那排结果点
-> 与滚动胜率火花线跟着一起缺席。它是这份 spec 里唯一还没落地的东西，要新开一张表 + 改终局那一帧的写入，
-> 与榜单互不相干，所以单独排一步。
+- **`won` 可以是 null——那就是平局**，沿用引擎 `board.winner` 缺席的同一条读法，库里不另立一套 W/L/D 词汇表。
+- **写入搭 `p_stats` 的车**：每个座位在那份 payload 里本来就有一行，近况挂在它的 `recent` 上，
+  RPC 签名一个字没改（`create or replace` 就够，不像 0006 那次要先 drop）。同一个事务，符合 §0②。
+- **不需要去重键**：重放走 `apply_room_action` 的 `unique_violation` 分支，事务在这条 insert 之前就回滚返回了。
+  冒烟脚本里有一条专门钉它（「重放不多插一行近况」）。
+
+> **2026-08-13 砍掉了初稿的修剪作业。** 初稿写「同一个作业里删掉每人第 20 行之后的」。
+> 一场一行 ≈ 40 字节，一万局四人局也才 4 万行——「近 20 场」是**查询**的口径（`limit 20`），
+> 不是存储的口径。为它养一个定时任务，是拿一份要维护的作业去换一点点磁盘。
+> ponytail：真长到要收的那天，往现成的每小时 `purge_stale_rooms` 里加一条 delete 就够。
+
+滚动胜率曲线与那排结果点由 `projectRecent()`（`lib/profile-view.ts`）算，页面只管摆。
+两处**看不出错**的地方由用例钉着：PostgREST 给的是「新 → 旧」而曲线要从旧往新读（画反了一样很像真的），
+以及平局按「没赢」算进分母（不是赢、也不是不计）。
 
 **榜单**（`/leaderboard`）：不引入合成分数，每条榜的排序键就是 `player_stats` 的**某一格**：
 
@@ -362,11 +373,11 @@ profile 页对 `games === 0` 的人要有一个像样的空状态，不能是一
 5. **profile 页**（`apps/web/app/profile/[id]/`）：把设计稿接到真数据上。
 6. **解锁的呈现**：`humanize` 加分支（全场可见的那一行）+ 收场弹窗里的封泥（`useMyUnlocks`，见 §5 的改判）。
 7. **榜单页**（`/leaderboard`）：迁移 0008 的 `leaderboards()` + 三条榜 + 「我排第几」，大厅加一个入口。
-8. **近 20 场**（`player_recent`）：新表 + 终局插一行 + profile 页那排结果点。**还没做**，见 §6。
+8. **近 20 场**（迁移 0009 的 `player_recent`）：新表 + 终局搭车插一行 + profile 页「近况」那一节。
 
 1–2 步做完就已经能在单测里验证全部 24 条成就的判定是对的，那是这个系统里唯一真正复杂的部分。
 
-1–7 已落地（2026-08-13）。
+**八步全部落地（2026-08-13）。** 这份 spec 描述的东西没有剩下的了。
 
 ---
 

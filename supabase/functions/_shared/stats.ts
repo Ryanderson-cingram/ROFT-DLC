@@ -22,6 +22,17 @@ export interface StatsRow {
   userId: string;
   stats: PlayerStats;
   unlocked: string[];
+  /**
+   * 近 20 场那一行（迁移 0009）。**搭同一趟车**——每个座位在 `p_stats` 里本来就有一行，
+   * 不值得为它多开一个 RPC 参数。
+   */
+  recent: {
+    /** null = 平局（同引擎 `board.winner` 缺席的读法）。 */
+    won: boolean | null;
+    skillId: string | null;
+    turns: number;
+    handLeft: number;
+  };
 }
 
 const KNOWN = new Set(ACHIEVEMENTS.map((a) => a.id));
@@ -99,7 +110,21 @@ export async function tallyFinishedGame(
     // 更不该被当成新解锁写回去（外键会拒，整个事务跟着炸）
     const unlocked = evaluate(next, flags, owned).filter((id) => KNOWN.has(id));
 
-    rows.push({ userId, stats: next, unlocked });
+    // 近况那一行的四个值终局这一帧全是现成的，一个都不用另算。
+    // 平局是 `won: null`——`delta.draws` 是这一局的，不是累计量。
+    // `board` 在类型上可选（lobby 阶段没有牌桌），终局必然有，但不写断言：`?.` 一样短
+    const board = result.state.board;
+    rows.push({
+      userId,
+      stats: next,
+      unlocked,
+      recent: {
+        won: delta.draws > 0 ? null : flags.won,
+        skillId: board?.skills[seat] ?? null,
+        turns: delta.turns,
+        handLeft: board?.hands[seat]?.length ?? 0,
+      },
+    });
     // 一个人一条，没解锁的不发——空的 toast 是噪音
     if (unlocked.length > 0)
       events_out.push({ type: "achievementUnlocked", public: { seat, ids: unlocked } });
