@@ -61,9 +61,11 @@ export function humanize(
       return { who: nameOf(seat), what: "结束回合" };
     case "deckReshuffled":
       return { who: "牌桌", what: `洗回 ${p.count} 张进摸牌堆`, kind: "system" };
-    // U8：牌堆洗满两次后又见底，无人打完 → 平局收场
-    case "gameDrawn":
-      return { who: "牌桌", what: "牌堆用尽，本局平局", kind: "system" };
+    // 终局的唯一一条。`winner` 缺席 = 平局（U8：牌堆洗满两次后又见底，无人打完）
+    case "gameEnded":
+      return typeof p.winner === "number"
+        ? { who: nameOf(p.winner), what: "打完最后一张，本局获胜", kind: "system" }
+        : { who: "牌桌", what: "牌堆用尽，本局平局", kind: "system" };
     case "punishWindowOpened":
       return { who: nameOf(asList<number>(p.actors)[0]), what: `被惩罚指向（累计 ${p.total} 张）：叠或吃`, kind: "punish" };
     case "punishStackChosen":
@@ -212,6 +214,15 @@ export function humanize(
       return { who: nameOf(seat), what: "回合结束时手牌不是 1 张，喊的 UNO 不作数——罚摸 2 张", kind: "uno" };
     case "unoCaught":
       return { who: nameOf(seat), what: `抓了${nameOf(p.target as number)}没喊 UNO——摸 2 张`, kind: "uno" };
+    /*
+      成就解锁（0006）。**全场可见**：成就不含任何暗牌信息，而「对手刚拿下一枚 0.3% 的封泥」
+      是这个品类里极强的桌面戏剧性。自己的那几枚另外画在收场弹窗里（`useMyUnlocks` + `<GameOver>`）。
+      名字来自 `achievement_defs`；这里拿不到那张表，所以只报数——一行日志不值得为它多拉一次表。
+    */
+    case "achievementUnlocked": {
+      const n = asList<string>(p.ids).length;
+      return n === 0 ? null : { who: nameOf(seat), what: `解锁了 ${n} 枚封泥`, kind: "system" };
+    }
     // 发牌/候选细节要么是暗信息、要么是纯噪音
     case "handDealt":
     case "draftOptionsDealt":

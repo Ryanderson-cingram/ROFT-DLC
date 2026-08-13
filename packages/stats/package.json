@@ -1,0 +1,21 @@
+{
+  "name": "@roft/stats",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "gen:achievements": "node --experimental-strip-types ../../scripts/gen-achievement-defs.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@roft/engine": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

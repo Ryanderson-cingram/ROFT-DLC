@@ -590,7 +590,7 @@ describe("打断者用最后一张手牌打断就赢了", () => {
     const before = opened.board!.hands[0].length;
     const r = respond(opened, 2, "raid", [only.id]);
     expect(r.state.board!.hands[0]).toHaveLength(before); // 没摸
-    expect(r.events.map((e) => e.type)).toEqual(["raided"]); // 没有 cardsDrawn
+    expect(r.events.map((e) => e.type)).toEqual(["raided", "gameEnded"]); // 没有 cardsDrawn
     expect(r.state.board!.currentSeat).toBe(opened.board!.currentSeat); // 回合没动
   });
 

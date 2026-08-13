@@ -26,7 +26,10 @@ export default async function LobbyPage() {
         </div>
         <div className="me">
           <span className="dot" />
-          <span className="me__name">{profile.username}</span>
+          {/* 名字就是进自己命盘的入口——顶栏已经满了，不再单开一个按钮 */}
+          <Link className="me__name" href={`/profile/${data.claims.sub}`}>
+            {profile.username}
+          </Link>
           <SignOutButton />
         </div>
       </header>
@@ -51,6 +54,16 @@ export default async function LobbyPage() {
             玩家百科
             <small className="opt-note" style={{ margin: 0 }}>
               四句总则、20 个技能的细则与例子。
+            </small>
+          </span>
+          <span className="arrow">→</span>
+        </Link>
+
+        <Link className="more" href="/leaderboard">
+          <span>
+            榜单
+            <small className="opt-note" style={{ margin: 0 }}>
+              胜率、抓漏喊、最长连胜三条榜，外加你自己第几。
             </small>
           </span>
           <span className="arrow">→</span>

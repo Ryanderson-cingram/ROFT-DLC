@@ -2,13 +2,14 @@ import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { GameOver } from "./game-over";
+import type { Seal } from "@/lib/unlocks";
 import { FIXTURE_NAMES, makeSnapshot } from "@/test-support/snapshot";
 
 const nameOf = (seat: number) => FIXTURE_NAMES[makeSnapshot().players[seat]?.userId ?? ""] ?? `座位 ${seat + 1}`;
 const over = (
   extra: Parameters<typeof makeSnapshot>[0],
   onRestart?: () => void | Promise<void>,
-  more: { onLeave?: () => void | Promise<void>; roomHref?: string } = {},
+  more: { onLeave?: () => void | Promise<void>; roomHref?: string; unlocked?: Seal[] } = {},
 ) =>
   render(
     <GameOver
@@ -112,5 +113,28 @@ describe("返回大厅 = 退出房间；返回房间 = 回等候室座位不动"
     over({ winner: 0 });
     expect(screen.getByRole("link", { name: "回大厅" }).getAttribute("href")).toBe("/");
     expect(screen.queryByRole("link", { name: /返回房间/ })).toBeNull();
+  });
+});
+
+// ------------------------------------------------ 本局解锁的封泥（spec 2026-08-10 §5）
+
+describe("解锁的封泥画在收场弹窗里", () => {
+  const SEALS: Seal[] = [
+    { id: "swift", tier: "天", mark: "速", name: "速通" },
+    { id: "pantheon", tier: "神", mark: "殿", name: "万神殿" },
+  ];
+
+  it("每枚一行：字 + 名 + 品级，品级写进 data-tier（品级色与 profile 页同一套）", () => {
+    const { container } = over({ winner: 0 }, () => {}, { unlocked: SEALS });
+    const rows = [...container.querySelectorAll(".overseal")];
+    expect(rows.map((r) => r.getAttribute("data-tier"))).toEqual(["天", "神"]);
+    expect(rows[0].textContent).toBe("速解锁 · 速通天 品");
+    expect(screen.getByLabelText("本局解锁 2 枚封泥")).not.toBeNull();
+  });
+
+  // 没解锁的那一局（多数局都是）不许留一个空盒子在「你赢了」下面
+  it("没解锁 → 整块不出现", () => {
+    const { container } = over({ winner: 0 }, () => {});
+    expect(container.querySelector(".overseals")).toBeNull();
   });
 });

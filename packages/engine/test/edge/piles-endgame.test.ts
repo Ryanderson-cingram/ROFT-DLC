@@ -66,13 +66,13 @@ describe("U8：整局最多洗 2 次，洗满之后再见底就是平局", () =>
     return { state, events, last };
   }
 
-  it("洗回两次之后摸牌堆再度见底 → 终局、无赢家、发 gameDrawn", () => {
+  it("洗回两次之后摸牌堆再度见底 → 终局、无赢家、发 gameEnded（无 winner）", () => {
     const { state, events, last } = run();
     expect(state.phase).toBe("finished");
     expect(state.board!.winner).toBeUndefined();
     expect(state.board!.reshuffles).toBe(2);
     expect(events.filter((e) => e.type === "deckReshuffled")).toHaveLength(2);
-    expect(last.events.at(-1)).toEqual({ type: "gameDrawn", public: { reason: "deck_exhausted" } });
+    expect(last.events.at(-1)).toEqual({ type: "gameEnded", public: { reason: "deck_exhausted" } });
   });
 
   it("平局之后谁都没有合法动作，快照按「无赢家」给", () => {
@@ -126,7 +126,7 @@ describe("U8 补充：平局判在回合交接，不在半路终止一条惩罚�
     expect(r.state.board!.hands[1]).toHaveLength(1);
     expect(r.state.phase).toBe("finished");
     expect(r.state.board!.winner).toBeUndefined();
-    expect(r.events.some((e) => e.type === "gameDrawn")).toBe(true);
+    expect(r.events.some((e) => e.type === "gameEnded")).toBe(true);
   });
 
   it("超时结算走同一条出口：claimTimeout 之后照样判平局", () => {

@@ -297,7 +297,7 @@ describe("司夜③ 盗改末牌", () => {
     expect(stealsOf(r.state)).toBe(0);
     expect(r.state.board!.punish).toBeUndefined();
     expect(r.state.pendingWindow).toBeUndefined();
-    expect(r.events.map((e) => e.type)).toEqual(["cardPlayed", "marksSpent"]);
+    expect(r.events.map((e) => e.type)).toEqual(["cardPlayed", "marksSpent", "gameEnded"]);
   });
 
   it("2 盗同一局面：走原 01-U5，摸 1 张不判胜", () => {

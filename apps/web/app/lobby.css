@@ -19,7 +19,13 @@
 .brand span { font-family: var(--font-display); font-size: 15px; color: var(--text-secondary); }
 .me { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; font-size: 14px; }
 /* 名字多长都不许把退出按钮挤出顶栏 */
-.me__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 名字是进命盘的链接，但顶栏里不该出现一个蓝色下划线——
+   保持正文色，只在悬停时给一条下划线说明「这里能点」 */
+.me__name {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--text-primary); text-decoration: none;
+}
+.me__name:hover { text-decoration: underline; text-underline-offset: 3px; color: var(--brass); }
 /* 顶栏里的次要动作收一档：44px 的主操作尺寸摆在这儿会喧宾夺主（触点仍有 36px + 内边距） */
 .me .btn { flex: none; min-height: 36px; padding: 0 10px; font-size: 13px; color: var(--text-secondary); }
 .me .btn:hover { color: var(--text-primary); }

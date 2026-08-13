@@ -30,6 +30,7 @@ import { buttonLabel } from "@/lib/hud-copy";
 import { needsDeclaration } from "@/lib/skills";
 import { useGameChannel } from "@/lib/game-channel";
 import { createClient } from "@/lib/supabase/client";
+import { useMyUnlocks } from "@/lib/unlocks";
 import "./game.css";
 
 /** 随出牌一起提交的旗标（提交前的客户端选择，不是服务端窗口）。 */
@@ -89,6 +90,9 @@ export default function GamePage() {
   const [logOpen, setLogOpen] = useState(false);
 
   const { snapshot, error, loaded, send, clearError, reload } = useGameChannel(roomId);
+  // 本局解锁的封泥。终局那一帧拉一次，画在收场弹窗里（下面两个 early return 之前调，
+  // 因为它是 hook——`snapshot` 还是 null 时它自己不动）
+  const unlocked = useMyUnlocks(roomId, snapshot);
 
   // 昵称不在快照里（展示数据不进规则层），自己从 room_seats join profiles 取。
   useEffect(() => {
@@ -397,6 +401,7 @@ export default function GamePage() {
           onRestart={restartGame}
           onLeave={leaveRoom}
           roomHref={`/room/${code}`}
+          unlocked={unlocked}
         />
       )}
 

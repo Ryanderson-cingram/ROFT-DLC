@@ -1,0 +1,55 @@
+/* ============================================================
+   榜单（spec 2026-08-10-profile-stats-and-achievements §6）
+   ------------------------------------------------------------
+   没有设计稿：三条榜就是三张名次表，形制沿用命盘页的顶栏与 `.panel`。
+   名字是链接（进那个人的命盘），自己那一行点亮——一眼找得到。
+   ============================================================ */
+
+.topbar {
+  position: sticky; top: 0; z-index: 70;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: var(--line);
+  background: rgba(9, 12, 17, 0.9);
+  backdrop-filter: blur(8px);
+}
+.topbar .brand { display: flex; align-items: baseline; gap: var(--sp-2); }
+.topbar .brand b {
+  font-family: var(--font-mono); font-size: 13px; font-weight: 700;
+  letter-spacing: 0.22em; color: var(--piao);
+}
+.topbar .brand span { font-family: var(--font-display); font-size: 15px; color: var(--qingyan); }
+
+.lb { width: 100%; max-width: 1080px; margin: 0 auto; padding: var(--sp-4) var(--sp-3) 96px; }
+.lb p { margin: 0; }
+.lb__head { display: grid; gap: var(--sp-2); max-width: 62ch; margin-bottom: var(--sp-4); }
+.lb__head h1 { margin: 0; font-size: 26px; }
+
+/* 三条榜并排，窄屏落成一列 */
+.lb__grid { display: grid; gap: var(--sp-3); grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.lb__board { display: grid; align-content: start; gap: var(--sp-2); }
+.lb__top { display: flex; align-items: baseline; gap: var(--sp-2); }
+.lb__top h2 { margin: 0; font-size: 19px; }
+.lb__top .hint { margin-left: auto; font-size: 11px; text-align: right; }
+
+.lb__rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.lb__row {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 7px 10px; border-radius: var(--radius-panel);
+}
+.lb__row:nth-child(odd) { background: var(--sunken); }
+/* 自己那一行：底色 + 左缘一道缥青，滚到哪儿都认得出 */
+.lb__row[data-me] { background: rgba(99, 210, 195, 0.1); box-shadow: inset 2px 0 0 var(--piao); }
+.lb__rk { min-width: 2ch; font-family: var(--font-mono); font-size: 12px; color: var(--muted); text-align: right; }
+/* 前三名的名次数字提一档亮度——榜首是这张表唯一的主角 */
+.lb__row:nth-child(-n + 3) .lb__rk { color: var(--brass); }
+.lb__nm { flex: 1; min-width: 0; font-family: var(--font-display); font-size: 15px; text-decoration: none; overflow-wrap: anywhere; }
+.lb__v { font-family: var(--font-mono); font-size: 14px; color: var(--yuebai); text-align: right; white-space: nowrap; }
+.lb__v small { display: block; font-size: 10px; color: var(--muted); }
+
+.lb__empty { padding: var(--sp-3) 0; text-align: center; }
+.lb__me {
+  margin-top: auto; padding-top: var(--sp-2); border-top: 1px dashed var(--edge);
+  font-size: 12px; color: var(--qingyan);
+}
+.lb__me b { font-family: var(--font-mono); font-size: 15px; color: var(--piao); }

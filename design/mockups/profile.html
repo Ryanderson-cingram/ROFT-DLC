@@ -1,0 +1,920 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>命盘 · ROFT-DLC</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  /* ============================================================
+     Profile「命盘」——玩家的个人式盘。
+     沿用签名母题：一张摊平的式盘。牌桌上那圈是**这一局**的轮转轨，
+     这里这圈是**这个人的一生**：外圈 60 齿 = 60 个技能的收集度，
+     中圈是胜率弧，盘心是他自己。
+     色照旧只有缥青（正向）与朱砂（危险）两支；唯一新增的一支是
+     四神那档的五彩（--card-wild-a），只给「神」品成就——
+     它本来就是牌面里最跳的东西，用来标记最稀有的东西刚好。
+     ============================================================ */
+
+  /* ---------- 页壳 ---------- */
+  .topbar {
+    position: sticky; top: 0; z-index: 70;
+    display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+    padding: var(--sp-2) var(--sp-3);
+    border-bottom: var(--line);
+    background: rgba(9, 12, 17, 0.9);
+    backdrop-filter: blur(8px);
+  }
+  .brand { display: flex; align-items: baseline; gap: var(--sp-2); }
+  .brand b { font-family: var(--font-mono); font-size: 13px; font-weight: 700; letter-spacing: 0.22em; color: var(--piao); }
+  .brand span { font-family: var(--font-display); font-size: 15px; color: var(--qingyan); }
+  .page { width: 100%; max-width: 1080px; margin: 0 auto; padding: var(--sp-4) var(--sp-3) 96px; }
+  /* tokens.css 只清了 h1–h3 的外边距。这一页的间距全部交给各容器的 gap，
+     留着 p 的默认 1em 会把每一行都顶开一大截（本命神职那几条最明显）。 */
+  p { margin: 0; }
+
+  section { margin-top: 56px; }
+  .sec-head { display: flex; align-items: baseline; gap: var(--sp-3); margin-bottom: var(--sp-3); }
+  .sec-head h2 { font-size: 20px; }
+  .sec-head .hint { margin-left: auto; }
+
+  /* ---------- 一、命盘 ---------- */
+  .hero { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: var(--sp-5); align-items: center; }
+
+  .plate-wrap { position: relative; aspect-ratio: 1; }
+  .plate-svg { width: 100%; height: 100%; overflow: visible; }
+  /* 盘上一切线条都是发丝线，只有胜率弧与点亮的齿有颜色——扫一眼先看到的是「你的成绩」 */
+  .pl-ring { fill: none; stroke: var(--edge); }
+  .pl-tick { stroke: #2a3644; stroke-width: 2.2; stroke-linecap: round; }
+  .pl-tick.is-on { stroke: var(--piao); filter: drop-shadow(0 0 4px var(--piao-glow)); }
+  /* 四神那 4 齿单独一支色：它们是牌堆里最稀的东西，点亮了就该跳出来 */
+  .pl-tick.is-god { stroke: #46375f; stroke-width: 3.4; }
+  .pl-tick.is-god.is-on { stroke: var(--card-wild-a); filter: drop-shadow(0 0 6px rgba(123, 92, 214, 0.75)); }
+  .pl-arc-bg { fill: none; stroke: rgba(54, 69, 84, 0.55); stroke-width: 9; }
+  .pl-arc { fill: none; stroke: var(--piao); stroke-width: 9; stroke-linecap: round; filter: drop-shadow(0 0 10px var(--piao-glow)); }
+  .pl-scale { stroke: var(--edge); stroke-width: 1; }
+  .pl-hub { fill: rgba(11, 17, 25, 0.72); stroke: var(--edge); }
+  /* 巡：一道绕盘扫过的天光，纯装饰，也是页面唯一常驻的动效 */
+  .pl-sweep { fill: url(#sweepGrad); transform-origin: 200px 200px; pointer-events: none; }
+
+  .plate-core { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; text-align: center; gap: 2px; pointer-events: none; }
+  .plate-core .eyebrow { font-size: 10px; }
+  .wr { font-family: var(--font-mono); font-size: 62px; font-weight: 700; line-height: 1; letter-spacing: -0.03em; color: var(--yuebai); }
+  .wr sub { font-size: 20px; font-weight: 400; color: var(--qingyan); vertical-align: baseline; margin-left: 2px; }
+  .plate-core .wl { font-family: var(--font-mono); font-size: 13px; color: var(--qingyan); }
+  .plate-core .wl b { color: var(--piao); font-weight: 700; }
+  .plate-core .wl i { color: var(--danger-text); font-style: normal; }
+
+  /* 盘外挂着的两枚小牌：收集度与四神，贴着它们各自对应的那圈 */
+  .plate-tag {
+    position: absolute; display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 10px; border: 1px solid var(--edge); border-radius: var(--radius-pill);
+    background: rgba(11, 17, 25, 0.92); font-size: 11px; color: var(--qingyan); white-space: nowrap;
+  }
+  .plate-tag b { font-family: var(--font-mono); font-size: 14px; color: var(--yuebai); }
+  .plate-tag--coll { top: 4px; left: 50%; transform: translateX(-50%); }
+  .plate-tag--god { bottom: 4px; left: 50%; transform: translateX(-50%); border-color: #4f3d80; }
+  .plate-tag--god b { color: var(--card-wild-a); }
+
+  /* ---------- 身份卡 ---------- */
+  .ident { display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }
+  .ident__name { display: flex; align-items: baseline; gap: var(--sp-2); flex-wrap: wrap; }
+  .ident__name h1 { margin: 0; font-family: var(--font-display); font-size: 40px; font-weight: 600; letter-spacing: 0.06em; }
+  /* 头衔是可装配的（成就解锁后可挂），所以做成一枚可点的牌而不是一行字 */
+  .title-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 2px 12px; border: 1px solid var(--warn); border-radius: var(--radius-pill);
+    background: rgba(224, 163, 60, 0.1); color: var(--warn);
+    font-family: var(--font-display); font-size: 14px; letter-spacing: 0.08em;
+  }
+  .ident__meta { display: flex; gap: var(--sp-3); flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+  .ident__meta .code { color: var(--qingyan); }
+
+  /* 封泥进度：一条进度条，两端写分档与「下一枚」 */
+  .ladder { display: grid; gap: 6px; }
+  .ladder__top { display: flex; align-items: baseline; gap: var(--sp-2); }
+  .ladder__rank { font-family: var(--font-display); font-size: 19px; letter-spacing: 0.06em; }
+  .ladder__pts { margin-left: auto; font-family: var(--font-mono); font-size: 12px; color: var(--qingyan); }
+  .ladder__pts b { font-size: 17px; color: var(--yuebai); }
+  .ladder__bar { position: relative; height: 8px; border-radius: var(--radius-pill); background: var(--sunken); border: 1px solid var(--edge); overflow: hidden; }
+  .ladder__fill { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: var(--radius-pill); background: linear-gradient(90deg, var(--piao-dim), var(--piao)); box-shadow: 0 0 12px var(--piao-glow); }
+  .ladder__next { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+
+  /* 四格速览 */
+  .quad { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--sp-2); }
+  .qcell { padding: 10px; border: var(--line); border-radius: var(--radius-panel); background: var(--mo); text-align: center; }
+  .qcell .num--lead { display: block; }
+  .qcell small { display: block; margin-top: 3px; font-size: 11px; color: var(--muted); }
+  .qcell--hot .num--lead { color: var(--piao); }
+
+  /* ---------- 二、关键数据 ---------- */
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-2); }
+  .stat {
+    position: relative; overflow: hidden;
+    padding: var(--sp-3); border: var(--line); border-radius: var(--radius-panel); background: var(--mo);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+    transition: border-color 0.16s ease, transform 0.16s var(--ease-tactile);
+    transform-style: preserve-3d;
+  }
+  .stat:hover { border-color: var(--piao-dim); }
+  .stat .k { font-size: 12px; color: var(--qingyan); }
+  .stat .v { display: flex; align-items: baseline; gap: 4px; margin-top: 4px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  .stat .v b { font-size: 30px; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
+  .stat .v span { font-size: 13px; color: var(--muted); }
+  .stat .d { margin-top: 6px; font-size: 11px; color: var(--muted); }
+  .stat .d em { font-style: normal; color: var(--piao); }
+  .stat .d em.down { color: var(--danger-text); }
+  /* 卡背后一层极淡的式盘弧，四张卡各转一个角度——纯材质，不承载信息 */
+  .stat::after {
+    content: ""; position: absolute; right: -40px; bottom: -46px; width: 120px; height: 120px;
+    border: 1px dashed var(--edge); border-radius: 50%; opacity: 0.5; pointer-events: none;
+  }
+
+  /* ---------- 三、近况 ---------- */
+  .form { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: var(--sp-3); align-items: stretch; }
+  .spark { position: relative; padding: var(--sp-3); }
+  .spark svg { display: block; width: 100%; height: 108px; overflow: visible; }
+  .spark .ln { fill: none; stroke: var(--piao); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .spark .ar { fill: url(#sparkFill); }
+  .spark .base { stroke: var(--edge); stroke-width: 1; stroke-dasharray: 3 5; }
+  .spark__cap { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: var(--muted); }
+
+  /* 近 20 场：一排结果点，胜=缥青实心、负=朱砂空心、平=灰。悬停出一行摘要 */
+  .runs { display: flex; flex-wrap: wrap; gap: 5px; margin-top: var(--sp-3); }
+  .run {
+    position: relative; width: 22px; height: 28px; padding: 0;
+    border: 1px solid var(--edge); border-radius: 3px; background: var(--sunken);
+    font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--muted);
+    cursor: pointer; transform-style: preserve-3d;
+    transition: transform 0.12s var(--ease-tactile), border-color 0.12s ease;
+  }
+  .run[data-r="W"] { border-color: var(--piao-dim); background: rgba(99, 210, 195, 0.16); color: var(--piao); }
+  .run[data-r="L"] { border-color: var(--zhu-dim); color: var(--danger-text); }
+  .run:hover { transform: translateY(-4px); border-color: var(--yuebai); z-index: 2; }
+  .run__tip {
+    position: absolute; bottom: calc(100% + 7px); left: 50%; transform: translateX(-50%);
+    display: none; padding: 6px 10px; border: var(--line); border-radius: var(--radius-panel);
+    background: rgba(6, 8, 12, 0.97); box-shadow: var(--shadow-lift);
+    font-family: var(--font-body); font-weight: 400; font-size: 12px; color: var(--yuebai);
+    white-space: nowrap; z-index: 5;
+  }
+  .run:hover .run__tip, .run:focus-visible .run__tip { display: block; }
+
+  .streak { display: grid; align-content: center; gap: var(--sp-2); padding: var(--sp-3); text-align: center; }
+  .streak__n { font-family: var(--font-mono); font-size: 46px; font-weight: 700; line-height: 1; color: var(--piao); text-shadow: 0 0 22px var(--piao-glow); }
+  .streak__best { font-size: 12px; color: var(--muted); }
+  .streak__best b { font-family: var(--font-mono); color: var(--qingyan); }
+
+  /* ---------- 四、本命神职 ---------- */
+  .mastery { display: grid; gap: 7px; }
+  .mrow {
+    display: grid; grid-template-columns: 116px minmax(0, 1fr) 108px; align-items: center; gap: var(--sp-3);
+    padding: 7px 10px; border: 1px solid transparent; border-radius: var(--radius-panel);
+    transition: background 0.14s ease, border-color 0.14s ease;
+  }
+  .mrow:hover { background: var(--mo); border-color: var(--edge); }
+  .mrow__nm { display: flex; align-items: center; gap: 6px; min-width: 0; font-family: var(--font-display); font-size: 16px; letter-spacing: 0.04em; }
+  .mrow__nm .sigil { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  .mrow__nm .sigil[data-suit="♥"], .mrow__nm .sigil[data-suit="♦"] { color: #b4574c; }
+  .mrow__nm .sigil[data-suit="神"] { color: var(--card-wild-a); }
+  .mrow__bar { position: relative; height: 20px; border-radius: 3px; background: var(--sunken); border: 1px solid var(--edge); overflow: hidden; }
+  .mrow__fill { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, rgba(99, 210, 195, 0.28), rgba(99, 210, 195, 0.62)); border-right: 1px solid var(--piao); }
+  .mrow--cold .mrow__fill { background: linear-gradient(90deg, rgba(226, 81, 60, 0.22), rgba(226, 81, 60, 0.5)); border-right-color: var(--zhu); }
+  /* 50% 基准线：没有它，一条 46% 的条和一条 54% 的条看上去一样长 */
+  .mrow__bar::after { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: rgba(233, 238, 246, 0.28); }
+  .mrow__num { display: flex; align-items: baseline; justify-content: flex-end; gap: 6px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  .mrow__num b { font-size: 17px; font-weight: 700; }
+  .mrow__num span { font-size: 11px; color: var(--muted); }
+
+  .rel { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); margin-top: var(--sp-3); }
+  .relcard { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3); }
+  .relcard .who { font-family: var(--font-display); font-size: 18px; letter-spacing: 0.05em; }
+  .relcard .fig { margin-left: auto; text-align: right; }
+  .relcard .fig b { display: block; font-family: var(--font-mono); font-size: 22px; font-weight: 700; }
+  .relcard .fig small { font-size: 11px; color: var(--muted); }
+  .relcard--foe .fig b { color: var(--danger-text); }
+  .relcard--ally .fig b { color: var(--piao); }
+
+  /* ---------- 五、趣味数据 ---------- */
+  .fun { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); }
+  /* align-content:start：条目少的那两张（最爱的牌 / 掷骰）不要把内容撑到格子正中，
+     六张卡的标题与第一行必须齐平 */
+  .funcard { padding: var(--sp-3); display: grid; align-content: start; gap: 10px; }
+  .funcard h3 { font-size: 14px; letter-spacing: 0.08em; color: var(--qingyan); font-family: var(--font-body); font-weight: 600; }
+  .fl { display: flex; align-items: baseline; gap: var(--sp-2); font-size: 13px; }
+  .fl span { color: var(--qingyan); }
+  .fl b { margin-left: auto; font-family: var(--font-mono); font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .fl b[data-tone="bad"] { color: var(--danger-text); }
+  .fl b[data-tone="ok"] { color: var(--piao); }
+  /* 骰面分布：三根柱，强袭 ×0 / ×1 / ×2 —— 唯一一处需要「形状」的趣味数据 */
+  .dice { display: flex; align-items: flex-end; gap: 8px; height: 62px; }
+  .dice i { flex: 1; display: block; position: relative; border-radius: 3px 3px 0 0; background: linear-gradient(180deg, var(--piao-dim), rgba(47, 109, 102, 0.35)); border-top: 2px solid var(--piao); height: 0; }
+  .dice i::after { content: attr(data-l); position: absolute; top: calc(100% + 3px); left: 0; right: 0; text-align: center; font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+  .dice-cap { margin-top: 16px; font-size: 11px; color: var(--muted); }
+  /* 最爱的一张牌：直接用真牌，不用图标 */
+  .favcard { display: flex; align-items: center; gap: var(--sp-3); }
+  .favcard .card { --card-w: 46px; --card-h: 69px; }
+  .favcard .fig b { display: block; font-family: var(--font-mono); font-size: 24px; font-weight: 700; line-height: 1.1; }
+  .favcard .fig small { font-size: 11px; color: var(--muted); }
+
+  /* ---------- 六、成就墙 ---------- */
+  .ach-filter { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip {
+    min-height: 32px; padding: 0 14px; border: 1px solid var(--edge); border-radius: var(--radius-pill);
+    background: transparent; color: var(--qingyan); font: inherit; font-size: 13px; cursor: pointer;
+    transition: border-color 0.14s ease, color 0.14s ease, background 0.14s ease;
+  }
+  .chip:hover { border-color: var(--piao-dim); color: var(--yuebai); }
+  .chip[aria-pressed="true"] { border-color: var(--piao); background: rgba(99, 210, 195, 0.14); color: var(--yuebai); }
+
+  .ach { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-2); margin-top: var(--sp-3); }
+  /* 成就 = 一枚封泥印：方章、四品各一色、盖上去的角度略歪。
+     未解锁的不是「灰版同一枚章」，而是**空的印槽**——虚线、没有章面，
+     一眼分得出「我有」和「这儿本来该有一枚」。 */
+  .seal {
+    position: relative; display: grid; gap: 8px; justify-items: center; text-align: center;
+    padding: var(--sp-3) 10px 12px; border: var(--line); border-radius: var(--radius-panel);
+    background: var(--mo); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+    cursor: default; overflow: hidden;
+    transition: border-color 0.16s ease, transform 0.16s var(--ease-tactile);
+  }
+  .seal:hover { transform: translateY(-3px); }
+  .seal__mark {
+    display: grid; place-items: center; width: 62px; height: 62px; border-radius: 8px;
+    font-family: var(--font-display); font-size: 26px; font-weight: 600; letter-spacing: 0;
+    transform: rotate(-3deg);
+  }
+  .seal__nm { font-family: var(--font-display); font-size: 16px; letter-spacing: 0.06em; }
+  .seal__desc { font-size: 11.5px; line-height: 1.5; color: var(--qingyan); }
+  .seal__foot { display: flex; align-items: center; gap: 6px; margin-top: auto; font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+  /* 稀有度：全服解锁比例。卡牌品类里这是最招人的一行字，所以给它一枚点 */
+  .seal__rar::before { content: ""; display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: currentColor; margin-right: 5px; vertical-align: middle; }
+
+  .seal[data-tier="凡"] .seal__mark { background: var(--mo-2); border: 1px solid var(--edge); color: var(--qingyan); }
+  .seal[data-tier="玄"] { border-color: var(--piao-dim); }
+  .seal[data-tier="玄"] .seal__mark { background: rgba(99, 210, 195, 0.14); border: 1px solid var(--piao); color: var(--piao); box-shadow: 0 0 18px -4px var(--piao-glow); }
+  .seal[data-tier="天"] { border-color: #7a5a1c; }
+  .seal[data-tier="天"] .seal__mark { background: rgba(224, 163, 60, 0.14); border: 1px solid var(--warn); color: var(--warn); box-shadow: 0 0 20px -4px rgba(224, 163, 60, 0.55); }
+  .seal[data-tier="神"] { border-color: #4f3d80; }
+  .seal[data-tier="神"] .seal__mark {
+    border: 1px solid var(--card-wild-a); color: #d9ccff;
+    background: conic-gradient(from 45deg, rgba(226, 59, 59, 0.3) 0 25%, rgba(49, 132, 240, 0.3) 0 50%, rgba(240, 180, 41, 0.3) 0 75%, rgba(49, 177, 90, 0.3) 0);
+    box-shadow: 0 0 26px -4px rgba(123, 92, 214, 0.9);
+  }
+  /* 神品的一道流光，只有它有——最稀的东西才配动。--shineX 由 GSAP 推着走 */
+  .seal[data-tier="神"][data-state="on"]::before {
+    content: ""; position: absolute; top: 0; left: var(--shineX, -60%); width: 45%; height: 100%;
+    background: linear-gradient(100deg, transparent, rgba(217, 204, 255, 0.16), transparent);
+    pointer-events: none;
+  }
+
+  .seal[data-state="off"] { background: rgba(11, 17, 25, 0.5); border-style: dashed; border-color: rgba(54, 69, 84, 0.7); }
+  .seal[data-state="off"] .seal__mark {
+    background: none; border: 1px dashed rgba(54, 69, 84, 0.9); color: #46525f;
+    box-shadow: none; transform: none; font-size: 22px;
+  }
+  .seal[data-state="off"] .seal__nm { color: var(--qingyan); }
+  .seal[data-state="off"] .seal__desc { color: var(--muted); }
+  /* 进行中的成就带一条进度：卡牌品类里「差一点点」是最强的回访动力 */
+  .seal__prog { width: 100%; height: 4px; border-radius: var(--radius-pill); background: var(--sunken); border: 1px solid var(--edge); overflow: hidden; }
+  .seal__prog i { display: block; height: 100%; width: 0; background: var(--piao-dim); }
+  .seal__pn { font-family: var(--font-mono); font-size: 10px; color: var(--qingyan); }
+
+  /* ---------- 七、榜单入口 ---------- */
+  .boards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); }
+  .board { display: grid; gap: 10px; padding: var(--sp-3); }
+  .board__t { font-size: 13px; color: var(--qingyan); }
+  .board__me { display: flex; align-items: baseline; gap: var(--sp-2); }
+  .board__me b { font-family: var(--font-mono); font-size: 34px; font-weight: 700; line-height: 1; }
+  .board__me b::before { content: "#"; font-size: 18px; color: var(--muted); margin-right: 1px; }
+  .board__me span { font-size: 12px; color: var(--muted); }
+  .board__me em { margin-left: auto; font-style: normal; font-family: var(--font-mono); font-size: 12px; color: var(--piao); }
+  .board__me em.down { color: var(--danger-text); }
+  .board__pct { height: 4px; border-radius: var(--radius-pill); background: var(--sunken); border: 1px solid var(--edge); overflow: hidden; }
+  .board__pct i { display: block; height: 100%; width: 0; background: var(--piao); }
+  .board__foot { font-size: 11px; color: var(--muted); }
+
+  /* ---------- 窄屏 ---------- */
+  @media (max-width: 900px) {
+    .hero { grid-template-columns: 1fr; gap: var(--sp-4); }
+    .plate-wrap { max-width: 380px; margin: 0 auto; }
+    .ident__name h1 { font-size: 32px; }
+    .stats, .fun, .boards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .ach { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .form { grid-template-columns: 1fr; }
+    .rel { grid-template-columns: 1fr; }
+    .mrow { grid-template-columns: 96px minmax(0, 1fr) 88px; gap: var(--sp-2); }
+  }
+  @media (max-width: 560px) {
+    .quad { grid-template-columns: repeat(2, 1fr); }
+    .stats, .fun, .boards, .ach { grid-template-columns: 1fr; }
+    .wr { font-size: 52px; }
+  }
+
+  /* 关掉动效时：一切最终态由 CSS 兜住，JS 不再建时间轴。
+     （盘上那道巡光是唯一的常驻动画，这里连它一起停。） */
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+    .pl-sweep { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand"><b>ROFT</b><span>诸神降临 4.1</span></div>
+  <div class="row">
+    <a class="btn btn--ghost" href="lobby.html">← 大厅</a>
+    <!-- 这台机器可能开着「减少动态效果」，那样整页会是静止的。
+         默认照旧尊重系统设置，这枚按钮只给看稿的人一个手动重播的出口。 -->
+    <button class="btn btn--ghost" type="button" id="replay">▷ 重播动效</button>
+    <button class="btn btn--ghost" type="button">分享战绩</button>
+  </div>
+</header>
+
+<main class="page">
+
+  <!-- ================= 一、命盘 ================= -->
+  <section class="hero" style="margin-top: 0">
+    <div class="plate-wrap" id="plate">
+      <svg class="plate-svg" viewBox="0 0 400 400" role="img" aria-label="命盘：胜率 58.2%，技能收集 50 / 60">
+        <defs>
+          <linearGradient id="sweepGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="rgba(99,210,195,0)"/>
+            <stop offset="100%" stop-color="rgba(99,210,195,0.16)"/>
+          </linearGradient>
+          <linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="rgba(99,210,195,0.28)"/>
+            <stop offset="100%" stop-color="rgba(99,210,195,0)"/>
+          </linearGradient>
+        </defs>
+
+        <!-- 巡光：一枚扇形，绕盘心转 -->
+        <path class="pl-sweep" id="sweep" d="M200 200 L200 8 A192 192 0 0 1 296 34 Z"/>
+
+        <!-- 外圈：60 齿 = 60 个技能，JS 生成 -->
+        <circle class="pl-ring" cx="200" cy="200" r="192" stroke-dasharray="2 6"/>
+        <g id="ticks"></g>
+
+        <!-- 中圈：胜率弧（周长 2πr = 942.48） -->
+        <circle class="pl-arc-bg" cx="200" cy="200" r="150"/>
+        <circle class="pl-arc" id="arc" cx="200" cy="200" r="150"
+                transform="rotate(-90 200 200)" stroke-dasharray="942.48" stroke-dashoffset="942.48"/>
+
+        <!-- 内圈刻度：式盘的度数，纯母题 -->
+        <circle class="pl-ring" cx="200" cy="200" r="128" stroke-dasharray="1 4"/>
+        <g id="scale"></g>
+        <circle class="pl-hub" cx="200" cy="200" r="112"/>
+      </svg>
+
+      <div class="plate-core">
+        <p class="eyebrow">生涯胜率</p>
+        <div class="wr"><span class="num" data-num="58.2" data-dec="1">0.0</span><sub>%</sub></div>
+        <p class="wl"><b>134</b> 胜 · <i>92</i> 负 · 4 平</p>
+      </div>
+
+      <span class="plate-tag plate-tag--coll">技能收集 <b><span class="num" data-num="50">0</span></b> / 60</span>
+      <span class="plate-tag plate-tag--god">四神 <b><span class="num" data-num="3">0</span></b> / 4</span>
+    </div>
+
+    <div class="ident">
+      <div>
+        <div class="ident__name">
+          <h1>无咎</h1>
+          <span class="title-chip">◆ 夜巡</span>
+        </div>
+        <div class="ident__meta">
+          <span>入盘于 <span class="code">2026-03-11</span></span>
+          <span>总时长 <span class="code">62 小时</span></span>
+          <span>上次对局 <span class="code">2 小时前</span></span>
+        </div>
+      </div>
+
+      <!-- 没有天梯分、没有段位：这一格是**封泥进度**。
+           它衡量的是「你走了多远」，不是「你比谁强」——与四品成就同源，点进去就是下面那面墙。 -->
+      <div class="ladder panel">
+        <div class="ladder__top">
+          <span class="ladder__rank">封泥</span>
+          <span class="ladder__pts"><b class="num" data-num="15">0</b> / 24</span>
+        </div>
+        <div class="ladder__bar"><i class="ladder__fill" data-w="62.5"></i></div>
+        <div class="ladder__next"><span>凡 4 · 玄 5 · 天 5 · 神 1</span><span>下一枚：一口气 5 / 6</span></div>
+      </div>
+
+      <div class="quad">
+        <div class="qcell"><b class="num--lead num" data-num="230">0</b><small>总对局</small></div>
+        <div class="qcell qcell--hot"><b class="num--lead num" data-num="5">0</b><small>当前连胜</small></div>
+        <div class="qcell"><b class="num--lead num" data-num="11">0</b><small>最长连胜</small></div>
+        <div class="qcell"><b class="num--lead num" data-num="23.4" data-dec="1">0</b><small>场均回合</small></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 二、关键数据 ================= -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Ⅰ</p><h2>关键数据</h2>
+      <span class="hint">对比最近 30 天</span>
+    </div>
+    <div class="stats">
+      <div class="stat">
+        <p class="k">先手胜率</p>
+        <p class="v"><b class="num" data-num="63.1" data-dec="1">0</b><span>%</span></p>
+        <p class="d">后手 <em>54.0%</em> · 差 <em>9.1</em> 点</p>
+      </div>
+      <div class="stat">
+        <p class="k">场均出牌</p>
+        <p class="v"><b class="num" data-num="25.6" data-dec="1">0</b><span>张</span></p>
+        <p class="d">生涯累计 <em>5,876</em> 张</p>
+      </div>
+      <div class="stat">
+        <p class="k">场均被惩罚</p>
+        <p class="v"><b class="num" data-num="9.8" data-dec="1">0</b><span>张</span></p>
+        <p class="d">较上月 <em class="down">↑ 1.2</em></p>
+      </div>
+      <div class="stat">
+        <p class="k">技能发动</p>
+        <p class="v"><b class="num" data-num="3.1" data-dec="1">0</b><span>次 / 局</span></p>
+        <p class="d">发动后胜率 <em>64.7%</em></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 三、近况 ================= -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Ⅱ</p><h2>近况</h2>
+      <span class="hint">最近 20 场 · 滚动胜率</span>
+    </div>
+    <div class="form">
+      <div class="panel spark">
+        <svg viewBox="0 0 560 108" preserveAspectRatio="none" aria-label="滚动胜率曲线">
+          <line class="base" x1="0" y1="54" x2="560" y2="54"/>
+          <path class="ar" id="sparkArea" d=""/>
+          <path class="ln" id="sparkLine" d=""/>
+        </svg>
+        <div class="spark__cap"><span>20 场前</span><span>50% 基准</span><span>最近一场</span></div>
+        <div class="runs" id="runs"></div>
+      </div>
+      <div class="panel streak">
+        <p class="eyebrow">当前连胜</p>
+        <div class="streak__n"><span class="num" data-num="5">0</span></div>
+        <p class="streak__best">最长 <b>11</b> · 距个人最佳 <b>6</b> 场</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 四、本命神职 ================= -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Ⅲ</p><h2>本命神职</h2>
+      <span class="hint">用过 ≥ 8 局的技能 · 按胜率排</span>
+    </div>
+    <div class="mastery" id="mastery"></div>
+
+    <div class="rel">
+      <div class="panel relcard relcard--foe">
+        <div>
+          <p class="eyebrow">宿敌</p>
+          <p class="who">照野</p>
+        </div>
+        <div class="fig"><b>7 - 19</b><small>对战 26 场</small></div>
+      </div>
+      <div class="panel relcard relcard--ally">
+        <div>
+          <p class="eyebrow">最佳盟友</p>
+          <p class="who">青塘</p>
+        </div>
+        <div class="fig"><b>81%</b><small>结盟 16 次的胜率</small></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 五、趣味数据 ================= -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Ⅳ</p><h2>趣味数据</h2>
+      <span class="hint">生涯累计</span>
+    </div>
+    <div class="fun">
+      <div class="panel funcard">
+        <h3>UNO</h3>
+        <p class="fl"><span>喊出</span><b class="num" data-num="214">0</b></p>
+        <p class="fl"><span>抓到别人漏喊</span><b data-tone="ok" class="num" data-num="88">0</b></p>
+        <p class="fl"><span>被别人抓到</span><b data-tone="bad" class="num" data-num="31">0</b></p>
+        <p class="fl"><span>误喊（罚摸 2）</span><b class="num" data-num="7">0</b></p>
+      </div>
+
+      <div class="panel funcard">
+        <h3>惩罚叠链</h3>
+        <p class="fl"><span>最长承受</span><b data-tone="bad" class="num" data-num="18">0</b></p>
+        <p class="fl"><span>最大一次转嫁</span><b data-tone="ok" class="num" data-num="14">0</b></p>
+        <p class="fl"><span>生涯累计摸牌</span><b class="num" data-num="3412">0</b></p>
+        <p class="fl"><span>把链打断的次数</span><b class="num" data-num="46">0</b></p>
+      </div>
+
+      <div class="panel funcard">
+        <h3>强袭掷骰</h3>
+        <div class="dice">
+          <i data-h="34" data-l="×0"></i><i data-h="52" data-l="×1"></i><i data-h="100" data-l="×2"></i>
+        </div>
+        <p class="dice-cap">共掷 <b class="code">271</b> 次 · ×2 占 <b class="code">46.9%</b>（期望 33.3%）</p>
+      </div>
+
+      <div class="panel funcard">
+        <h3>最常打出的一张</h3>
+        <div class="favcard">
+          <span class="card" data-color="red" data-face="+2"></span>
+          <div class="fig">
+            <b class="num" data-num="96">0</b>
+            <small>次 · 占全部出牌 1.6%</small>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel funcard">
+        <h3>盘外事</h3>
+        <p class="fl"><span>结盟达成 / 拒绝</span><b><span class="num" data-num="22">0</span> / <span class="num" data-num="9">0</span></b></p>
+        <p class="fl"><span>发起劫营</span><b class="num" data-num="17">0</b></p>
+        <p class="fl"><span>收魂</span><b data-tone="ok" class="num" data-num="308">0</b></p>
+        <p class="fl"><span>被封印</span><b data-tone="bad" class="num" data-num="24">0</b></p>
+      </div>
+
+      <div class="panel funcard">
+        <h3>纪录</h3>
+        <p class="fl"><span>最快取胜</span><b data-tone="ok">9 <span style="font-size:11px;color:var(--muted)">回合</span></b></p>
+        <p class="fl"><span>最长鏖战</span><b>47 <span style="font-size:11px;color:var(--muted)">回合</span></b></p>
+        <p class="fl"><span>单回合最多出牌</span><b>6 <span style="font-size:11px;color:var(--muted)">张</span></b></p>
+        <p class="fl"><span>手牌最多时</span><b data-tone="bad">29 <span style="font-size:11px;color:var(--muted)">张</span></b></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 六、成就 ================= -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Ⅴ</p><h2>封泥</h2>
+      <span class="hint"><b class="code">15</b> / 24 已得</span>
+    </div>
+    <div class="ach-filter" id="achFilter">
+      <button class="chip" type="button" data-f="all" aria-pressed="true">全部</button>
+      <button class="chip" type="button" data-f="on" aria-pressed="false">已得</button>
+      <button class="chip" type="button" data-f="off" aria-pressed="false">未得</button>
+      <button class="chip" type="button" data-f="凡" aria-pressed="false">凡</button>
+      <button class="chip" type="button" data-f="玄" aria-pressed="false">玄</button>
+      <button class="chip" type="button" data-f="天" aria-pressed="false">天</button>
+      <button class="chip" type="button" data-f="神" aria-pressed="false">神</button>
+    </div>
+    <div class="ach" id="ach"></div>
+  </section>
+
+  <!-- ================= 七、榜单 ================= -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Ⅵ</p><h2>榜单</h2>
+      <span class="hint">本赛季 · 共 2,417 人上榜</span>
+    </div>
+    <div class="boards">
+      <!-- 榜单一律按**原始统计**排，不引入天梯分那种合成分数：
+           每一条榜的排序键就是 player_stats 里的某一列，谁都能自己验算。 -->
+      <div class="panel board">
+        <p class="board__t">胜率（≥ 50 局）</p>
+        <p class="board__me"><b class="num" data-num="182">0</b><span>/ 2417</span><em>↑ 24</em></p>
+        <div class="board__pct"><i data-w="92.5"></i></div>
+        <p class="board__foot">超过 92.5% 的玩家</p>
+      </div>
+      <div class="panel board">
+        <p class="board__t">抓漏喊</p>
+        <p class="board__me"><b class="num" data-num="31">0</b><span>/ 2417</span><em>↑ 6</em></p>
+        <div class="board__pct"><i data-w="98.7"></i></div>
+        <p class="board__foot">超过 98.7% 的玩家</p>
+      </div>
+      <div class="panel board">
+        <p class="board__t">最长连胜</p>
+        <p class="board__me"><b class="num" data-num="447">0</b><span>/ 2417</span><em class="down">↓ 12</em></p>
+        <div class="board__pct"><i data-w="81.5"></i></div>
+        <p class="board__foot">超过 81.5% 的玩家</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script>
+/* ============================================================
+   数据（后期从 room_events 聚合出来的形状，这里先写死一份）
+   ============================================================ */
+
+/* 外圈 60 齿：花色顺序 = 牌堆顺序（★4 → ♥13 → ♦13 → ♠13 → ♣13 → 神4）。
+   on = 这个技能至少用过一局。 */
+const SKILLS = [
+  ["★","宏伟",1],["★","宝藏",1],["★","灾难",1],["★","狂欢",0],
+  ["♥","恩惠",1],["♥","迫近",1],["♥","精英",1],["♥","并列",0],["♥","神授",1],["♥","近卫",1],["♥","极运",1],
+  ["♥","异议",1],["♥","专精",1],["♥","伤逝",0],["♥","回溯",1],["♥","偏折",1],["♥","阳谋",1],
+  ["♦","强袭",1],["♦","血棘",1],["♦","影歌",1],["♦","攻心",1],["♦","毒池",0],["♦","夜魇",1],["♦","天堂",1],
+  ["♦","日月",1],["♦","寄生",0],["♦","劫营",1],["♦","远星",1],["♦","不意",1],["♦","觐见",1],
+  ["♠","恒心",1],["♠","先哲",1],["♠","福赐",1],["♠","契约",0],["♠","合纵",1],["♠","连横",1],["♠","窃贼",1],
+  ["♠","八门",1],["♠","黑白",0],["♠","毒师",1],["♠","忍戒",1],["♠","心火",1],["♠","染手",1],
+  ["♣","统御",1],["♣","明暗",1],["♣","司夜",1],["♣","辉耀",0],["♣","吟游",1],["♣","伪神",1],["♣","通牌",1],
+  ["♣","万变",1],["♣","预兆",0],["♣","终结",1],["♣","无念",1],["♣","降临",1],["♣","飞升",1],
+  ["神","古神 Ricin",1],["神","邪神 Omorph",1],["神","时神 Fade",0],["神","主神 Tindra",1],
+];
+
+/* 近 20 场：结果 / 用的技能 / 回合数 / 收场时的手牌。
+   没有分数那一列——不做天梯，一场就是一场，赢了输了各自算数。 */
+const RUNS = [
+  ["W","司夜",21,0],["L","恒心",30,6],["W","强袭",17,0],["W","影歌",25,0],["L","恩惠",34,9],
+  ["L","近卫",28,4],["W","司夜",19,0],["W","劫营",22,0],["D","毒师",47,7],["W","飞升",14,0],
+  ["L","专精",26,11],["W","司夜",18,0],["W","降临",23,0],["L","阳谋",31,5],["W","强袭",20,0],
+  ["W","古神 Ricin",16,0],["W","司夜",15,0],["W","偏折",24,0],["W","影歌",21,0],["W","飞升",12,0],
+];
+
+/* 本命神职：技能 / 花色 / 局数 / 胜率 */
+const MASTERY = [
+  ["司夜","♣",34,71],["飞升","♣",19,68],["影歌","♦",23,65],["强袭","♦",28,61],
+  ["偏折","♥",15,60],["劫营","♦",17,53],["近卫","♥",21,43],["恒心","♠",12,33],
+];
+
+/* 成就。tier 凡/玄/天/神；on=已得；prog=[已完成, 目标]（未得且可量化时给）。
+   `from` 是这条成就靠哪个引擎事件算出来的——后期建聚合表时直接照抄。 */
+const ACH = [
+  ["凡","初","初登盘","打完你的第一局。",1,null,"98.1%","gameStarted"],
+  ["凡","唤","开口","第一次喊出 UNO。",1,null,"96.4%","unoCalled"],
+  ["凡","露","亮相","第一次亮出技能。",1,null,"95.2%","skillRevealed"],
+  ["凡","神","见神","抽到四神中的任意一位。",1,null,"71.8%","skillChosen"],
+  ["玄","捕","抓漏喊猎人","抓到别人漏喊 25 次。",1,null,"22.6%","unoCaught"],
+  ["玄","叁","三连","连胜 3 局。",1,null,"44.0%","board.winner"],
+  ["玄","骰","骰徒","累计掷骰 100 次。",1,null,"18.3%","diceRolled"],
+  ["玄","盟","合纵连横","达成结盟 10 次。",1,null,"29.7%","allianceFormed"],
+  ["玄","魂","收魂人","生涯累计获得 100 枚魂。",1,null,"25.1%","marksGained"],
+  ["玄","彩","满堂彩","单局内四色各打出 ≥ 8 张。",0,[3,4],"9.4%","cardPlayed"],
+  ["天","反","反手","把总量 ≥ 12 的惩罚链整条转出去。",1,null,"6.8%","punishStack"],
+  ["天","刃","空手接白刃","全程不喊 UNO、也没被抓到，并赢下这一局。",1,null,"4.8%","unoCalled / unoCaught 双缺席"],
+  ["天","速","速通","12 回合之内取胜。",1,null,"7.9%","turnEnded"],
+  ["天","无","无相胜","全程不亮技能取胜。",0,null,"4.1%","skillRevealed 缺席"],
+  ["天","狼","独狼","拒绝掉所有结盟邀请并取胜。",0,[2,3],"5.6%","allianceRefused"],
+  ["天","算","清算","单条惩罚链总量达到 16 张。",1,null,"8.3%","punishStack.total"],
+  ["天","夜","守夜人","在 00:00–04:00 之间打完一局。",1,null,"13.7%","room.finished_at"],
+  ["天","气","一口气","单回合打出 6 张以上的牌。",0,[5,6],"6.2%","cardPlayed"],
+  ["神","殿","万神殿","用四神各赢下至少一局。",0,[3,4],"1.4%","skillChosen + winner"],
+  ["神","志","博物志","60 个技能全部至少用过一局。",0,[50,60],"0.6%","skillChosen"],
+  ["神","命","天命","单赛季 50 局以上且胜率 ≥ 70%。",0,[58,70],"0.9%","season agg"],
+  ["神","逆","逆流","在被封印的状态下取胜。",1,null,"2.2%","sealed + winner"],
+  ["神","净","零封之局","一局内没摸过一张牌、也没吃过惩罚，并取胜。",0,null,"0.3%","cardsDrawn 缺席"],
+  ["神","墟","归墟","牌堆洗满两次之后仍然取胜。",0,[1,2],"1.1%","deckReshuffled"],
+];
+
+/* ============================================================
+   建 DOM
+   ============================================================ */
+const $ = (s, r = document) => r.querySelector(s);
+const svgEl = (n) => document.createElementNS("http://www.w3.org/2000/svg", n);
+
+/* 外圈 60 齿 */
+const ticks = $("#ticks");
+SKILLS.forEach(([suit, name, on], i) => {
+  const g = svgEl("line");
+  const a = (i * 6 - 90) * Math.PI / 180;   // 6° 一齿，从正上方起
+  const r0 = 170, r1 = suit === "神" ? 190 : 186;
+  g.setAttribute("x1", 200 + Math.cos(a) * r0); g.setAttribute("y1", 200 + Math.sin(a) * r0);
+  g.setAttribute("x2", 200 + Math.cos(a) * r1); g.setAttribute("y2", 200 + Math.sin(a) * r1);
+  g.setAttribute("class", "pl-tick" + (on ? " is-on" : "") + (suit === "神" ? " is-god" : ""));
+  const t = svgEl("title"); t.textContent = `${suit} ${name}${on ? "" : "（未用过）"}`;
+  g.appendChild(t);
+  ticks.appendChild(g);
+});
+
+/* 内圈刻度：每 5° 一根短线，纯母题 */
+const scale = $("#scale");
+for (let i = 0; i < 72; i++) {
+  const a = i * 5 * Math.PI / 180, l = svgEl("line");
+  l.setAttribute("x1", 200 + Math.cos(a) * 118); l.setAttribute("y1", 200 + Math.sin(a) * 118);
+  l.setAttribute("x2", 200 + Math.cos(a) * (i % 6 === 0 ? 126 : 123)); l.setAttribute("y2", 200 + Math.sin(a) * (i % 6 === 0 ? 126 : 123));
+  l.setAttribute("class", "pl-scale");
+  scale.appendChild(l);
+}
+
+/* 近 20 场的点 */
+const runs = $("#runs");
+RUNS.forEach(([r, skill, turns, left]) => {
+  const b = document.createElement("button");
+  b.className = "run"; b.type = "button"; b.dataset.r = r;
+  const tail = r === "W" ? "打完收工" : `收场还剩 <span class="code">${left}</span> 张`;
+  b.innerHTML = `${r}<span class="run__tip">${skill} · <span class="code">${turns}</span> 回合 · ${tail}</span>`;
+  runs.appendChild(b);
+});
+
+/* 滚动胜率曲线：以 20 场的滑窗算，映射到 0–108（54 = 50%） */
+{
+  const pts = RUNS.map((_, i) => {
+    const win = RUNS.slice(0, i + 1).filter(([r]) => r === "W").length;
+    return win / (i + 1);
+  });
+  const X = (i) => (i / (pts.length - 1)) * 560;
+  /* 纵轴铺满 0–100%，不是 25–75%：第 1 场之后的滚动胜率必然是 0% 或 100%，
+     压缩量程会让开头那一段直接冲出画布。54 = 50%，正好落在那条基准虚线上。 */
+  const Y = (p) => 104 - p * 100;
+  const d = pts.map((p, i) => `${i ? "L" : "M"}${X(i).toFixed(1)} ${Y(p).toFixed(1)}`).join(" ");
+  $("#sparkLine").setAttribute("d", d);
+  $("#sparkArea").setAttribute("d", `${d} L560 108 L0 108 Z`);
+}
+
+/* 本命神职 */
+$("#mastery").innerHTML = MASTERY.map(([nm, suit, n, wr]) => `
+  <div class="mrow${wr < 50 ? " mrow--cold" : ""}">
+    <p class="mrow__nm"><span class="sigil" data-suit="${suit}">${suit}</span>${nm}</p>
+    <div class="mrow__bar"><i class="mrow__fill" data-w="${wr}"></i></div>
+    <p class="mrow__num"><b>${wr}%</b><span>${n} 局</span></p>
+  </div>`).join("");
+
+/* 成就墙 */
+$("#ach").innerHTML = ACH.map(([tier, mark, nm, desc, on, prog, rar, from]) => `
+  <article class="seal" data-tier="${tier}" data-state="${on ? "on" : "off"}" title="来源事件：${from}">
+    <div class="seal__mark">${on ? mark : "▢"}</div>
+    <h3 class="seal__nm">${nm}</h3>
+    <p class="seal__desc">${desc}</p>
+    ${prog ? `<div class="seal__prog"><i data-w="${(prog[0] / prog[1] * 100).toFixed(1)}"></i></div>
+              <span class="seal__pn">${prog[0]} / ${prog[1]}</span>` : ""}
+    <p class="seal__foot"><span class="seal__rar">${tier} 品</span><span>${rar} 的人拥有</span></p>
+  </article>`).join("");
+
+/* 成就筛选 */
+$("#achFilter").addEventListener("click", (e) => {
+  const btn = e.target.closest(".chip"); if (!btn) return;
+  const f = btn.dataset.f;
+  $("#achFilter").querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", String(c === btn)));
+  $("#ach").querySelectorAll(".seal").forEach((s) => {
+    const keep = f === "all" || (f === "on" || f === "off" ? s.dataset.state === f : s.dataset.tier === f);
+    s.hidden = !keep;
+  });
+});
+
+/* ============================================================
+   动效。CSS 里没有任何「初始隐藏」，所以：
+   关掉动效（或 GSAP 没加载出来）时页面就是最终态，不会白屏。
+   ============================================================ */
+const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const ARC_LEN = 942.48;                       // 2π × 150
+const ARC_END = ARC_LEN * (1 - 0.582);        // 胜率 58.2%
+const fmt = (v, dec) => v.toFixed(dec).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+/* 终态：一切进度条 / 滚表 / 弧线的最后一帧。
+   动画只是「从 0 长到这里」，所以 GSAP 没加载出来、或系统关了动效时，
+   直接调它就是一张完整的页面——不会白屏，也不会留下一排 0。 */
+const setFinal = () => {
+  document.querySelectorAll("[data-w]").forEach((el) => { el.style.width = el.dataset.w + "%"; });
+  document.querySelectorAll(".dice i").forEach((el) => { el.style.height = el.dataset.h + "%"; });
+  document.querySelectorAll(".num").forEach((el) => { el.textContent = fmt(+el.dataset.num, +(el.dataset.dec || 0)); });
+  $("#arc").setAttribute("stroke-dashoffset", String(ARC_END));
+};
+
+function play() {
+  gsap.registerPlugin(ScrollTrigger);
+
+  /* 重播：把上一轮留下的触发器与补间全清掉，再从零起。
+     不清的话 ScrollTrigger 的 once:true 会让第二次点没有任何反应。 */
+  ScrollTrigger.getAll().forEach((t) => t.kill());
+  gsap.globalTimeline.clear();
+  gsap.set("[data-w]", { clearProps: "width" });
+  document.querySelectorAll("[data-w], .dice i").forEach((el) => { el.style.width = ""; el.style.height = ""; });
+  document.querySelectorAll(".num").forEach((el) => { el.textContent = "0"; });
+  $("#arc").setAttribute("stroke-dashoffset", String(ARC_LEN));
+  window.scrollTo({ top: 0, behavior: "instant" });
+
+  /* 数字滚表。整数加千分位，小数按 data-dec 定位 */
+  const count = (el, vars = {}) => {
+    const dec = +(el.dataset.dec || 0), o = { v: 0 };
+    return gsap.to(o, {
+      v: +el.dataset.num, duration: 1.4, ease: "power2.out", ...vars,
+      onUpdate: () => { el.textContent = fmt(o.v, dec); },
+    });
+  };
+  const countAll = (sel, root = document) => root.querySelectorAll(sel).forEach((el) => count(el, { delay: 0.3 }));
+
+  /* ---- 巡光：全页唯一常驻动画，慢到几乎察觉不到 ---- */
+  gsap.to("#sweep", { rotation: 360, transformOrigin: "200px 200px", duration: 26, repeat: -1, ease: "none" });
+
+  /* ---- 开场：盘先立起来，齿绕一圈点亮，胜率弧再走 ---- */
+  gsap.timeline({ defaults: { ease: "power3.out" } })
+    .from("#plate", { scale: 0.86, opacity: 0, duration: 1, ease: "power2.out" })
+    .from("#scale line", { opacity: 0, duration: 0.5, stagger: { each: 0.004, from: "random" } }, "-=0.6")
+    /* 齿从正上方绕一圈依次点亮——这一下就是「你的一生摊开来看」 */
+    .from(".pl-tick", { scaleY: 0.2, opacity: 0, transformOrigin: "50% 100%", duration: 0.5, stagger: 0.012 }, "-=0.4")
+    .to("#arc", { attr: { "stroke-dashoffset": ARC_END }, duration: 1.6, ease: "power2.inOut" }, "-=0.8")
+    .from(".plate-core > *", { y: 14, opacity: 0, duration: 0.6, stagger: 0.09 }, "-=1.3")
+    .add(() => { document.querySelectorAll(".plate-core .num, .plate-tag .num").forEach((el) => count(el)); }, "-=1.3")
+    .from(".plate-tag", { opacity: 0, y: 8, duration: 0.5, stagger: 0.1 }, "-=1.1")
+    .from(".ident__name h1", { x: -22, opacity: 0, duration: 0.7 }, "-=1.5")
+    .from(".title-chip", { scale: 0.7, opacity: 0, duration: 0.5, ease: "back.out(2.2)" }, "-=1.2")
+    .from(".ident__meta span", { opacity: 0, y: 6, duration: 0.4, stagger: 0.07 }, "-=1.1")
+    .from(".ladder", { y: 16, opacity: 0, duration: 0.6 }, "-=1.0")
+    .to(".ladder__fill", { width: "62.5%", duration: 1.1, ease: "power2.out" }, "-=0.6")
+    .from(".qcell", { y: 18, opacity: 0, duration: 0.5, stagger: 0.07 }, "-=0.9")
+    .add(() => { document.querySelectorAll(".ladder .num, .qcell .num").forEach((el) => count(el)); }, "-=0.7");
+
+  /* ---- 每一段进视口再演 ---- */
+  const reveal = (sel, build) => {
+    document.querySelectorAll(sel).forEach((node) => {
+      ScrollTrigger.create({ trigger: node, start: "top 84%", once: true, onEnter: () => build(node) });
+    });
+  };
+
+  reveal(".sec-head", (s) => gsap.from(s.children, { y: 12, opacity: 0, duration: 0.45, stagger: 0.06 }));
+
+  reveal(".stats", (s) => {
+    gsap.from(s.querySelectorAll(".stat"), { y: 26, opacity: 0, duration: 0.6, stagger: 0.08, ease: "power3.out" });
+    countAll(".num", s);
+  });
+
+  reveal(".form", (s) => {
+    gsap.from(s, { y: 24, opacity: 0, duration: 0.6 });
+    /* 曲线画出来：先量真实长度，再从「整条藏起来」走到 0 */
+    const ln = $("#sparkLine"), len = ln.getTotalLength();
+    gsap.fromTo(ln, { strokeDasharray: len, strokeDashoffset: len },
+                    { strokeDashoffset: 0, duration: 1.6, ease: "power2.inOut", delay: 0.2 });
+    gsap.from("#sparkArea", { opacity: 0, duration: 1, delay: 0.9 });
+    /* 20 场结果像一排牌被翻过来 */
+    gsap.from(s.querySelectorAll(".run"), { rotateX: -90, opacity: 0, duration: 0.45, stagger: 0.035,
+                                            ease: "back.out(1.6)", delay: 0.4, transformOrigin: "50% 100%" });
+    countAll(".num", s);
+  });
+
+  reveal(".mastery", (s) => {
+    gsap.from(s.querySelectorAll(".mrow"), { x: -18, opacity: 0, duration: 0.5, stagger: 0.06, ease: "power3.out" });
+    s.querySelectorAll(".mrow__fill").forEach((el, i) => {
+      gsap.to(el, { width: el.dataset.w + "%", duration: 1, delay: 0.15 + i * 0.06, ease: "power2.out" });
+    });
+  });
+
+  reveal(".rel", (s) => gsap.from(s.querySelectorAll(".relcard"), { y: 20, opacity: 0, duration: 0.5, stagger: 0.1 }));
+
+  reveal(".fun", (s) => {
+    gsap.from(s.querySelectorAll(".funcard"), { y: 26, opacity: 0, duration: 0.55, stagger: 0.07, ease: "power3.out" });
+    countAll(".num", s);
+    gsap.to(s.querySelectorAll(".dice i"), { height: (i, el) => el.dataset.h + "%", duration: 0.9,
+                                             stagger: 0.1, delay: 0.35, ease: "back.out(1.4)" });
+    /* 最爱的那张牌翻个面出来 */
+    gsap.from(s.querySelector(".favcard .card"), { rotateY: 180, scale: 0.7, duration: 0.8, delay: 0.5, ease: "back.out(1.5)" });
+  });
+
+  /* ---- 成就：一枚一枚**盖**下去。卡先落位，章面晚一拍、幅度更大——「啪」的那一下在章上 ---- */
+  reveal(".ach", (s) => {
+    gsap.from(s.querySelectorAll(".seal"), { scale: 1.5, opacity: 0, duration: 0.5, ease: "back.out(2.6)", stagger: 0.045 });
+    gsap.from(s.querySelectorAll('.seal[data-state="on"] .seal__mark'),
+              { scale: 2.2, opacity: 0, rotate: -18, duration: 0.42, ease: "back.out(3)", stagger: 0.045, delay: 0.12 });
+    s.querySelectorAll(".seal__prog i").forEach((el, i) => {
+      gsap.to(el, { width: el.dataset.w + "%", duration: 0.8, delay: 0.5 + i * 0.06 });
+    });
+    /* 神品的流光：只有已解锁的那几枚在循环，最稀的东西才配动 */
+    s.querySelectorAll('.seal[data-tier="神"][data-state="on"]').forEach((el, i) => {
+      gsap.fromTo(el, { "--shineX": "-60%" }, {
+        "--shineX": "200%", duration: 1.6, ease: "power1.inOut",
+        repeat: -1, repeatDelay: 3.4, delay: 0.9 + i * 0.8,
+      });
+    });
+  });
+
+  reveal(".boards", (s) => {
+    gsap.from(s.querySelectorAll(".board"), { y: 24, opacity: 0, duration: 0.55, stagger: 0.1, ease: "power3.out" });
+    countAll(".num", s);
+    s.querySelectorAll(".board__pct i").forEach((el, i) => {
+      gsap.to(el, { width: el.dataset.w + "%", duration: 1.1, delay: 0.35 + i * 0.1, ease: "power2.out" });
+    });
+  });
+
+  ScrollTrigger.refresh();
+}
+
+/* 悬停时数据卡跟着指针微微侧过去。与开场时间轴无关，所以只挂一次，
+   重播不会重复绑定。触屏没有 hover，整段跳过。 */
+function bindTilt() {
+  if (!matchMedia("(hover: hover)").matches) return;
+  document.querySelectorAll(".stat, .seal").forEach((el) => {
+    const rx = gsap.quickTo(el, "rotateX", { duration: 0.4, ease: "power2.out" });
+    const ry = gsap.quickTo(el, "rotateY", { duration: 0.4, ease: "power2.out" });
+    el.addEventListener("pointermove", (e) => {
+      const r = el.getBoundingClientRect();
+      ry(((e.clientX - r.left) / r.width - 0.5) * 9);
+      rx((0.5 - (e.clientY - r.top) / r.height) * 9);
+    });
+    el.addEventListener("pointerleave", () => { rx(0); ry(0); });
+  });
+}
+
+if (!window.gsap) {
+  setFinal();
+  $("#replay").disabled = true;
+} else if (REDUCED) {
+  /* 系统说了「减少动态效果」，就照做——但看稿的人还能手动放一遍 */
+  setFinal();
+  $("#replay").addEventListener("click", () => { play(); bindTilt(); }, { once: true });
+} else {
+  play();
+  bindTilt();
+  $("#replay").addEventListener("click", play);
+}
+</script>
+</body>
+</html>
