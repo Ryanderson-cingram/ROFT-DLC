@@ -282,18 +282,33 @@ evaluate(stats: PlayerStats, flags: GameFlags, owned: Set<string>): string[]
 另开一张窄表 `player_recent(user_id, finished_at, won, skill_id, turns)`，
 终局时插一行，同一个作业里删掉每人第 20 行之后的。它是唯一一处需要「留一段历史」的地方。
 
-**榜单**：不引入合成分数，每条榜的排序键就是 `player_stats` 的**某一列**：
+> **还没做**（2026-08-13）。profile 页目前没有这一格——设计稿 `profile.html` 里的那排结果点
+> 与滚动胜率火花线跟着一起缺席。它是这份 spec 里唯一还没落地的东西，要新开一张表 + 改终局那一帧的写入，
+> 与榜单互不相干，所以单独排一步。
+
+**榜单**（`/leaderboard`）：不引入合成分数，每条榜的排序键就是 `player_stats` 的**某一格**：
 
 | 榜 | 排序键 | 门槛 |
 |---|---|---|
 | 胜率 | `wins::real / games` | `games >= 50`（否则 1 胜 0 负就是榜一） |
-| 抓漏喊 | `uno_caught` | 无 |
-| 最长连胜 | `streak_best` | 无 |
+| 抓漏喊 | `unoCaught` | > 0（0 是「还没发生过」，不是并列最后一名） |
+| 最长连胜 | `streakBest` | > 0（同上） |
 
-实现：每条榜一个部分索引 + `limit 100` 的普通查询。**不上物化视图**——
-几千行的表直接查就够快，物化视图要养刷新作业。真到十万行再说。
+**不上物化视图**——几千行的表直接查就够快，物化视图要养刷新作业。真到十万行再说。
 
-「我排第几」用 `count(*) where <排序键> > 我的值` 现算，同样不需要预计算。
+> **2026-08-13 实现时改了一处**：初稿写的是「每条榜一个部分索引 + `limit 100` 的普通查询」，
+> 也就是三条 PostgREST 查询。落地时撞上一件事：**PostgREST 按 jsonb 键排序是按 text 排的**，
+> `?order=stats->>wins.desc` 会把 "9" 排在 "10" 前头——榜单当场就是错的，而且错得很像对的。
+> jsonb 取出来是文本，转型只能在 SQL 里做。
+>
+> 所以三条榜收进**一个 stable 的 SQL 函数** `leaderboards()`（迁移 0008）：一次 RPC 拿三条榜，
+> `rank() over (partition by board order by value desc)` 顺手把「我排第几」也算了
+> （整张表本来就已经排好，捞自己那一行是白送的，不必再来三条 `count(*)`）。
+> `security invoker` + 现成的 RLS，函数里不自己判权限。
+> 空榜**整格缺席**（不是空数组），页面按这个口径写空状态。
+>
+> 「我排第几」走 `auth.uid()`，不收 user_id 参数——少一个可以乱填的入参。
+> 冒烟脚本里那一段因此必须拿玩家 token 打，用 service_role 跑它恒为 null（`scripts/e2e-stats.mjs`）。
 
 ---
 
@@ -346,9 +361,12 @@ profile 页对 `games === 0` 的人要有一个像样的空状态，不能是一
 4. **room-action 边缘函数**：终局分支里调 `tallyGame`，把结果塞进 RPC。
 5. **profile 页**（`apps/web/app/profile/[id]/`）：把设计稿接到真数据上。
 6. **解锁的呈现**：`humanize` 加分支（全场可见的那一行）+ 收场弹窗里的封泥（`useMyUnlocks`，见 §5 的改判）。
-7. **榜单页**：三条榜 + 「我排第几」。
+7. **榜单页**（`/leaderboard`）：迁移 0008 的 `leaderboards()` + 三条榜 + 「我排第几」，大厅加一个入口。
+8. **近 20 场**（`player_recent`）：新表 + 终局插一行 + profile 页那排结果点。**还没做**，见 §6。
 
 1–2 步做完就已经能在单测里验证全部 24 条成就的判定是对的，那是这个系统里唯一真正复杂的部分。
+
+1–7 已落地（2026-08-13）。
 
 ---
 

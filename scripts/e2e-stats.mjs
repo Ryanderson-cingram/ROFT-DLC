@@ -178,6 +178,24 @@ const unlockEvents = evs.filter((e) => e.type === "achievementUnlocked");
 check("achievementUnlocked 三条（每人一条）", unlockEvents.length, 3);
 check("终局事件带 winner", evs.find((e) => e.type === "gameEnded")?.public_payload, { winner: 0 });
 
+/*
+  榜单（0008 的 `leaderboards()`）。这一段**必须用玩家的 token 打**，不是 service_role：
+  「我排第几」走的是 `auth.uid()`，用 service_role 跑它恒为 null，等于什么都没验。
+  名次不写死成 1——本地库里可能还躺着别的对局，验的是「榜上那一行」与「我的名次」对得上。
+*/
+console.log("\n—— 榜单 ——");
+const boards = await (await fetch(`${API}/rest/v1/rpc/leaderboards`, {
+  method: "POST",
+  headers: { apikey: ANON, Authorization: `Bearer ${tokens[0]}`, "Content-Type": "application/json" },
+  body: "{}",
+})).json();
+const mineStreak = boards.streak?.rows?.find((r) => r.userId === U[0]);
+check("连胜榜上有赢家（streakBest = 1）", mineStreak?.value, 1);
+check("「我排第几」= 榜上那一行的名次", boards.streak?.mine?.rank, mineStreak?.rank);
+// 空榜整格缺席（不是空数组）——页面按这个口径写的
+check("胜率榜的 50 局门槛：这一局谁都不够 → 整条榜缺席", boards.winRate, undefined);
+check("这一局没人抓漏喊 → 抓漏喊榜缺席", boards.caught, undefined);
+
 console.log("\n—— 幂等 ——");
 const replay = await act("e2e-final");
 const body = JSON.parse(await replay.text());

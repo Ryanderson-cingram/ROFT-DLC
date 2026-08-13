@@ -58,6 +58,16 @@ export default async function LobbyPage() {
           </span>
           <span className="arrow">→</span>
         </Link>
+
+        <Link className="more" href="/leaderboard">
+          <span>
+            榜单
+            <small className="opt-note" style={{ margin: 0 }}>
+              胜率、抓漏喊、最长连胜三条榜，外加你自己第几。
+            </small>
+          </span>
+          <span className="arrow">→</span>
+        </Link>
       </main>
     </>
   );
