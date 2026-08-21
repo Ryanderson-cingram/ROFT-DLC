@@ -11,6 +11,7 @@ import {
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { Bgm } from "@/components/game/bgm";
 import type { PileKey } from "@/components/game/card-river";
 import { Dock } from "@/components/game/dock";
 import { DraftSheet } from "@/components/game/draft-sheet";
@@ -315,6 +316,9 @@ export default function GamePage() {
           send({ type: "claimTimeout", seat: snapshot.youSeat, windowId: snapshot.windowId })
         }
       />
+      {/* 背景音乐：场上唱哪一支歌声就放哪一曲，右缘一枚开关（spec 2026-08-19）。
+          排在这里 = 两个 early return 之后：牌桌还没画出来时不出声。 */}
+      <Bgm snapshot={snapshot} />
       <LogDrawer
         open={logOpen}
         onOpen={() => setLogOpen(true)}

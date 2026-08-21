@@ -872,6 +872,14 @@ dialog.modal { margin: 0; width: 100%; height: 100%; max-width: none; max-height
   writing-mode: vertical-rl; cursor: pointer;
 }
 .drawer__handle:hover { color: var(--piao); border-color: var(--piao-dim); }
+/* 音乐开关（spec 2026-08-19）：与「记录」同一根右缘、同一套边框，只是方的、图标居中。
+   叠在把手上方——牌桌上不另开第二处视觉语言。 */
+.handle--bgm {
+  top: calc(42% - 52px); min-height: 0; width: 34px; height: 44px; padding: 0;
+  display: grid; place-items: center; writing-mode: horizontal-tb;
+}
+/* 开着 = 缥青（令牌里「正在生效」的那个色），关着与「记录」同一档次级灰 */
+.handle--bgm[aria-pressed="true"] { color: var(--piao); border-color: var(--piao-dim); }
 /* 抽屉的遮罩：被挡住的那半屏压暗，点它即关（与 .drawer 同由 body[data-drawer] 驱动） */
 .drawer-scrim {
   position: fixed; inset: 0; z-index: 93;
